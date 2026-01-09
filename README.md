@@ -9,8 +9,8 @@
 
 <div align="center">
     
-[![PyPI Version](https://img.shields.io/pypi/v/fluidgym.svg)](https://pypi.python.org/pypi/fluidgym)
-[![image](https://img.shields.io/pypi/pyversions/fluidgym/0.1.0.svg)](https://pypi.python.org/pypi/fluidgym)
+[![PyPI version](https://badge.fury.io/py/fluidgym.svg)](https://badge.fury.io/py/fluidgym)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/fluidgym)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.9-EE4C2C?logo=pytorch&logoColor=white)
 ![CUDA](https://img.shields.io/badge/CUDA-12.8-%2376B900)
 ![License](https://img.shields.io/badge/License-MIT-orange)
