@@ -9,13 +9,9 @@
 
 <div align="center">
     
-[![PyPI Version](https://img.shields.io/pypi/v/fluidgym.svg)](https://pypi.python.org/pypi/fluidgym)
-[![image](https://img.shields.io/pypi/pyversions/fluidgym/0.1.0.svg)](https://pypi.python.org/pypi/fluidgym)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.9-EE4C2C?logo=pytorch&logoColor=white)
 ![CUDA](https://img.shields.io/badge/CUDA-12.8-%2376B900)
 ![License](https://img.shields.io/badge/License-MIT-orange)
-[![Linters](https://github.com/safe-autonomous-systems/rl-fluid-bench/actions/workflows/linters.yml/badge.svg)](https://github.com/safe-autonomous-systems/rl-fluid-bench/actions/workflows/linters.yml)
-[![Docs](https://github.com/safe-autonomous-systems/rl-fluid-bench/actions/workflows/docs.yml/badge.svg)](https://github.com/safe-autonomous-systems/rl-fluid-bench/actions/workflows/docs.yml)
     
 </div>
 
@@ -32,29 +28,9 @@
 
 ## Installation
 
-### 📦 Installation from PyPi
-
-1. Ensure the correct PyTorch version is installed (compatible with CUDA 12.8):
-```bash
-pip install torch --index-url https://download.pytorch.org/whl/cu128
-```
-
-2. Install 
-
-```bash
-pip install fluidgym
-```
-
-### 🐳 Using Docker
-
-Instead of installing FluidGym you can use one of our Docker containers:
-
-- [Python 3.10](https://google.com)
-- [Python 3.11](https://google.com)
-- [Python 3.12](https://google.com)
-- [Python 3.13](https://google.com)
-
 ### 🧱 Build from Source (GitHub)
+
+For double-blind review, only local installation is available.
 
 1. Create a new conda environment and activate it:
 ```bash
