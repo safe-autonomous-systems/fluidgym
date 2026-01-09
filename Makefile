@@ -28,6 +28,10 @@ check: check-ruff check-mypy
 docs:
 	cd docs && $(MAKE) html && cd ..
 
+.PHONY: upload-docs
+upload-docs: docs
+	ghp-import -n -p -f docs/build/html
+
 .PHONY: pre-commit
 pre-commit:
 	$(PRECOMMIT) run --all-files || :
