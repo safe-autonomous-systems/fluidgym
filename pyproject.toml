@@ -1,0 +1,133 @@
+[project]
+name = "fluidgym"
+dynamic = ["version"]
+description = "Plug-and-Play Benchmarking of Reinforcement Learning Algorithms for Large-Scale Flow Control"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Jannis Becktepe", email = "jannis@becktepe.de" }
+]
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "torch==2.9.*",
+    "gymnasium",
+    "numpy",
+    "pandas",
+    "matplotlib>=3.9,<3.10",
+    "seaborn",
+    "huggingface_hub>=1.0.0",
+    "scikit-image",
+    "imageio",
+    "platformdirs",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+    "ruff",
+    "mypy",
+    "pytest",
+    "types-seaborn",
+    "pandas-stubs",
+    "types-setuptools",
+    "scipy-stubs",
+]
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme",
+]
+experiments = [
+    "hydra-core",
+    "gymnasium==1.2.1",
+    "numpy==2.2.6",
+    "pandas==2.3.2",
+    "matplotlib==3.9.4",
+    "seaborn==0.13.2",
+    "wandb",
+    "stable-baselines3[extra]==2.7.0",
+    "rliable",
+]
+sb3 = [
+    "gymnasium>=1.2.1",
+    "stable-baselines3[extra]>=2.7.0",
+]
+torchrl = [
+    "gymnasium>=1.2.1",
+    "torchrl",
+]
+pettingzoo = [
+    "gymnasium>=1.2.1",
+    "pettingzoo",
+]
+
+[build-system]
+requires = ["setuptools", "wheel", "torch==2.9.1+cu128"]
+build-backend = "setuptools.build_meta"
+
+[tool.isort]
+profile = "black"  
+line_length = 88  
+skip = [".gitignore", "src/fluidgym/simulation/pict"]  
+
+[tool.ruff]
+line-length = 88
+exclude = ["src/fluidgym/simulation/pict/"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "Q", "D"]
+ignore = [
+  "D104",    # Missing docstring in public package
+  "D105",    # Missing docstring in magic mthod
+  "D203",    # 1 blank line required before class docstring
+  "D205",    # 1 blank line between summary and description
+  "D401",    # First line of docstring should be in imperative mood
+  "N806",    # Variable X in function should be lowercase
+  "E731",    # Do not assign a lambda expression, use a def
+  "A003",    # Shadowing a builtin
+  "S101",    # Use of assert detected.
+  "W292",    # No newline at end of file
+  "PLC1901", # "" can be simplified to be falsey
+  "TCH003",  # Move stdlib import into TYPE_CHECKING
+  "B010",    # Do not use `setattr`
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy" 
+
+[tool.mypy]
+files = ["src/fluidgym"]
+exclude = 'src/fluidgym/simulation/pict/.*'
+explicit_package_bases = true
+
+[tool.cibuildwheel]
+build = "cp310-manylinux_x86_64 cp311-manylinux_x86_64 cp312-manylinux_x86_64 cp313-manylinux_x86_64"
+skip = "*musllinux*"
+
+environment = """
+CUDA_HOME=/usr/local/cuda-12.8
+TORCH_CUDA_ARCH_LIST=8.0;8.6;9.0+PTX
+MAX_JOBS=1
+"""
+
+[tool.cibuildwheel.linux]
+manylinux-x86_64-image = "manylinux_2_28"
+before-all = """
+curl -sSL https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo \
+  -o /etc/yum.repos.d/cuda-rhel8.repo
+dnf clean all
+dnf -y install cuda-toolkit-12-8
+"""
+
+[tool.setuptools]
+license-files = [
+    "LICENSE",
+    "LICENSES/*.txt",
+]

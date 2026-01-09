@@ -1,0 +1,7 @@
+﻿AirfoilEnv2D
+============
+
+.. autoclass:: fluidgym.envs.airfoil.AirfoilEnv2D
+   :members:
+   :undoc-members:
+   :show-inheritance:
