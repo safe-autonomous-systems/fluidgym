@@ -1,0 +1,17 @@
+fluidgym.util.data\_utils
+=========================
+
+.. automodule:: fluidgym.util.data_utils
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      download_initial_domains
+      load_statistics
+      load_uncontrolled_episode
+      prepare_initial_domains
+      save_statistics
+      save_uncontrolled_episode
+   

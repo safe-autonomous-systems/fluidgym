@@ -1,0 +1,263 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AirfoilEnv3D &mdash; FluidGym 0.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Turbulent Channel Flow (TCF)" href="../tcf.html" />
+    <link rel="prev" title="AirfoilEnv2D" href="fluidgym.envs.airfoil.AirfoilEnv2D.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            FluidGym
+              <img src="../../_static/logo_lm.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../basic_usage/index.html">Basic Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../basic_usage/interfaces/index.html">Interfaces</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/interfaces/fluidgym.html">FluidGym</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/interfaces/gymnasium.html">Gymnasium</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/interfaces/torchrl.html">TorchRL</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/interfaces/pettingzoo.html">Pettingzoo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/interfaces/sb3_marl.html">Stable-Baselines3</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/interfaces/gradient_based_methods.html">Gradient-Based Methods</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../basic_usage/rendering.html">Rendering Environments</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../advanced_usage/index.html">Advanced Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../advanced_usage/parallelization.html">Running FluidGym on multiple GPUs in parallel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../advanced_usage/custom_environments.html">Adding Custom Environments to FluidGym</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../advanced_usage/configuration.html">Additional Configuration Options</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="reference internal" href="../../api.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../cylinder.html">Flow Past Cylinder</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.cylinder.CylinderJetEnv2D.html">CylinderJetEnv2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.cylinder.CylinderRotEnv2D.html">CylinderRotEnv2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.cylinder.CylinderJetEnv3D.html">CylinderJetEnv3D</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../rbc.html">Rayleigh-Bénard Convection (RBC)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.rbc.RBCEnv2D.html">RBCEnv2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.rbc.RBCEnv3D.html">RBCEnv3D</a></li>
+</ul>
+</li>
+<li class="toctree-l2 current"><a class="reference internal" href="../airfoil.html">Flow Past Airfoil</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.airfoil.AirfoilEnv2D.html">AirfoilEnv2D</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">AirfoilEnv3D</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../tcf.html">Turbulent Channel Flow (TCF)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.tcf.TCF3DBottomEnv.html">TCF3DBottomEnv</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.tcf.TCF3DBothEnv.html">TCF3DBothEnv</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../faq.html">Frequently Asked Questions</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">FluidGym</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../api.html">API Reference</a></li>
+          <li class="breadcrumb-item"><a href="../airfoil.html">Flow Past Airfoil</a></li>
+      <li class="breadcrumb-item active">AirfoilEnv3D</li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/safe-autonomous-systems/fluidgym/blob/main/docs/source/api/generated/fluidgym.envs.airfoil.AirfoilEnv3D.rst" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="airfoilenv3d">
+<h1>AirfoilEnv3D<a class="headerlink" href="#airfoilenv3d" title="Link to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="fluidgym.envs.airfoil.AirfoilEnv3D">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">fluidgym.envs.airfoil.</span></span><span class="sig-name descname"><span class="pre">AirfoilEnv3D</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_agents</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reynolds_number</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adaptive_cfl</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step_length</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">episode_length</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attack_angle_deg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_obs_window</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_reward_weight</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_2d_obs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">init_from_2d</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dtype</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">torch.float32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cuda_device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">device</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">load_initial_domain</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">load_domain_statistics</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">randomize_initial_state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable_actions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">differentiable</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/fluidgym/envs/airfoil/airfoil_env_3d.html#AirfoilEnv3D"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.airfoil.AirfoilEnv3D" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">AirfoilEnvBase</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">MultiAgentFluidEnv</span></code></p>
+<p>Environment for 3D airfoil drag and lift reduction.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n_agents</strong> (<em>int</em>) – The number of agents controlling the synthetic jets.</p></li>
+<li><p><strong>reynolds_number</strong> (<em>float</em>) – The Reynolds number of the flow.</p></li>
+<li><p><strong>adaptive_cfl</strong> (<em>float</em>) – Target CFL number for adaptive time stepping.</p></li>
+<li><p><strong>step_length</strong> (<em>float</em>) – The non-dimensional time length of each environment step.</p></li>
+<li><p><strong>episode_length</strong> (<em>int</em>) – The number of steps per episode.</p></li>
+<li><p><strong>dt</strong> (<em>float</em>) – The time step size to use in the simulation.</p></li>
+<li><p><strong>attack_angle_deg</strong> (<em>float</em>) – The angle of attack of the airfoil in degrees.</p></li>
+<li><p><strong>local_obs_window</strong> (<em>int</em>) – The size of the local observation window for each agent.</p></li>
+<li><p><strong>local_reward_weight</strong> (<em>float</em><em> | </em><em>None</em>) – The weight of the local reward in the combined reward for each agent. Has to be
+set if multi-agent step function is used. Defaults to None.</p></li>
+<li><p><strong>local_2d_obs</strong> (<em>bool</em>) – Whether to use 2D local observations (velocity in x and y directions only, a
+single sensor layer and window = 1). Defaults to False.</p></li>
+<li><p><strong>init_from_2d</strong> (<em>bool</em>) – Whether to initialize the 3D flow field from a 2D initial domain. This
+significantly reduces the initial transient phase. If the initial domain is
+loaded from disk, this parameter is not active. Defaults to True.</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em>) – The data type to use for the simulation. Defaults to torch.float32.</p></li>
+<li><p><strong>cuda_device</strong> (<em>torch.device</em><em> | </em><em>None</em>) – The CUDA device to use for the simulation. If None, the default cuda device is
+used. Defaults to None.</p></li>
+<li><p><strong>debug</strong> (<em>bool</em>) – Whether to enable debug mode. Defaults to False.</p></li>
+<li><p><strong>load_initial_domain</strong> (<em>bool</em>) – Whether to load initial domain states from disk. Defaults to True.</p></li>
+<li><p><strong>load_domain_statistics</strong> (<em>bool</em>) – Whether to load domain statistics from disk. Defaults to True.</p></li>
+<li><p><strong>randomize_initial_state</strong> (<em>bool</em>) – Whether to randomize the initial state on reset. Defaults to True.</p></li>
+<li><p><strong>enable_actions</strong> (<em>bool</em>) – Whether to enable actions. If False, the environment will be run in
+uncontrolled mode. Defaults to True.</p></li>
+<li><p><strong>differentiable</strong> (<em>bool</em>) – Whether to enable differentiable simulation mode. Defaults to False.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">References</p>
+<p>[1] R. Montalà et al., “Discovering Flow Separation Control Strategies in 3D Wings
+via Deep Reinforcement Learning,” Sept. 12, 2025, arXiv: arXiv:2509.10185.
+doi: 10.48550/arXiv.2509.10185.</p>
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.airfoil.AirfoilEnv3D.action_space_shape">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">action_space_shape</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#fluidgym.envs.airfoil.AirfoilEnv3D.action_space_shape" title="Link to this definition"></a></dt>
+<dd><p>The shape of the action space.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.airfoil.AirfoilEnv3D.local_observation_space_shape">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">local_observation_space_shape</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#fluidgym.envs.airfoil.AirfoilEnv3D.local_observation_space_shape" title="Link to this definition"></a></dt>
+<dd><p>The shape of the local observation space for each agent.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.airfoil.AirfoilEnv3D.n_agents">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">n_agents</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#fluidgym.envs.airfoil.AirfoilEnv3D.n_agents" title="Link to this definition"></a></dt>
+<dd><p>The number of agents in the environment.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.airfoil.AirfoilEnv3D.observation_space_shape">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">observation_space_shape</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#fluidgym.envs.airfoil.AirfoilEnv3D.observation_space_shape" title="Link to this definition"></a></dt>
+<dd><p>The shape of the observation space.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.airfoil.AirfoilEnv3D.reset_marl">
+<span class="sig-name descname"><span class="pre">reset_marl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">randomize</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/airfoil/airfoil_env_3d.html#AirfoilEnv3D.reset_marl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.airfoil.AirfoilEnv3D.reset_marl" title="Link to this definition"></a></dt>
+<dd><p>Reset the environment to the initial state for multiple agents.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>seed</strong> (<em>int</em><em> | </em><em>None</em>) – The seed to use for random number generation. If None, the current seed is
+used.</p></li>
+<li><p><strong>randomize</strong> (<em>bool</em><em> | </em><em>None</em>) – Whether to randomize the initial state. If None, the default behavior is
+used.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A tuple containing the initial observations for all agents and an info
+dictionary.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>tuple[torch.Tensor, dict]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.airfoil.AirfoilEnv3D.step_marl">
+<span class="sig-name descname"><span class="pre">step_marl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">actions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">bool</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">bool</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/airfoil/airfoil_env_3d.html#AirfoilEnv3D.step_marl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.airfoil.AirfoilEnv3D.step_marl" title="Link to this definition"></a></dt>
+<dd><p>Take a step in the environment using the given actions for multiple agents.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>actions</strong> (<em>torch.Tensor</em>) – The actions to take for each agent.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A tuple containing the observations, rewards, terminated flag, truncated
+flag, and info dictionary.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>tuple[torch.Tensor, torch.Tensor, bool, bool, dict[str, torch.Tensor]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="fluidgym.envs.airfoil.AirfoilEnv2D.html" class="btn btn-neutral float-left" title="AirfoilEnv2D" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../tcf.html" class="btn btn-neutral float-right" title="Turbulent Channel Flow (TCF)" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Safe Autonomous Systems (SAS), TU Dortmund University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

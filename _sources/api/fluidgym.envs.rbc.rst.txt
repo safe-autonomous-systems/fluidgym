@@ -1,0 +1,15 @@
+fluidgym.envs.rbc
+=================
+
+.. automodule:: fluidgym.envs.rbc
+
+   
+.. rubric:: Modules
+
+.. autosummary::
+   :toctree:
+   :recursive:
+
+   rbc_env_2d
+   rbc_env_3d
+   rbc_env_base

@@ -1,0 +1,13 @@
+fluidgym.envs.util.profiles
+===========================
+
+.. automodule:: fluidgym.envs.util.profiles
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      get_inflow_profile
+      get_jet_profile
+   

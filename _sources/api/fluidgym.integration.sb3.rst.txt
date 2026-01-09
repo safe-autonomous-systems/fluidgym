@@ -1,0 +1,16 @@
+fluidgym.integration.sb3
+========================
+
+.. automodule:: fluidgym.integration.sb3
+
+   
+.. rubric:: Modules
+
+.. autosummary::
+   :toctree:
+   :recursive:
+
+   eval_callback
+   multi_agent_vec_env
+   parallel_vec_env
+   util

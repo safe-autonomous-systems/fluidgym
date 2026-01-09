@@ -1,0 +1,12 @@
+fluidgym.envs.airfoil.airfoil\_env\_3d
+======================================
+
+.. automodule:: fluidgym.envs.airfoil.airfoil_env_3d
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      AirfoilEnv3D
+   

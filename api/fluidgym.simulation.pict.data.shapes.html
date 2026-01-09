@@ -1,0 +1,215 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fluidgym.simulation.pict.data.shapes &mdash; FluidGym 0.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=d45e8c67"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="fluidgym.simulation.pict.data.torroja" href="fluidgym.simulation.pict.data.torroja.html" />
+    <link rel="prev" title="fluidgym.simulation.pict.data.resample" href="fluidgym.simulation.pict.data.resample.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            FluidGym
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../basic_usage/index.html">Basic Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../advanced_usage/index.html">Advanced Usage</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../api.html">API References</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="fluidgym.html">fluidgym</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.config.html">fluidgym.config</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.html">fluidgym.envs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.integration.html">fluidgym.integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.registry.html">fluidgym.registry</a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="fluidgym.simulation.html">fluidgym.simulation</a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="fluidgym.simulation.extensions.html">fluidgym.simulation.extensions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fluidgym.simulation.helpers.html">fluidgym.simulation.helpers</a></li>
+<li class="toctree-l4 current"><a class="reference internal" href="fluidgym.simulation.pict.html">fluidgym.simulation.pict</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fluidgym.simulation.simulation.html">fluidgym.simulation.simulation</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.util.html">fluidgym.util</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../faq.html">Frequently Asked Questions</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">FluidGym</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">API References</a></li>
+          <li class="breadcrumb-item"><a href="fluidgym.html">fluidgym</a></li>
+          <li class="breadcrumb-item"><a href="fluidgym.simulation.html">fluidgym.simulation</a></li>
+          <li class="breadcrumb-item"><a href="fluidgym.simulation.pict.html">fluidgym.simulation.pict</a></li>
+          <li class="breadcrumb-item"><a href="fluidgym.simulation.pict.data.html">fluidgym.simulation.pict.data</a></li>
+      <li class="breadcrumb-item active">fluidgym.simulation.pict.data.shapes</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/fluidgym.simulation.pict.data.shapes.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-fluidgym.simulation.pict.data.shapes">
+<span id="fluidgym-simulation-pict-data-shapes"></span><h1>fluidgym.simulation.pict.data.shapes<a class="headerlink" href="#module-fluidgym.simulation.pict.data.shapes" title="Link to this heading"></a></h1>
+<p class="rubric">Functions</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">coords_to_center_coords</span></code>(coords)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">extrapolate_boundary_layers</span></code>(grid[, boundaries])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">extrude_grid_z</span></code>(grid, res_z[, start_z, ...])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">generate_grid_vertices_2D</span></code>(res, corner_vertices)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_extrapolated_boundary_layer</span></code>(grid, bound, ...)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_grid_coords</span></code>(size[, dtype])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_grid_cube_centered</span></code>(size, cube_size[, dtype])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_grid_normal_dist</span></code>(size, mean, var[, dtype])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_grid_normal_dist_from_ortho_transforms</span></code>(...)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_grid_striped_x</span></code>(size[, dtype])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">interpolate_vertices_from_borders_2D</span></code>(borders)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">invert_weights</span></code>(weights)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">make_cosX_grid</span></code>(x, y[, x_scale, y_scale, ...])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">make_matrix_rotation_2D</span></code>(angle[, degrees])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">make_matrix_rotation_3D</span></code>(rotvec[, degrees])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">make_rotation_distance_scaling_fn_sine</span></code>(...)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">make_rotation_distance_scaling_fn_sine_half</span></code>(...)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">make_torus_2D</span></code>(res, r1, r2, start_angle, angle)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">make_wall_refined_ortho_grid</span></code>(res_x, res_y[, ...])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">make_weights_cos</span></code>(res, refinement)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">make_weights_exp</span></code>(res, base, refinement)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">make_weights_exp_global</span></code>(res, global_scale, ...)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">make_weights_linear</span></code>(res)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">ortho_transform_to_coords</span></code>(transform, dims)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">rotate_grid</span></code>(grid, angle[, axis, center, ...])</p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="fluidgym.simulation.pict.data.resample.html" class="btn btn-neutral float-left" title="fluidgym.simulation.pict.data.resample" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="fluidgym.simulation.pict.data.torroja.html" class="btn btn-neutral float-right" title="fluidgym.simulation.pict.data.torroja" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Safe Autonomous Systems (SAS), TU Dortmund University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

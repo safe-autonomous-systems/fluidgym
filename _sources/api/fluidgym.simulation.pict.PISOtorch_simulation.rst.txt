@@ -1,0 +1,32 @@
+fluidgym.simulation.pict.PISOtorch\_simulation
+==============================================
+
+.. automodule:: fluidgym.simulation.pict.PISOtorch_simulation
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      add_pressure_ts_norm
+      append_prep_fn
+      balance_boundary_fluxes
+      getVelocityResultMaxMag
+      getVelocityResultMaxVel
+      get_advective_velocity
+      get_fixed_boundary_flux
+      get_fixed_boundary_fluxes
+      get_max_time_step
+      get_varying_boundary_flux
+      prepend_prep_fn
+      restrict_inflow
+      tensor_as_np
+      update_advective_boundaries
+      update_advective_boundaries_static
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      Simulation
+   

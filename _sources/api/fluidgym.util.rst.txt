@@ -1,0 +1,14 @@
+fluidgym.util
+=============
+
+.. automodule:: fluidgym.util
+
+   
+.. rubric:: Modules
+
+.. autosummary::
+   :toctree:
+   :recursive:
+
+   data_utils
+   helpers

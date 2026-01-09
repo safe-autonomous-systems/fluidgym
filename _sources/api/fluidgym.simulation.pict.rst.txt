@@ -1,0 +1,16 @@
+fluidgym.simulation.pict
+========================
+
+.. automodule:: fluidgym.simulation.pict
+
+   
+.. rubric:: Modules
+
+.. autosummary::
+   :toctree:
+   :recursive:
+
+   PISOtorch_diff
+   PISOtorch_simulation
+   data
+   util

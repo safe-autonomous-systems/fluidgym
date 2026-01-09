@@ -1,0 +1,147 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fluidgym.envs.airfoil.airfoil_env_2d &mdash; FluidGym 0.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=d45e8c67"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="fluidgym.envs.airfoil.airfoil_env_3d" href="fluidgym.envs.airfoil.airfoil_env_3d.html" />
+    <link rel="prev" title="fluidgym.envs.airfoil" href="fluidgym.envs.airfoil.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            FluidGym
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../basic_usage/index.html">Basic Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../advanced_usage/index.html">Advanced Usage</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../api.html">API References</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="fluidgym.html">fluidgym</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.config.html">fluidgym.config</a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="fluidgym.envs.html">fluidgym.envs</a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="fluidgym.envs.airfoil.html">fluidgym.envs.airfoil</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fluidgym.envs.cylinder.html">fluidgym.envs.cylinder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fluidgym.envs.fluid_env.html">fluidgym.envs.fluid_env</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fluidgym.envs.multi_agent_fluid_env.html">fluidgym.envs.multi_agent_fluid_env</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fluidgym.envs.parallel_env.html">fluidgym.envs.parallel_env</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fluidgym.envs.rbc.html">fluidgym.envs.rbc</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fluidgym.envs.tcf.html">fluidgym.envs.tcf</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fluidgym.envs.util.html">fluidgym.envs.util</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.integration.html">fluidgym.integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.registry.html">fluidgym.registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.simulation.html">fluidgym.simulation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.util.html">fluidgym.util</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../faq.html">Frequently Asked Questions</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">FluidGym</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">API References</a></li>
+          <li class="breadcrumb-item"><a href="fluidgym.html">fluidgym</a></li>
+          <li class="breadcrumb-item"><a href="fluidgym.envs.html">fluidgym.envs</a></li>
+          <li class="breadcrumb-item"><a href="fluidgym.envs.airfoil.html">fluidgym.envs.airfoil</a></li>
+      <li class="breadcrumb-item active">fluidgym.envs.airfoil.airfoil_env_2d</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/fluidgym.envs.airfoil.airfoil_env_2d.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-fluidgym.envs.airfoil.airfoil_env_2d">
+<span id="fluidgym-envs-airfoil-airfoil-env-2d"></span><h1>fluidgym.envs.airfoil.airfoil_env_2d<a class="headerlink" href="#module-fluidgym.envs.airfoil.airfoil_env_2d" title="Link to this heading"></a></h1>
+<p>Environment for 2D airfoil aerodynamic efficiency improvement.</p>
+<p class="rubric">Classes</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">AirfoilEnv2D</span></code>(reynolds_number, adaptive_cfl, ...)</p></td>
+<td><p>Environment for 2D airfoil aerodynamic efficiency improvement.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="fluidgym.envs.airfoil.html" class="btn btn-neutral float-left" title="fluidgym.envs.airfoil" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="fluidgym.envs.airfoil.airfoil_env_3d.html" class="btn btn-neutral float-right" title="fluidgym.envs.airfoil.airfoil_env_3d" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Safe Autonomous Systems (SAS), TU Dortmund University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

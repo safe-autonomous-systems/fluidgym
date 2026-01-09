@@ -1,0 +1,17 @@
+fluidgym.simulation.pict.util.domain\_io
+========================================
+
+.. automodule:: fluidgym.simulation.pict.util.domain_io
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      bound_idx_to_str
+      boundary_condition_string_to_type
+      boundary_condition_type_to_string
+      dtype_to_string
+      load_domain
+      save_domain
+   

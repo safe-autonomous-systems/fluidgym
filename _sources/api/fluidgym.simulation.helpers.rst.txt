@@ -1,0 +1,15 @@
+fluidgym.simulation.helpers
+===========================
+
+.. automodule:: fluidgym.simulation.helpers
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      get_cell_centers
+      get_cell_size
+      get_transform_matrices
+      transform_to_computional_domain
+   

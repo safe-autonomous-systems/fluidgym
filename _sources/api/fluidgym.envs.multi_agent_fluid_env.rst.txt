@@ -1,0 +1,12 @@
+fluidgym.envs.multi\_agent\_fluid\_env
+======================================
+
+.. automodule:: fluidgym.envs.multi_agent_fluid_env
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      MultiAgentFluidEnv
+   

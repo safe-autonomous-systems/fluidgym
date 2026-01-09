@@ -1,0 +1,26 @@
+fluidgym.simulation.pict.data.resample
+======================================
+
+.. automodule:: fluidgym.simulation.pict.data.resample
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      get_output_shape
+      get_uniform_transform
+      make_matrix_scaling
+      make_matrix_translation
+      make_meshgrid_AABB
+      make_uniform_transform_AABB_inner
+      make_uniform_transform_AABB_outer
+      sample_coords_from_uniform_grid
+      sample_coords_to_uniform_grid
+      sample_from_uniform_grid
+      sample_multi_coords_from_uniform_grid
+      sample_multi_coords_to_uniform_grid
+      sample_to_uniform_grid
+      sample_transform_from_uniform_grid
+      sample_transform_to_uniform_grid
+   

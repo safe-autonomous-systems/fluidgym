@@ -1,0 +1,23 @@
+fluidgym.simulation.pict.data.online\_statistics
+================================================
+
+.. automodule:: fluidgym.simulation.pict.data.online_statistics
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      torch_squeeze_multidim
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      CovarianceOnlineParallel_Torch
+      MultivariateMomentsOnlineParallel_Torch
+      PSDOnline_Torch
+      TemporalTwoPointCorrelation_Online_torch
+      TurbulentEnergyBudgetsOnlineParallel_Torch
+      WelfordOnlineParallel_Torch
+   

@@ -1,0 +1,14 @@
+fluidgym.envs.airfoil.grid
+==========================
+
+.. automodule:: fluidgym.envs.airfoil.grid
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      get_jet_locations
+      make_airfoil_domain
+      read_airfoil
+   

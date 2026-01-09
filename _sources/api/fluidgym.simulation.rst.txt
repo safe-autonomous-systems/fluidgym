@@ -1,0 +1,16 @@
+fluidgym.simulation
+===================
+
+.. automodule:: fluidgym.simulation
+
+   
+.. rubric:: Modules
+
+.. autosummary::
+   :toctree:
+   :recursive:
+
+   extensions
+   helpers
+   pict
+   simulation

@@ -1,0 +1,17 @@
+fluidgym.simulation.pict.data
+=============================
+
+.. automodule:: fluidgym.simulation.pict.data
+
+   
+.. rubric:: Modules
+
+.. autosummary::
+   :toctree:
+   :recursive:
+
+   TCF_tools
+   online_statistics
+   resample
+   shapes
+   torroja

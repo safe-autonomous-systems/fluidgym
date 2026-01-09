@@ -1,0 +1,80 @@
+fluidgym.simulation.extensions.PISOtorch
+========================================
+
+.. automodule:: fluidgym.simulation.extensions.PISOtorch
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      ComputePressureGradient
+      ComputeSpatialVelocityGradients
+      ComputeVelocityDivergence
+      CoordsToFaceTransforms
+      CoordsToTransforms
+      CopyPressureResultFromBlocks
+      CopyPressureResultGradFromBlocks
+      CopyPressureResultToBlocks
+      CopyScalarResultFromBlocks
+      CopyScalarResultGradFromBlocks
+      CopyScalarResultGradToBlocks
+      CopyScalarResultToBlocks
+      CopyVelocityResultFromBlocks
+      CopyVelocityResultGradFromBlocks
+      CopyVelocityResultGradToBlocks
+      CopyVelocityResultToBlocks
+      CorrectVelocity
+      CorrectVelocityGrad
+      EigenDecomposition
+      InvertMatrix
+      MakeBasisUnique
+      MakeCoordsNDNonUniformScaleNormalized
+      MakeGrid2DNonUniformScale
+      MakeGridNDExpScaleNormalized
+      MakeGridNDNonUniformScaleNormalized
+      SGSviscosityIncompressibleSmagorinsky
+      SampleTransformedGridGlobalToLocal
+      SampleTransformedGridLocalToGlobal
+      SampleTransformedGridLocalToGlobalMulti
+      SetupAdvectionMatrix
+      SetupAdvectionMatrixGrad
+      SetupAdvectionScalar
+      SetupAdvectionScalarGrad
+      SetupAdvectionVelocity
+      SetupAdvectionVelocityGrad
+      SetupPressureCorrection
+      SetupPressureCorrectionGrad
+      SetupPressureMatrix
+      SetupPressureMatrixGrad
+      SetupPressureRHS
+      SetupPressureRHSGrad
+      SetupPressureRHSdiv
+      SetupPressureRHSdivGrad
+      SolveLinear
+      SparseOuterProduct
+      TransformVectors
+      VectorToDiagMatrix
+      matmul
+      matmulGrad
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      Block
+      Boundary
+      BoundaryConditionType
+      BoundarySampling
+      BoundaryType
+      CSRmatrix
+      ConnectedBoundary
+      ConvergenceCriterion
+      Domain
+      FixedBoundary
+      Int4
+      LinearSolverResultInfo
+      PeriodicBoundary
+      StaticDirichletBoundary
+      VaryingDirichletBoundary
+   

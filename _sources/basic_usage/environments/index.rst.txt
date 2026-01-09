@@ -1,0 +1,11 @@
+FluidGym Environments
+=====================
+
+.. toctree::
+   :hidden:
+   :maxdepth: 2
+
+   cylinder
+   rayleigh_benard_convection
+   airfoil
+   turbulent_channel_flow

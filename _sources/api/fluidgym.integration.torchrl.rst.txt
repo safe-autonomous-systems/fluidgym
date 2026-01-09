@@ -1,0 +1,12 @@
+fluidgym.integration.torchrl
+============================
+
+.. automodule:: fluidgym.integration.torchrl
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      TorchRLFluidEnv
+   

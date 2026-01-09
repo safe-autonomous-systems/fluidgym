@@ -1,0 +1,12 @@
+fluidgym.envs.cylinder.jet\_cylinder\_env\_3d
+=============================================
+
+.. automodule:: fluidgym.envs.cylinder.jet_cylinder_env_3d
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      CylinderJetEnv3D
+   

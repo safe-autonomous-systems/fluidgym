@@ -1,0 +1,18 @@
+﻿fluidgym
+========
+
+.. automodule:: fluidgym
+
+   
+.. rubric:: Modules
+
+.. autosummary::
+   :toctree:
+   :recursive:
+
+   config
+   envs
+   integration
+   registry
+   simulation
+   util

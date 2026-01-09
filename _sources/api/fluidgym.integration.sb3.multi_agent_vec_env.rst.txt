@@ -1,0 +1,12 @@
+fluidgym.integration.sb3.multi\_agent\_vec\_env
+===============================================
+
+.. automodule:: fluidgym.integration.sb3.multi_agent_vec_env
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      MultiAgentVecEnv
+   

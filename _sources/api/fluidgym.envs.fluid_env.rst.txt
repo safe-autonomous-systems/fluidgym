@@ -1,0 +1,14 @@
+fluidgym.envs.fluid\_env
+========================
+
+.. automodule:: fluidgym.envs.fluid_env
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      EnvMode
+      FluidEnv
+      Stats
+   

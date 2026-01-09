@@ -1,0 +1,22 @@
+fluidgym.simulation.pict.util.logging
+=====================================
+
+.. automodule:: fluidgym.simulation.pict.util.logging
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      close_logging
+      get_logger
+      get_now_string
+      setup_logging
+      setup_run
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      StreamCapture
+   

@@ -1,0 +1,284 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fluidgym.envs.cylinder.rotating_cylinder_env_2d &mdash; FluidGym 0.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../../_static/documentation_options.js?v=d45e8c67"></script>
+      <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../../index.html" class="icon icon-home">
+            FluidGym
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../basic_usage/index.html">Basic Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../advanced_usage/index.html">Advanced Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../faq.html">Frequently Asked Questions</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">FluidGym</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">fluidgym.envs.cylinder.rotating_cylinder_env_2d</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for fluidgym.envs.cylinder.rotating_cylinder_env_2d</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Environment for flow around a cylinder with rotating cylinder actuation.&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.envs.cylinder.cylinder_env_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">CylinderEnvBase</span>
+
+<span class="n">CYLINDER_ROT_2D_DEFAULT_CONFIG</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;reynolds_number&quot;</span><span class="p">:</span> <span class="mf">1e2</span><span class="p">,</span>
+    <span class="s2">&quot;resolution&quot;</span><span class="p">:</span> <span class="mi">24</span><span class="p">,</span>
+    <span class="s2">&quot;dt&quot;</span><span class="p">:</span> <span class="mf">1e-2</span><span class="p">,</span>
+    <span class="s2">&quot;adaptive_cfl&quot;</span><span class="p">:</span> <span class="mf">0.8</span><span class="p">,</span>
+    <span class="s2">&quot;step_length&quot;</span><span class="p">:</span> <span class="mf">0.25</span><span class="p">,</span>
+    <span class="s2">&quot;episode_length&quot;</span><span class="p">:</span> <span class="mi">80</span><span class="p">,</span>
+    <span class="s2">&quot;lift_penalty&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+    <span class="s2">&quot;dtype&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
+    <span class="s2">&quot;load_initial_domain&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="s2">&quot;load_domain_statistics&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="s2">&quot;randomize_initial_state&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="s2">&quot;enable_actions&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="s2">&quot;differentiable&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="CylinderRotEnv2D">
+<a class="viewcode-back" href="../../../../api/generated/fluidgym.envs.cylinder.rotating_cylinder_env_2d.CylinderRotEnv2D.html#fluidgym.envs.cylinder.rotating_cylinder_env_2d.CylinderRotEnv2D">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CylinderRotEnv2D</span><span class="p">(</span><span class="n">CylinderEnvBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Environment for flow around a cylinder with rotating cylinder actuation.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    reynolds_number: float</span>
+<span class="sd">        The Reynolds number of the flow.</span>
+
+<span class="sd">    resolution: int</span>
+<span class="sd">        The resolution of the simulation grid. Corresponds to the angular resolution</span>
+<span class="sd">        around the cylinder.</span>
+
+<span class="sd">    dt: float</span>
+<span class="sd">        The time step size to use in the simulation.</span>
+
+<span class="sd">    adaptive_cfl: float</span>
+<span class="sd">        The adaptive CFL number to use in the simulation.</span>
+
+<span class="sd">    step_length: float</span>
+<span class="sd">        The non-dimensional time length of each environment step.</span>
+
+<span class="sd">    episode_length: int</span>
+<span class="sd">        The number of steps per episode.</span>
+
+<span class="sd">    lift_penalty: float</span>
+<span class="sd">        The penalty factor for lift in the reward calculation.</span>
+
+<span class="sd">    dtype: torch.dtype</span>
+<span class="sd">        The data type to use for the simulation. Defaults to torch.float32.</span>
+
+<span class="sd">    cuda_device: torch.device | None</span>
+<span class="sd">        The CUDA device to use for the simulation. If None, the default cuda device is</span>
+<span class="sd">        used. Defaults to None.</span>
+
+<span class="sd">    load_initial_domain: bool</span>
+<span class="sd">        Whether to load initial domain states from disk. Defaults to True.</span>
+
+<span class="sd">    load_domain_statistics: bool</span>
+<span class="sd">        Whether to load domain statistics from disk. Defaults to True.</span>
+
+<span class="sd">    randomize_initial_state: bool</span>
+<span class="sd">        Whether to randomize the initial state on reset. Defaults to True.</span>
+
+<span class="sd">    enable_actions: bool</span>
+<span class="sd">        Whether to enable actions. If False, the environment will be run in</span>
+<span class="sd">        uncontrolled mode. Defaults to True.</span>
+
+<span class="sd">    differentiable: bool</span>
+<span class="sd">        Whether to enable differentiable simulation mode. Defaults to False.</span>
+
+<span class="sd">    References</span>
+<span class="sd">    ----------</span>
+<span class="sd">    [1] M. Tokarev, E. Palkin, and R. Mullyadzhanov, “Deep Reinforcement Learning</span>
+<span class="sd">    Control of Cylinder Flow Using Rotary Oscillations at Low Reynolds Number,”</span>
+<span class="sd">    Energies, vol. 13, no. 22, Art. no. 22, Jan. 2020, doi: 10.3390/en13225920.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">reynolds_number</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">resolution</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">adaptive_cfl</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">step_length</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">episode_length</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">lift_penalty</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">dtype</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
+        <span class="n">cuda_device</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">load_initial_domain</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">load_domain_statistics</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">randomize_initial_state</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">enable_actions</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">differentiable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">ndims</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="n">resolution</span><span class="o">=</span><span class="n">resolution</span><span class="p">,</span>
+            <span class="n">reynolds_number</span><span class="o">=</span><span class="n">reynolds_number</span><span class="p">,</span>
+            <span class="n">dt</span><span class="o">=</span><span class="n">dt</span><span class="p">,</span>
+            <span class="n">adaptive_cfl</span><span class="o">=</span><span class="n">adaptive_cfl</span><span class="p">,</span>
+            <span class="n">step_length</span><span class="o">=</span><span class="n">step_length</span><span class="p">,</span>
+            <span class="n">episode_length</span><span class="o">=</span><span class="n">episode_length</span><span class="p">,</span>
+            <span class="n">lift_penalty</span><span class="o">=</span><span class="n">lift_penalty</span><span class="p">,</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span>
+            <span class="n">cuda_device</span><span class="o">=</span><span class="n">cuda_device</span><span class="p">,</span>
+            <span class="n">load_initial_domain</span><span class="o">=</span><span class="n">load_initial_domain</span><span class="p">,</span>
+            <span class="n">load_domain_statistics</span><span class="o">=</span><span class="n">load_domain_statistics</span><span class="p">,</span>
+            <span class="n">randomize_initial_state</span><span class="o">=</span><span class="n">randomize_initial_state</span><span class="p">,</span>
+            <span class="n">enable_actions</span><span class="o">=</span><span class="n">enable_actions</span><span class="p">,</span>
+            <span class="n">differentiable</span><span class="o">=</span><span class="n">differentiable</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_additional_initialization</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_additional_initialization</span><span class="p">()</span>
+        <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_left_velocity</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_top_velocity</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_bottom_velocity</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_right_velocity</span><span class="p">,</span>
+        <span class="p">)</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_boundary_velocities</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_boundary_velocities</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">coords_to_velocities</span><span class="p">(</span><span class="n">coords_boundary</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+            <span class="n">centers</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">coords_boundary</span><span class="p">[:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">coords_boundary</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">:])</span>
+
+            <span class="n">velocities</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">centers</span><span class="p">)</span>
+            <span class="n">theta</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">atan2</span><span class="p">(</span><span class="n">centers</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="p">:],</span> <span class="n">centers</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:])</span>
+            <span class="n">velocities</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">velocities</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">theta</span><span class="p">),</span> <span class="o">-</span><span class="n">torch</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">theta</span><span class="p">)</span>
+
+            <span class="k">return</span> <span class="n">velocities</span>
+
+        <span class="n">vertex_coords</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="o">.</span><span class="n">getVertexCoordinates</span><span class="p">()</span>
+        <span class="n">left_coords</span> <span class="o">=</span> <span class="n">vertex_coords</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_left_block_idx</span><span class="p">]</span>
+        <span class="n">top_coords</span> <span class="o">=</span> <span class="n">vertex_coords</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_top_block_idx</span><span class="p">]</span>
+        <span class="n">right_coords</span> <span class="o">=</span> <span class="n">vertex_coords</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_right_block_idx</span><span class="p">]</span>
+        <span class="n">bottom_coords</span> <span class="o">=</span> <span class="n">vertex_coords</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_bottom_block_idx</span><span class="p">]</span>
+
+        <span class="n">left_coords_boundary</span> <span class="o">=</span> <span class="n">left_coords</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">top_coords_boundary</span> <span class="o">=</span> <span class="n">top_coords</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="n">right_coords_boundary</span> <span class="o">=</span> <span class="n">right_coords</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="n">bottom_coords_boundary</span> <span class="o">=</span> <span class="n">bottom_coords</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]</span>
+
+        <span class="n">left_velocities</span> <span class="o">=</span> <span class="n">coords_to_velocities</span><span class="p">(</span><span class="n">left_coords_boundary</span><span class="p">)</span>
+        <span class="n">top_velocities</span> <span class="o">=</span> <span class="n">coords_to_velocities</span><span class="p">(</span><span class="n">top_coords_boundary</span><span class="p">)</span>
+        <span class="n">right_velocities</span> <span class="o">=</span> <span class="n">coords_to_velocities</span><span class="p">(</span><span class="n">right_coords_boundary</span><span class="p">)</span>
+        <span class="n">bottom_velocities</span> <span class="o">=</span> <span class="n">coords_to_velocities</span><span class="p">(</span><span class="n">bottom_coords_boundary</span><span class="p">)</span>
+
+        <span class="n">left_velocities</span> <span class="o">=</span> <span class="n">left_velocities</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="kc">None</span><span class="p">]</span>
+        <span class="n">top_velocities</span> <span class="o">=</span> <span class="n">top_velocities</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="n">right_velocities</span> <span class="o">=</span> <span class="n">right_velocities</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="kc">None</span><span class="p">]</span>
+        <span class="n">bottom_velocities</span> <span class="o">=</span> <span class="n">bottom_velocities</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:]</span>
+
+        <span class="k">return</span> <span class="n">left_velocities</span><span class="p">,</span> <span class="n">top_velocities</span><span class="p">,</span> <span class="n">bottom_velocities</span><span class="p">,</span> <span class="n">right_velocities</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_apply_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Apply the given action to the simulation.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        action: torch.Tensor</span>
+<span class="sd">            The action to apply, representing the rotation speed of the cylinder wall.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_left_boundary</span><span class="o">.</span><span class="n">setVelocity</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_left_velocity</span> <span class="o">*</span> <span class="n">action</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_top_boundary</span><span class="o">.</span><span class="n">setVelocity</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_top_velocity</span> <span class="o">*</span> <span class="n">action</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_right_boundary</span><span class="o">.</span><span class="n">setVelocity</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_right_velocity</span> <span class="o">*</span> <span class="n">action</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bottom_boundary</span><span class="o">.</span><span class="n">setVelocity</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_bottom_velocity</span> <span class="o">*</span> <span class="n">action</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Unique identifier for the environment.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;RotatingCylinder</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_ndims</span><span class="si">}</span><span class="s2">D_Re</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_reynolds_number</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Safe Autonomous Systems (SAS), TU Dortmund University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

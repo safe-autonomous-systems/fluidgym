@@ -1,0 +1,6 @@
+fluidgym.config
+===============
+
+.. currentmodule:: fluidgym
+
+.. autodata:: config

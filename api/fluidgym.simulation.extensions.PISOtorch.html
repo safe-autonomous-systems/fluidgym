@@ -1,0 +1,336 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fluidgym.simulation.extensions.PISOtorch &mdash; FluidGym 0.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=d45e8c67"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="fluidgym.simulation.helpers" href="fluidgym.simulation.helpers.html" />
+    <link rel="prev" title="fluidgym.simulation.extensions" href="fluidgym.simulation.extensions.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            FluidGym
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../basic_usage/index.html">Basic Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../advanced_usage/index.html">Advanced Usage</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../api.html">API References</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="fluidgym.html">fluidgym</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.config.html">fluidgym.config</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.html">fluidgym.envs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.integration.html">fluidgym.integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.registry.html">fluidgym.registry</a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="fluidgym.simulation.html">fluidgym.simulation</a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="fluidgym.simulation.extensions.html">fluidgym.simulation.extensions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fluidgym.simulation.helpers.html">fluidgym.simulation.helpers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fluidgym.simulation.pict.html">fluidgym.simulation.pict</a></li>
+<li class="toctree-l4"><a class="reference internal" href="fluidgym.simulation.simulation.html">fluidgym.simulation.simulation</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.util.html">fluidgym.util</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../faq.html">Frequently Asked Questions</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">FluidGym</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">API References</a></li>
+          <li class="breadcrumb-item"><a href="fluidgym.html">fluidgym</a></li>
+          <li class="breadcrumb-item"><a href="fluidgym.simulation.html">fluidgym.simulation</a></li>
+          <li class="breadcrumb-item"><a href="fluidgym.simulation.extensions.html">fluidgym.simulation.extensions</a></li>
+      <li class="breadcrumb-item active">fluidgym.simulation.extensions.PISOtorch</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/fluidgym.simulation.extensions.PISOtorch.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-fluidgym.simulation.extensions.PISOtorch">
+<span id="fluidgym-simulation-extensions-pisotorch"></span><h1>fluidgym.simulation.extensions.PISOtorch<a class="headerlink" href="#module-fluidgym.simulation.extensions.PISOtorch" title="Link to this heading"></a></h1>
+<p class="rubric">Functions</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">ComputePressureGradient</span></code>(arg0, arg1, arg2)</p></td>
+<td><p>pressure gradient (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">ComputeSpatialVelocityGradients</span></code>(domain)</p></td>
+<td><p>Compute the spatial gradients of all velocity components of all blocks in the domain.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">ComputeVelocityDivergence</span></code>(arg0)</p></td>
+<td><p>velocity divergence (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CoordsToFaceTransforms</span></code>(arg0)</p></td>
+<td><p>Computes cell face transformation metrics from cell vertex coordinates.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CoordsToTransforms</span></code>(arg0)</p></td>
+<td><p>Computes cell transformation metrics from cell vertex coordinates.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CopyPressureResultFromBlocks</span></code>(arg0)</p></td>
+<td><p>PISO copy pressure result (CUDA)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CopyPressureResultGradFromBlocks</span></code>(arg0)</p></td>
+<td><p>PISO copy scalar result grad (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CopyPressureResultToBlocks</span></code>(arg0)</p></td>
+<td><p>PISO copy pressure result (CUDA)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CopyScalarResultFromBlocks</span></code>(arg0)</p></td>
+<td><p>PISO copy scalar result (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CopyScalarResultGradFromBlocks</span></code>(arg0)</p></td>
+<td><p>PISO copy scalar result grad (CUDA)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CopyScalarResultGradToBlocks</span></code>(arg0)</p></td>
+<td><p>PISO copy scalar result grad (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CopyScalarResultToBlocks</span></code>(arg0)</p></td>
+<td><p>PISO copy scalar result (CUDA)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CopyVelocityResultFromBlocks</span></code>(arg0)</p></td>
+<td><p>PISO copy velocity result back (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CopyVelocityResultGradFromBlocks</span></code>(arg0)</p></td>
+<td><p>PISO copy velocity result grad (CUDA)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CopyVelocityResultGradToBlocks</span></code>(arg0)</p></td>
+<td><p>PISO copy velocity result grad (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CopyVelocityResultToBlocks</span></code>(arg0)</p></td>
+<td><p>PISO copy velocity result (CUDA)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CorrectVelocity</span></code>(domain, timeStep[, version, ...])</p></td>
+<td><p>Correct the velocity given by pressureRHSdiv with the gradient of the blocks' pressure fields.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CorrectVelocityGrad</span></code>(arg0, arg1, arg2)</p></td>
+<td><p>PISO correct velocity gradient (CUDA)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">EigenDecomposition</span></code>(matrices[, ...])</p></td>
+<td><p>Eigen decomposition of symmetric matrices (CUDA).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">InvertMatrix</span></code>(matrices[, inPlace])</p></td>
+<td><p>Returns the inverse of a square matrix in the channel dimension.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">MakeBasisUnique</span></code>(basisMatrices, sortingVectors)</p></td>
+<td><p>Makes a given set of orthogonal basis vectors (as colums in flat row-major matrices) unique (CUDA).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">MakeCoordsNDNonUniformScaleNormalized</span></code>(arg0, ...)</p></td>
+<td><p>MakeCoordsNDNonUniformScaleNormalized (CUDA)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">MakeGrid2DNonUniformScale</span></code>(arg0, arg1, arg2)</p></td>
+<td><p>MakeGrid2DNonUniformScale (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">MakeGridNDExpScaleNormalized</span></code>(arg0, arg1, ...)</p></td>
+<td><p>MakeGridNDExpScaleNormalized (CUDA)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">MakeGridNDNonUniformScaleNormalized</span></code>(arg0, ...)</p></td>
+<td><p>MakeGridNDNonUniformScaleNormalized (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SGSviscosityIncompressibleSmagorinsky</span></code>(...)</p></td>
+<td><p>Compute the additive viscosities for a Smagorinsky SGS scheme based on the velocity field.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SampleTransformedGridGlobalToLocal</span></code>(...)</p></td>
+<td><p>Sample from a globally transformed grid (single transformation matrix for all cells) to a locally transformed grid (individual cell coordinates).Each cell of the output grid gathers its value by interpolating cells of the input grid.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SampleTransformedGridLocalToGlobal</span></code>(...[, ...])</p></td>
+<td><p>Sample from a locally transformed grid (individual cell coordinates) to a globally transformed grid (single transformation matrix for all cells).Each cell of the input grid scatters its value to cells of the output grid.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SampleTransformedGridLocalToGlobalMulti</span></code>(...)</p></td>
+<td><p>Version of SampleTransformedGridLocalToGlobal with multiple input grids.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SetupAdvectionMatrix</span></code>(domain, timeStep, ...)</p></td>
+<td><p>Setup the matrix of the advection/diffusion system.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SetupAdvectionMatrixGrad</span></code>(domain, timeStep, ...)</p></td>
+<td><p>PISO setup A matrix gradient (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SetupAdvectionScalar</span></code>(domain, timeStep, ...)</p></td>
+<td><p>Setup the RHS for passive scalar advection/diffusion.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SetupAdvectionScalarGrad</span></code>(domain, timeStep, ...)</p></td>
+<td><p>PISO setup scalar advection gradient (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SetupAdvectionVelocity</span></code>(domain, timeStep, ...)</p></td>
+<td><p>Setup the RHS for velocity advection/diffusion.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SetupAdvectionVelocityGrad</span></code>(domain, timeStep, ...)</p></td>
+<td><p>PISO setup velocity advection gradient (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SetupPressureCorrection</span></code>(domain, timeStep[, ...])</p></td>
+<td><p>Setup matrix, RHS, and div(RHS) of the pressure system.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SetupPressureCorrectionGrad</span></code>(domain, timeStep)</p></td>
+<td><p>PISO setup pressure gradient (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SetupPressureMatrix</span></code>(domain, timeStep[, ...])</p></td>
+<td><p>Setup only the matrix of the pressure system.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SetupPressureMatrixGrad</span></code>(domain, timeStep[, ...])</p></td>
+<td><p>PISO setup pressure gradient (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SetupPressureRHS</span></code>(domain, timeStep[, ...])</p></td>
+<td><p>Setup RHS and div(RHS) of the pressure system.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SetupPressureRHSGrad</span></code>(domain, timeStep[, ...])</p></td>
+<td><p>PISO setup pressure gradient (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SetupPressureRHSdiv</span></code>(domain, timeStep[, ...])</p></td>
+<td><p>Compute only div(RHS).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SetupPressureRHSdivGrad</span></code>(domain, timeStep[, ...])</p></td>
+<td><p>PISO setup pressure gradient (CUDA)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SolveLinear</span></code>(A, RHS, x, maxIterations, ...)</p></td>
+<td><p>Sparse linear solve on GPU (CUDA).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">SparseOuterProduct</span></code>(arg0, arg1, arg2)</p></td>
+<td><p>Outer product multiplied by sparsity pattern of result matrix.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">TransformVectors</span></code>(arg0, arg1, arg2)</p></td>
+<td><p>Transform vectors with given transformation.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">VectorToDiagMatrix</span></code>(vectors)</p></td>
+<td><p>Writes the vector in the channel dimension into the diagonal of a flat row-major matrix in the channel dimension.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">matmul</span></code>(vectorMatrixA, vectorMatrixB[, ...])</p></td>
+<td><p>Computes the product matrix/vector * matrix/vector for vectors or symmetrics matrices given in the channel dimension of NCDHW tensors.Matrices are assumed to be in a flattend row-major format.transpose and invert only apply if the quantity is a matrix.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">matmulGrad</span></code>(vectorMatrixA, vectorMatrixB, ...)</p></td>
+<td><p>Computes gradients of the product matrix/vector * matrix/vector for vectors or symmetrics matrices given in the channel dimension of NCDHW tensors.Matrices are assumed to be in a flattend row-major format.transpose and invert only apply if the quantity is a matrix.</p></td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Classes</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">Block</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">Boundary</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">BoundaryConditionType</span></code></p></td>
+<td><p>Members:</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">BoundarySampling</span></code></p></td>
+<td><p>Members:</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">BoundaryType</span></code></p></td>
+<td><p>Members:</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">CSRmatrix</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">ConnectedBoundary</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">ConvergenceCriterion</span></code></p></td>
+<td><p>Members:</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">Domain</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">FixedBoundary</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">Int4</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">LinearSolverResultInfo</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">PeriodicBoundary</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">StaticDirichletBoundary</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">VaryingDirichletBoundary</span></code></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="fluidgym.simulation.extensions.html" class="btn btn-neutral float-left" title="fluidgym.simulation.extensions" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="fluidgym.simulation.helpers.html" class="btn btn-neutral float-right" title="fluidgym.simulation.helpers" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Safe Autonomous Systems (SAS), TU Dortmund University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

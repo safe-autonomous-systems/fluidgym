@@ -1,0 +1,41 @@
+Cylinder Flow Environments
+==========================
+
+Flow past a cylinder with active control via jet or rotational actuation.
+
++-----------------------------+-----------+-------------+------------+
+| Environment ID              | Actuation | Reynolds    | Resolution |
++=============================+===========+=============+============+
+| ``CylinderJet2D-easy-v0``   | Jet       | 100         | 24         |
++-----------------------------+-----------+-------------+------------+
+| ``CylinderJet2D-medium-v0`` | Jet       | 250         | 32         |
++-----------------------------+-----------+-------------+------------+
+| ``CylinderJet2D-hard-v0``   | Jet       | 500         | 32         |
++-----------------------------+-----------+-------------+------------+
+| ``CylinderRot2D-easy-v0``   | Rotation  | 100         | 24         |
++-----------------------------+-----------+-------------+------------+
+| ``CylinderRot2D-medium-v0`` | Rotation  | 250         | 32         |
++-----------------------------+-----------+-------------+------------+
+| ``CylinderRot2D-hard-v0``   | Rotation  | 500         | 32         |
++-----------------------------+-----------+-------------+------------+
+| ``CylinderJet3D-easy-v0``   | Jet       | 100         | 24         |
++-----------------------------+-----------+-------------+------------+
+| ``CylinderJet3D-medium-v0`` | Jet       | 250         | 32         |
++-----------------------------+-----------+-------------+------------+
+| ``CylinderJet3D-hard-v0``   | Jet       | 500         | 48         |
++-----------------------------+-----------+-------------+------------+
+
+.. automodule:: fluidgym.envs.cylinder
+   :no-members:
+   :no-inherited-members:
+
+Classes
+-------
+
+.. autosummary::
+   :toctree: generated/
+   :template: class.rst
+
+   fluidgym.envs.cylinder.jet_cylinder_env_2d.CylinderJetEnv2D
+   fluidgym.envs.cylinder.rotating_cylinder_env_2d.CylinderRotEnv2D
+   fluidgym.envs.cylinder.jet_cylinder_env_3d.CylinderJetEnv3D

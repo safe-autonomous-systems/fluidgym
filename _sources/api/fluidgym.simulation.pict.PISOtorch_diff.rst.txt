@@ -1,0 +1,42 @@
+fluidgym.simulation.pict.PISOtorch\_diff
+========================================
+
+.. automodule:: fluidgym.simulation.pict.PISOtorch_diff
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      CopyPressureResultToBlocks
+      CopyScalarResultFromBlocks
+      CopyScalarResultToBlocks
+      CopyVelocityResultFromBlocks
+      CopyVelocityResultToBlocks
+      CorrectVelocity
+      SetupAdvectionMatrix
+      SetupAdvectionScalar
+      SetupAdvectionVelocity
+      SetupPressureCorrection
+      SetupPressureMatrix
+      SetupPressureRHS
+      SetupPressureRHSdiv
+      check_non_ortho_rhs
+      clear_excluded_gradients
+      detach_domain
+      detach_domain_fwd
+      detach_domain_grad
+      exclude_gradient
+      flatten_domain
+      is_tensor_empty
+      linear_solve_GPU
+      matmul
+      reset_domain
+      set_domain_tensors_from_flat
+   
+   .. rubric:: Exceptions
+
+   .. autosummary::
+   
+      LinsolveError
+   

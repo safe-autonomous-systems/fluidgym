@@ -1,0 +1,14 @@
+fluidgym.envs.util.obs\_extraction
+==================================
+
+.. automodule:: fluidgym.envs.util.obs_extraction
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      extract_moving_window_2d
+      extract_moving_window_2d_x_z
+      extract_moving_window_3d
+   

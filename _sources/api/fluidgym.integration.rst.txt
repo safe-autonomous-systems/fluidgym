@@ -1,0 +1,16 @@
+fluidgym.integration
+====================
+
+.. automodule:: fluidgym.integration
+
+   
+.. rubric:: Modules
+
+.. autosummary::
+   :toctree:
+   :recursive:
+
+   gymnasium
+   pettingzoo
+   sb3
+   torchrl

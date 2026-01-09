@@ -1,0 +1,12 @@
+fluidgym.envs.cylinder.rotating\_cylinder\_env\_2d
+==================================================
+
+.. automodule:: fluidgym.envs.cylinder.rotating_cylinder_env_2d
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      CylinderRotEnv2D
+   

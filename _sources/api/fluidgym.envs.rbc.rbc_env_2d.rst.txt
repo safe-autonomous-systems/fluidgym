@@ -1,0 +1,12 @@
+fluidgym.envs.rbc.rbc\_env\_2d
+==============================
+
+.. automodule:: fluidgym.envs.rbc.rbc_env_2d
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      RBCEnv2D
+   

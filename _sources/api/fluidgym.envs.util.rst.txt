@@ -1,0 +1,16 @@
+fluidgym.envs.util
+==================
+
+.. automodule:: fluidgym.envs.util
+
+   
+.. rubric:: Modules
+
+.. autosummary::
+   :toctree:
+   :recursive:
+
+   forces
+   obs_extraction
+   profiles
+   visualization

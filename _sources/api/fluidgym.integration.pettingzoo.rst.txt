@@ -1,0 +1,12 @@
+fluidgym.integration.pettingzoo
+===============================
+
+.. automodule:: fluidgym.integration.pettingzoo
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      PettingZooFluidEnv
+   

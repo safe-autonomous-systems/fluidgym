@@ -1,0 +1,20 @@
+fluidgym.registry
+=================
+
+.. automodule:: fluidgym.registry
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      make
+      register
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      EnvRegistry
+      EnvSpec
+   

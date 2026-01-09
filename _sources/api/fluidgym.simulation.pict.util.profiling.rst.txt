@@ -1,0 +1,23 @@
+fluidgym.simulation.pict.util.profiling
+=======================================
+
+.. automodule:: fluidgym.simulation.pict.util.profiling
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      SAMPLE
+      STATS
+      format_time
+      sample
+      stats
+      time_unit
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      Profiler
+   

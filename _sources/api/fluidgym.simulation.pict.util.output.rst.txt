@@ -1,0 +1,45 @@
+fluidgym.simulation.pict.util.output
+====================================
+
+.. automodule:: fluidgym.simulation.pict.util.output
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      arrange_blocks
+      get_grid_AABB
+      get_grids_AABB
+      ntonp
+      numerical_to_numpy
+      pad_to_size
+      plot_grid
+      plot_grids
+      print_CSR
+      print_CSR_obj
+      print_grid
+      reduce_3D
+      save_block_data_image
+      save_domain_images
+      save_np_exr
+      save_np_img
+      save_np_png
+      save_np_png_channels
+      save_plotted_grids
+      save_pressure_image
+      save_scalar_image
+      save_transform_exr
+      save_velocity_exr
+      save_velocity_image
+      save_velocity_source_image
+      tensor_to_numpy
+      ttonp
+      vel_to_color
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      StringWriter
+   

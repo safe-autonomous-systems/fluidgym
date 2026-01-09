@@ -1,0 +1,14 @@
+fluidgym.integration.sb3.util
+=============================
+
+.. automodule:: fluidgym.integration.sb3.util
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      evaluate_model
+      plot_eval_sequence
+      test_model
+   

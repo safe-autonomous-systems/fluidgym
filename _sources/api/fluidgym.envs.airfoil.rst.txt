@@ -1,0 +1,16 @@
+fluidgym.envs.airfoil
+=====================
+
+.. automodule:: fluidgym.envs.airfoil
+
+   
+.. rubric:: Modules
+
+.. autosummary::
+   :toctree:
+   :recursive:
+
+   airfoil_env_2d
+   airfoil_env_3d
+   airfoil_env_base
+   grid

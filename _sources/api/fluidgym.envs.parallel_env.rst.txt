@@ -1,0 +1,13 @@
+fluidgym.envs.parallel\_env
+===========================
+
+.. automodule:: fluidgym.envs.parallel_env
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      Command
+      ParallelFluidEnv
+   

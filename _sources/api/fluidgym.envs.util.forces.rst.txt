@@ -1,0 +1,16 @@
+fluidgym.envs.util.forces
+=========================
+
+.. automodule:: fluidgym.envs.util.forces
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      collect_boundary_coords
+      collect_boundary_fields
+      compute_forces_2d
+      compute_forces_3d
+      wall_distance_from_vertices
+   

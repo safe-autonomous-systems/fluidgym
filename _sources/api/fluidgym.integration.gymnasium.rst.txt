@@ -1,0 +1,12 @@
+fluidgym.integration.gymnasium
+==============================
+
+.. automodule:: fluidgym.integration.gymnasium
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      GymFluidEnv
+   

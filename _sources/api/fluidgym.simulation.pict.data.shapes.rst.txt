@@ -1,0 +1,36 @@
+fluidgym.simulation.pict.data.shapes
+====================================
+
+.. automodule:: fluidgym.simulation.pict.data.shapes
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      coords_to_center_coords
+      extrapolate_boundary_layers
+      extrude_grid_z
+      generate_grid_vertices_2D
+      get_extrapolated_boundary_layer
+      get_grid_coords
+      get_grid_cube_centered
+      get_grid_normal_dist
+      get_grid_normal_dist_from_ortho_transforms
+      get_grid_striped_x
+      interpolate_vertices_from_borders_2D
+      invert_weights
+      make_cosX_grid
+      make_matrix_rotation_2D
+      make_matrix_rotation_3D
+      make_rotation_distance_scaling_fn_sine
+      make_rotation_distance_scaling_fn_sine_half
+      make_torus_2D
+      make_wall_refined_ortho_grid
+      make_weights_cos
+      make_weights_exp
+      make_weights_exp_global
+      make_weights_linear
+      ortho_transform_to_coords
+      rotate_grid
+   
