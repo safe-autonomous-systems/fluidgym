@@ -23,7 +23,6 @@
     <h3>
       <a href="#-installation">Installation</a> |
       <a href="#-gettign-started">Getting Started</a> |
-      <a href="#-reproducing-experiments">Reproducing Experiments</a> |
       <a href="#-license-&-citation">License & Citation</a>
     </h3>
 </div>
@@ -103,44 +102,6 @@ for _ in range(50):
     if term or trunc:
         break
 ```
-
-## Reproducing Experiments
-
-All commands to reproduce the experiments of the paper can be found in [`experiments.md`](experiments.md).
-The steps to generate the initial domain snapshots and statistics are stated in [`initial_domain_generation.md`](initial_domain_generation.md).
-
-<div style="border: 2px solid red; padding: 10px; border-radius: 5px;">
-<strong>Note:</strong> 
-
-
-The download of initial domain snapshots is not possible without accessing our huggingface repository.
-Therefore, during the double-blind review phase, environments can only be used with the following arguments:
-```python
-import fluidgym
-
-env = fluidgym.make(
-    "JetCylinder2D-easy-v0",
-    load_initial_domain=False,
-    load_domain_statistics=False
-)
-obs, info = env.reset(seed=42)
-
-for _ in range(50):
-    action = env.sample_action()
-    obs, reward, term, trunc, info = env.step(action)
-    env.render()
-
-    if term or trunc:
-        break
-```
-
-However, rewards are not normalized with uncontrolled values and episodes start with an 
-un-initialized flow field. 
-
-Alternatively, you can create the initial domain snapshots yourself as explained in [`initial_domain_generation.md`](initial_domain_generation.md).
-We note that, depending on the environment, this might take a while.
-
-</div>
 
 ## License & Citation
 
