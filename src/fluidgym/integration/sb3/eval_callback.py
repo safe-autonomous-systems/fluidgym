@@ -207,13 +207,11 @@ class EvalCallback(BaseCallback):
         if Path("training_log.csv").exists():
             existing_log = pd.read_csv("training_log.csv")
             existing_log.to_csv("training_log_backup.csv", index=False)
-            combined_log = pd.concat(
-                [existing_log, logged_df], ignore_index=True
-            )
+            combined_log = pd.concat([existing_log, logged_df], ignore_index=True)
             combined_log.to_csv("training_log.csv", index=False)
         else:
             logged_df.to_csv("training_log.csv", index=False)
-            
+
         if self.checkpoint_latest:
             self._save_model()
 
@@ -231,6 +229,8 @@ class EvalCallback(BaseCallback):
                 )
                 eval_rewards.append(reward)
             mean_eval_reward = float(np.mean(eval_rewards))
+
+        pd.DataFrame(self.logged_data).to_csv("training_log.csv", index=False)
 
         if self.checkpoint_latest:
             self._save_model()
