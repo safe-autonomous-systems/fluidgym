@@ -780,12 +780,27 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
             u = block.velocity
             p = block.pressure
 
-            u += (torch.randn_like(u, device=self._cuda_device) * velocity_noise).to(
-                self._dtype
+            u += (
+                torch.normal(
+                    mean=0.0,
+                    std=1.0,
+                    size=u.shape,
+                    device=self._cuda_device,
+                    generator=self._torch_rng_cuda,
+                )
+                * velocity_noise
             )
-            p += (torch.randn_like(p, device=self._cuda_device) * pressure_noise).to(
-                self._dtype
+            p += (
+                torch.normal(
+                    mean=0.0,
+                    std=1.0,
+                    size=p.shape,
+                    device=self._cuda_device,
+                    generator=self._torch_rng_cuda,
+                )
+                * pressure_noise
             )
+
             block.setVelocity(u)
             block.setPressure(p)
 
