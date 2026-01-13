@@ -4,12 +4,12 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
 
-from fluidgym import config as global_config
 import fluidgym.simulation.pict.data.shapes as shapes
+from fluidgym import config as global_config
 from fluidgym.envs.multi_agent_fluid_env import MultiAgentFluidEnv
 from fluidgym.simulation import Simulation
 from fluidgym.simulation.extensions import (
@@ -680,7 +680,7 @@ class RBCEnvBase(MultiAgentFluidEnv, ABC):
 
     def plot(self, output_path: Path | None = None) -> None:
         """Plot the environments configuration.
-        
+
         Parameters
         ----------
         output_path: Path | None
@@ -693,16 +693,19 @@ class RBCEnvBase(MultiAgentFluidEnv, ABC):
         sensor_x = torch.linspace(0, self._L, self._n_sensors_x + 1)[:-1] + self._L / (
             2 * self._n_sensors_x
         )
-        sensor_y = torch.linspace(0, self._H, self._n_sensors_y + 1)[:-1] + self._H / (
-            2 * self._n_sensors_y
-        ) - self._H / 2
+        sensor_y = (
+            torch.linspace(0, self._H, self._n_sensors_y + 1)[:-1]
+            + self._H / (2 * self._n_sensors_y)
+            - self._H / 2
+        )
         grid_x, grid_y = torch.meshgrid(sensor_x, sensor_y, indexing="ij")
-        sensor_locations = torch.stack(
-            [grid_x, grid_y], dim=-1).reshape(-1, 2).T.numpy()
+        sensor_locations = (
+            torch.stack([grid_x, grid_y], dim=-1).reshape(-1, 2).T.numpy()
+        )
 
         colors = global_config.palette
 
-        fig = plt.figure(figsize=(10, 5))
+        plt.figure(figsize=(10, 5))
         ax = plt.gca()
 
         # Plot sensors
@@ -731,11 +734,11 @@ class RBCEnvBase(MultiAgentFluidEnv, ABC):
         ax.set_yticks([-self._H / 2, 0, self._H / 2])
         ax.set_yticklabels([f"{-self._H / 2:.1f}", "0.0", f"{self._H / 2:.1f}"])
 
-        ax.set_xticks([0,self._L])
+        ax.set_xticks([0, self._L])
 
         aspect = round(self._aspect_ratio / torch.pi)
         aspect_str = "" if aspect == 1 else str(aspect)
-        ax.set_xticklabels([f"0", aspect_str + r"$\pi$"])
+        ax.set_xticklabels(["0", aspect_str + r"$\pi$"])
 
         ax.set_xlabel("L")
         ax.set_ylabel("H")

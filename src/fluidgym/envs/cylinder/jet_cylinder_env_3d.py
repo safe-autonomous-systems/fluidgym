@@ -5,7 +5,6 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from fluidgym import config as fluidgym_config
 from fluidgym.envs.cylinder.cylinder_env_base import CylinderEnvBase
 from fluidgym.envs.multi_agent_fluid_env import MultiAgentFluidEnv
 from fluidgym.envs.util.profiles import get_jet_profile

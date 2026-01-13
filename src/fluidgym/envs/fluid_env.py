@@ -920,7 +920,7 @@ class FluidEnv(ABC):
     @abstractmethod
     def plot(self, output_path: Path | None = None) -> None:
         """Plot the environments configuration.
-        
+
         Parameters
         ----------
         output_path: Path | None

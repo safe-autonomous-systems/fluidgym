@@ -5,9 +5,9 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, to_rgb
 
 from fluidgym.config import config as global_config
@@ -803,7 +803,7 @@ class AirfoilEnvBase(FluidEnv):
 
     def plot(self, output_path: Path | None = None) -> None:
         """Plot the environments configuration.
-        
+
         Parameters
         ----------
         output_path: Path | None
@@ -814,7 +814,7 @@ class AirfoilEnvBase(FluidEnv):
             output_path = Path(".")
 
         # First, we plot the domain shape
-        fig = plt.figure(figsize=(10, 2.5))
+        plt.figure(figsize=(10, 2.5))
         ax = plt.gca()
 
         plt.xlim(0, self.render_shape[0] - 1)
@@ -825,10 +825,12 @@ class AirfoilEnvBase(FluidEnv):
         colors = global_config.palette
 
         rgb = to_rgb(colors[0])
-        cmap = ListedColormap([
-            (1.0, 1.0, 1.0),  
-            rgb,       
-        ])
+        cmap = ListedColormap(
+            [
+                (1.0, 1.0, 1.0),
+                rgb,
+            ]
+        )
 
         plt.imshow(
             self._airfoil_mask,
@@ -845,19 +847,23 @@ class AirfoilEnvBase(FluidEnv):
 
         total_length = 1.5 + self.L
 
-        ax.set_yticks([
-            0,
-            int(self.render_shape[1] / 2),
-            self.render_shape[1] - 1,
-        ])
-        ax.set_yticklabels([f"-{self.H/2:.1f}", "0.0", f"{self.H/2:.1f}"])
+        ax.set_yticks(
+            [
+                0,
+                int(self.render_shape[1] / 2),
+                self.render_shape[1] - 1,
+            ]
+        )
+        ax.set_yticklabels([f"-{self.H / 2:.1f}", "0.0", f"{self.H / 2:.1f}"])
         ax.set_ylabel("H")
 
-        ax.set_xticks([
-            0,
-            int(self.render_shape[0] / total_length) * 1.5,
-            int(self.render_shape[0] / total_length) * 2.5,
-            self.render_shape[0]]
+        ax.set_xticks(
+            [
+                0,
+                int(self.render_shape[0] / total_length) * 1.5,
+                int(self.render_shape[0] / total_length) * 2.5,
+                self.render_shape[0],
+            ]
         )
         ax.set_xticklabels(["-1.5", "0.0", "1.0", f"{self.L}"])
         ax.set_xlabel("L")

@@ -5,10 +5,10 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-import torch
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
+import numpy as np
+import torch
 
 from fluidgym import config as fluidgym_config
 from fluidgym.envs.cylinder.grid import make_vortex_street_domain
@@ -790,7 +790,7 @@ class CylinderEnvBase(FluidEnv, ABC):
 
     def plot(self, output_path: Path | None = None) -> None:
         """Plot the environments configuration.
-        
+
         Parameters
         ----------
         output_path: Path | None
@@ -827,9 +827,7 @@ class CylinderEnvBase(FluidEnv, ABC):
 
         # Then, we add the sensor locations
         for sensor in sensor_locations.T:
-            plt.scatter(
-                sensor[0], sensor[1], color=colors[2], label="Sensors", s=5
-            )
+            plt.scatter(sensor[0], sensor[1], color=colors[2], label="Sensors", s=5)
 
         plt.tight_layout()
         plt.savefig(output_path / f"{self.id}.pdf")

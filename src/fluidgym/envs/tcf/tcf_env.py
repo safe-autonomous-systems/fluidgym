@@ -4,10 +4,10 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-import matplotlib.pyplot as plt
 
 from fluidgym.config import config as global_config
 from fluidgym.envs.fluid_env import EnvMode, Stats
@@ -755,7 +755,7 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
 
     def plot(self, output_path: Path | None = None) -> None:
         """Plot the environments configuration.
-        
+
         Parameters
         ----------
         output_path: Path | None
@@ -769,7 +769,7 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
 
         colors = global_config.palette
 
-        fig = plt.figure(figsize=(10, 5))
+        plt.figure(figsize=(10, 5))
         ax = plt.gca()
 
         # add vertical line for y_sensor as dotted line
@@ -786,7 +786,7 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
 
         aspect = round(self._L / torch.pi)
         aspect_str = "" if aspect == 1 else str(aspect)
-        ax.set_xticklabels([f"0", aspect_str + r"$\pi$"])
+        ax.set_xticklabels(["0", aspect_str + r"$\pi$"])
 
         ax.set_xlabel("L")
         ax.set_ylabel("H")
