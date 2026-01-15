@@ -28,6 +28,7 @@ from fluidgym.simulation.helpers import get_cell_centers, get_cell_size
 from fluidgym.simulation.pict.data import TCF_tools
 from fluidgym.simulation.pict.PISOtorch_simulation import (
     append_prep_fn,
+    balance_boundary_fluxes,
 )
 from fluidgym.simulation.pict.util.output import _resample_block_data
 from fluidgym.simulation.simulation import Simulation
@@ -444,6 +445,7 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
             non_orthogonal=True,
             output_resampling_shape=self.render_shape[: self._ndims],
             output_resampling_fill_max_steps=16,
+            differentiable=self._differentiable,
         )
 
         sim.solver_double_fallback = False
@@ -459,7 +461,9 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
     def _additional_initialization(self) -> None:
         self._block = self._domain.getBlock(0)
         self._bottom_plate = self._block.getBoundary("-y")
+        self._inflow = self._block.getBoundary("-x")
         self._top_plate = self._block.getBoundary("+y")
+        self._outflow = self._block.getBoundary("+x")
         self._y_obs_bottom_idx = self.__get_y_obs_idx(y_wall=self._y_obs_wall)
 
     def _action_to_control(self, action: torch.Tensor) -> torch.Tensor:
@@ -467,16 +471,22 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
         # we ensure a zero mean and max abs. value of u_wall
         if self._scale_actions:
             # Ensure zero-net mass flux
-            action -= torch.mean(action)
+            scaled_action = action - torch.mean(action)
 
             # Ensure max abs. value of u_wall
-            action = self._u_wall * action / (torch.clamp(action.abs(), min=1.0))
-            action -= torch.mean(action)
+            scaled_action = (
+                self._u_wall
+                * scaled_action
+                / (torch.clamp(scaled_action.abs(), min=1.0))
+            )
+            scaled_action -= torch.mean(scaled_action)
+        else:
+            scaled_action = action
 
         velocity_profile = torch.zeros(
             (1, 3, self._z, 1, self._x), device=self._cuda_device
         )
-        v_expanded = action.repeat_interleave(
+        v_expanded = scaled_action.repeat_interleave(
             self._actor_size, dim=0
         ).repeat_interleave(self._actor_size, dim=1)
 
@@ -486,10 +496,18 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
 
     def _apply_action(self, action: torch.Tensor) -> None:
         """Apply the given action to the simulation."""
-        action = action.view(self._n_actors_x, self._n_actors_z)
+        reshaped_action = action.view(self._n_actors_x, self._n_actors_z)
 
-        control = self._action_to_control(action)
+        control = self._action_to_control(reshaped_action)
         self._bottom_plate.setVelocity(control)
+        out_bounds = [
+            self._inflow,
+            self._outflow,
+            self._bottom_plate,
+        ]
+
+        if not self.scale_actions:
+            balance_boundary_fluxes(self._domain, out_bounds, tol=1e-5)
 
     @property
     def tau_ref(self) -> float:
@@ -718,10 +736,10 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
     def _step_impl(
         self, action: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, bool, dict[str, torch.Tensor]]:
-        action = action.squeeze()
+        flat_action = action.squeeze()
 
         if self._enable_actions:
-            self._apply_action(action)
+            self._apply_action(flat_action)
 
         tau_top_list = []
         tau_bottom_list = []
@@ -998,10 +1016,10 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
         _, global_reward, terminated, truncated, info = self.step(actions)
 
         local_obs = self._get_local_obs()
-        agent_rewards = torch.full(
-            size=(self.n_agents,),
-            fill_value=global_reward.item(),
-            device=self._cpu_device,
+        agent_rewards = global_reward * torch.ones(
+            self.n_agents,
+            device=global_reward.device,
+            dtype=global_reward.dtype,
         )
         info["global_reward"] = global_reward
 
@@ -1110,6 +1128,18 @@ class TCF3DBothEnv(TCF3DBottomEnv):
 
         self._bottom_plate.setVelocity(control_bottom)
         self._top_plate.setVelocity(control_top)
+
+        if not self.scale_actions:
+            balance_boundary_fluxes(
+                self._domain,
+                [
+                    self._inflow,
+                    self._outflow,
+                    self._bottom_plate,
+                    self._top_plate,
+                ],
+                tol=1e-5,
+            )
 
     def _get_reward(
         self, tau_total: torch.Tensor, tau_bottom: torch.Tensor

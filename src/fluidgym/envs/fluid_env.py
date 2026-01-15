@@ -3,6 +3,7 @@
 import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -48,6 +49,15 @@ class EnvMode(Enum):
     TRAIN = "train"
     VAL = "val"
     TEST = "test"
+
+
+@dataclass
+class EnvState:
+    """Dataclass to hold the state of a FluidEnv environment."""
+
+    domain: PISOtorch.Domain
+    n_steps: int
+    mode: EnvMode
 
 
 # Number of domains per mode
@@ -714,10 +724,6 @@ class FluidEnv(ABC):
             A tuple containing the observation, reward, terminated flag, truncated flag,
             and info dictionary.
         """
-        if not self._differentiable:
-            action.requires_grad = False
-            action = action.detach()
-
         if not self._reset_called:
             raise RuntimeError(
                 "Environment must be reset before stepping. Call 'reset()' before"
@@ -1219,3 +1225,40 @@ class FluidEnv(ABC):
             shape=self.observation_space_shape,
             dtype=np.float32,
         )
+
+    def get_state(self) -> EnvState:
+        """Get the current state of the environment.
+
+        Returns
+        -------
+        EnvState
+            The current state of the environment.
+        """
+        domain = self._domain.Clone()
+        domain.PrepareSolve()
+        domain.Detach()
+
+        return EnvState(
+            domain=domain,
+            n_steps=self._n_steps,
+            mode=self._mode,
+        )
+
+    def set_state(self, state: EnvState) -> None:
+        """Set the current state of the environment.
+
+        Parameters
+        ----------
+        state: EnvState
+            The state to set the environment to.
+        """
+        self._domain = state.domain.Clone()
+        self._domain.PrepareSolve()
+        self._sim = self._get_simulation(
+            domain=self._domain,
+            prep_fn=self._get_prep_fn(self._domain),
+        )
+        self._n_steps = state.n_steps
+        self._mode = state.mode
+
+        self._additional_initialization()

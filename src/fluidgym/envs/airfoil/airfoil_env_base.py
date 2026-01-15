@@ -279,6 +279,7 @@ class AirfoilEnvBase(FluidEnv):
             non_orthogonal=True,
             output_resampling_shape=self.render_shape[: self._ndims],
             output_resampling_fill_max_steps=128,
+            differentiable=self._differentiable,
         )
 
         sim.preconditionBiCG = False

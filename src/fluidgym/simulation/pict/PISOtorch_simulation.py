@@ -86,6 +86,9 @@ def get_fixed_boundary_flux(bound, bound_idx):
 
 
 def get_fixed_boundary_fluxes(list_idx_bound):
+    if len(list_idx_bound) == 0:
+        return torch.zeros([1], dtype=torch.float32, device=cuda_device)
+    
     domain = list_idx_bound[0][1].getParentDomain()
     boundary_flux = torch.zeros([1], dtype=domain.getDtype(), device=domain.getDevice())
     for boundIdx, bound in list_idx_bound:

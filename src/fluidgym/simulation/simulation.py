@@ -110,10 +110,10 @@ class Simulation(PISOtorchSimulation):
         Whether to use the differentiable solver backend. Defaults to False.
 
     exclude_advection_solve_gradients: bool
-        Whether to exclude gradients from advection solve. Defaults to True.
+        Whether to exclude gradients from advection solve. Defaults to False.
 
     exclude_pressure_solve_gradients: bool
-        Whether to exclude gradients from pressure solve. Defaults to True.
+        Whether to exclude gradients from pressure solve. Defaults to False.
 
     output_resampling_shape: tuple[int, ...] | None
         Shape for output resampling. If None, dynamic shape is used. Defaults to None.
@@ -153,7 +153,7 @@ class Simulation(PISOtorchSimulation):
         non_orthogonal: bool = True,
         differentiable: bool = False,
         exclude_advection_solve_gradients: bool = False,
-        exclude_pressure_solve_gradients: bool = True,
+        exclude_pressure_solve_gradients: bool = False,
         output_resampling_shape: tuple[int, ...] | None = None,
         output_resampling_fill_max_steps: int = 0,
     ):

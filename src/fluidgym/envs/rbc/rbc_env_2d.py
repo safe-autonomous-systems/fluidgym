@@ -249,17 +249,12 @@ class RBCEnv2D(RBCEnvBase):
         # (expand returns a view; use .clone() if you need a writable contiguous tensor)
         control = T_smooth.expand(self._x)
 
-        # self.plot_actuation(
-        #     action=action.cpu(),
-        #     action_smooth=T_smooth.cpu(),
-        # )
-
         return control
 
     def _apply_action(self, action: torch.Tensor) -> None:
         """Apply the given action to the simulation."""
-        action = action.squeeze()
-        control = self.__action_to_control(action)
+        flat_action = action.squeeze()
+        control = self.__action_to_control(flat_action)
         control = control[None, None, None, ...]
 
         self._bottom_plate.setPassiveScalar(control)

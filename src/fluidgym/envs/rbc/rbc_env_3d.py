@@ -222,10 +222,10 @@ class RBCEnv3D(RBCEnvBase):
 
     def _action_to_control(self, action: torch.Tensor) -> torch.Tensor:
         # First, we bring the action to the shape (n_heaters, n_heaters)
-        action = action.view(self._n_heaters, self._n_heaters)
+        transformed_action = action.view(self._n_heaters, self._n_heaters)
 
         # Cf. eq. (8) in https://doi.org/10.1063/5.0153181
-        T_shifted = action - action.mean()
+        T_shifted = transformed_action - transformed_action.mean()
 
         # Cf. eq. (9) in https://doi.org/10.1063/5.0153181
         T_action = T_shifted / (

@@ -328,6 +328,10 @@ class CylinderEnvBase(FluidEnv, ABC):
         assert self.__wall_distances.grad_fn is None
         assert self.__wall_face_lengths.grad_fn is None
 
+        self.__last_control = torch.zeros(
+            (1,), device=self._cuda_device, requires_grad=False
+        )
+
     def _randomize_domain(self) -> None:
         strouhal_number = 0.3
         vortex_shedding_period = 1 / (
