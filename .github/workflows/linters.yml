@@ -1,0 +1,38 @@
+name: Linters
+
+on:
+  # Manually triggerable in github
+  workflow_dispatch:
+
+  # When a push occurs on either of these branches
+  push:
+   branches:
+     - main
+
+  # When a push occurs on a PR that targets these branches
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  linters:
+    name: "Python 3.10"
+    runs-on: ubuntu-latest
+
+    container:
+      image: python:3.10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pre-commit ruff mypy types-seaborn pandas-stubs types-setuptools scipy-stubs
+
+      - name: Update git permissions
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Run pre-commit (all files)
+        run: pre-commit run --all-files --verbose
