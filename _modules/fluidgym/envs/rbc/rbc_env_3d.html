@@ -5,7 +5,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>fluidgym.envs.rbc.rbc_env_3d &mdash; FluidGym 0.0.1 documentation</title>
+  <title>fluidgym.envs.rbc.rbc_env_3d &mdash; FluidGym 0.0.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../../../../_static/css/theme.css?v=e59714d7" />
 
@@ -52,19 +52,13 @@
 <li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/gradient_based_methods.html">Gradient-Based Methods</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../basic_usage/environments/index.html">FluidGym Environments</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/environments/cylinder.html">Cylinder Flow Environments</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/environments/rayleigh_benard_convection.html">Rayleigh-Bénard Convection (RBC)</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/environments/airfoil.html">Flow Past Airfoil</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/environments/turbulent_channel_flow.html">Turbulent Channel Flow (TCF)</a></li>
-</ul>
-</li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../basic_usage/rendering.html">Rendering Environments</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../advanced_usage/index.html">Advanced Usage</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../../../advanced_usage/parallelization.html">Running FluidGym on multiple GPUs in parallel</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../advanced_usage/custom_environments.html">Adding Custom Environments to FluidGym</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../advanced_usage/configuration.html">Additional Configuration Options</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api.html">API Reference</a><ul>
@@ -346,10 +340,10 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_action_to_control</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
         <span class="c1"># First, we bring the action to the shape (n_heaters, n_heaters)</span>
-        <span class="n">action</span> <span class="o">=</span> <span class="n">action</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_n_heaters</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_n_heaters</span><span class="p">)</span>
+        <span class="n">transformed_action</span> <span class="o">=</span> <span class="n">action</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_n_heaters</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_n_heaters</span><span class="p">)</span>
 
         <span class="c1"># Cf. eq. (8) in https://doi.org/10.1063/5.0153181</span>
-        <span class="n">T_shifted</span> <span class="o">=</span> <span class="n">action</span> <span class="o">-</span> <span class="n">action</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+        <span class="n">T_shifted</span> <span class="o">=</span> <span class="n">transformed_action</span> <span class="o">-</span> <span class="n">transformed_action</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
 
         <span class="c1"># Cf. eq. (9) in https://doi.org/10.1063/5.0153181</span>
         <span class="n">T_action</span> <span class="o">=</span> <span class="n">T_shifted</span> <span class="o">/</span> <span class="p">(</span>
@@ -607,6 +601,9 @@
                     <span class="n">output_path</span>
                     <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;3d_temperature_fig_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_n_episodes</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_n_steps</span><span class="si">}</span><span class="s2">.png&quot;</span>
                 <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">output_path_3d</span> <span class="o">=</span> <span class="kc">None</span>
+
             <span class="n">render_data</span><span class="p">[</span><span class="s2">&quot;3d_temperature&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">render_3d_voxels</span><span class="p">(</span>
                 <span class="n">field</span><span class="o">=</span><span class="n">T</span><span class="p">,</span>
                 <span class="n">ds</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
@@ -627,7 +624,7 @@
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2025, Safe Autonomous Systems (SAS), TU Dortmund University.</p>
+    <p>&#169; Copyright 2026, Safe Autonomous Systems (SAS), TU Dortmund University.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
