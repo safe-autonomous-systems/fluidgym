@@ -16,7 +16,7 @@ from fluidgym.envs.airfoil.grid import (
     make_airfoil_domain,
     read_airfoil,
 )
-from fluidgym.envs.fluid_env import FluidEnv, Stats
+from fluidgym.envs.fluid_env import EnvState, FluidEnv, Stats
 from fluidgym.envs.util.forces import (
     collect_boundary_coords,
     collect_boundary_fields,
@@ -145,7 +145,7 @@ class AirfoilEnvBase(FluidEnv):
             self._tail_lower_block_idx,
         ) = range(6)
 
-        self.__last_action = torch.zeros((1,), device=self._cuda_device)
+        self.__last_control = torch.zeros((1,), device=self._cuda_device)
         self._viscosity = self._viscosity.to(self._cuda_device)
         _, self._airfoil_coords = read_airfoil(
             path=self._airfoil_path,
@@ -740,7 +740,7 @@ class AirfoilEnvBase(FluidEnv):
         """
         obs, info = super().reset(seed=seed, randomize=randomize)
 
-        self.__last_action = torch.zeros(
+        self.__last_control = torch.zeros(
             (self.action_space_shape[-1],), device=self._cuda_device
         )
         flat_obs = obs.flatten()
@@ -770,12 +770,12 @@ class AirfoilEnvBase(FluidEnv):
         all_cls = []
         for _ in range(self._n_sim_steps):
             # We apply the action smoothing as proposed by Rabault et al. (2020)
-            smooth_action = self.__last_action + self._action_smoothing_alpha * (
-                action - self.__last_action
+            control = self.__last_control + self._action_smoothing_alpha * (
+                action - self.__last_control
             )
-            self.__last_action = smooth_action
+            self.__last_control = control
             if self._enable_actions:
-                self._apply_action(smooth_action)
+                self._apply_action(control)
 
             self._sim.single_step()
             _cd, _cl = self._get_drag_and_lift()
@@ -887,3 +887,32 @@ class AirfoilEnvBase(FluidEnv):
         stats = super()._load_domain_statistics()
         self._vorticity_stats = Stats(**stats["vorticity_magnitude"])
         return stats
+
+    def detach(self) -> None:
+        """Detach all tensors from the current computation graph."""
+        super().detach()
+        self.__last_control = self.__last_control.detach()
+
+    def get_state(self) -> EnvState:
+        """Get the current state of the environment.
+
+        Returns
+        -------
+        EnvState
+            The current state of the environment.
+        """
+        state = super().get_state()
+        state.additional_info["last_control"] = self.__last_control.clone()
+        return state
+
+    def set_state(self, state: EnvState) -> None:
+        """Set the current state of the environment.
+
+        Parameters
+        ----------
+        state: EnvState
+            The state to set the environment to.
+        """
+        super().set_state(state)
+        last_control: torch.Tensor = state.additional_info["last_control"]
+        self.__last_control = last_control

@@ -12,7 +12,7 @@ import torch
 
 from fluidgym import config as fluidgym_config
 from fluidgym.envs.cylinder.grid import make_vortex_street_domain
-from fluidgym.envs.fluid_env import FluidEnv, Stats
+from fluidgym.envs.fluid_env import EnvState, FluidEnv, Stats
 from fluidgym.envs.util.forces import (
     collect_boundary_coords,
     collect_boundary_fields,
@@ -191,9 +191,6 @@ class CylinderEnvBase(FluidEnv, ABC):
             self._bottom_block_idx,
             self._vortex_street_block_idx,
         ) = range(5)
-        self.__last_control = torch.zeros(
-            (1,), device=self._cuda_device, requires_grad=False
-        )
         self._sensors_locations = self._get_sensor_locations()
         self._cylinder_mask = self._get_cylinder_mask()
 
@@ -860,3 +857,27 @@ class CylinderEnvBase(FluidEnv, ABC):
         """Detach all tensors from the current computation graph."""
         super().detach()
         self.__last_control = self.__last_control.detach()
+
+    def get_state(self) -> EnvState:
+        """Get the current state of the environment.
+
+        Returns
+        -------
+        EnvState
+            The current state of the environment.
+        """
+        state = super().get_state()
+        state.additional_info["last_control"] = self.__last_control.clone()
+        return state
+
+    def set_state(self, state: EnvState) -> None:
+        """Set the current state of the environment.
+
+        Parameters
+        ----------
+        state: EnvState
+            The state to set the environment to.
+        """
+        super().set_state(state)
+        last_control: torch.Tensor = state.additional_info["last_control"]
+        self.__last_control = last_control

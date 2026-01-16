@@ -55,9 +55,11 @@ class EnvMode(Enum):
 class EnvState:
     """Dataclass to hold the state of a FluidEnv environment."""
 
+    class_name: str
     domain: PISOtorch.Domain
     n_steps: int
     mode: EnvMode
+    additional_info: dict[str, Any]
 
 
 # Number of domains per mode
@@ -1239,9 +1241,11 @@ class FluidEnv(ABC):
         domain.Detach()
 
         return EnvState(
+            class_name=self.__class__.__name__,
             domain=domain,
             n_steps=self._n_steps,
             mode=self._mode,
+            additional_info={},
         )
 
     def set_state(self, state: EnvState) -> None:
@@ -1252,6 +1256,12 @@ class FluidEnv(ABC):
         state: EnvState
             The state to set the environment to.
         """
+        if state.class_name != self.__class__.__name__:
+            raise ValueError(
+                f"State class name {state.class_name} does not match "
+                f"environment class name {self.__class__.__name__}."
+            )
+
         self._domain = state.domain.Clone()
         self._domain.PrepareSolve()
         self._sim = self._get_simulation(
