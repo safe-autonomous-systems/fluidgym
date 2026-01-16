@@ -72,7 +72,7 @@ def _get_extensions():
 
 setup(
     name="FluidGym",
-    version=f"0.0.1",
+    version="0.0.2",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     ext_modules=_get_extensions(),
