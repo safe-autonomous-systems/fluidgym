@@ -1074,6 +1074,7 @@ def CopyVelocityResultToBlocks(domain):
                     if _LOG_DEBUG:
                         _LOG.info("copy velocity to backward")
                     for block, v_grad in zip(domain.getBlocks(), blocks_velocity_grad):
+                        v_grad = v_grad.contiguous()
                         block.setVelocityGrad(v_grad)
                     domain.CreateVelocityResultGrad()
                     domain.UpdateDomainData()
