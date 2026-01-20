@@ -38,15 +38,12 @@ def test_env(env_id: str):
         num_agents = env.n_agents
 
         obs, info = env.reset_marl()
-        assert obs.shape[1] == num_agents, \
+        assert obs.shape[0] == num_agents, \
             f"Number of agents in observation {obs.shape[1]} does not match "\
-            f"expected {num_agents}"
-        assert reward.shape[0] == num_agents, \
-            f"Number of agents in reward {reward.shape[0]} does not match "\
             f"expected {num_agents}"
         
         obs, reward, terminated, truncated, info = env.step_marl(env.sample_action())
-        assert obs.shape[1] == num_agents, \
+        assert obs.shape[0] == num_agents, \
             f"Number of agents in observation {obs.shape[1]} does not match "\
             f"expected {num_agents}"
         assert reward.shape[0] == num_agents, \
@@ -54,10 +51,10 @@ def test_env(env_id: str):
             f"expected {num_agents}"
         
         assert obs[0].shape == env.local_observation_space_shape, \
-            f"Local observation shape {obs[0].shape} does not match " \
+            f"Local observation shape {obs[1:].shape} does not match " \
             f"expected {env.local_observation_space_shape}"
         
         assert "global_reward" in info, \
             "Global reward missing from info"
         assert isinstance(info["global_reward"], torch.Tensor), \
-            "Global reward should be a tensor"
+            "Global reward should be a tensor"  
