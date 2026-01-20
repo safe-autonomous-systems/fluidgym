@@ -337,4 +337,19 @@ register(
     reynolds_number=1e3,
 )
 
+register(
+    id="Airfoil3D-medium-v0",
+    entry_point=AirfoilEnv3D,
+    defaults=AIRFOIL_3D_DEFAULT_CONFIG,
+    reynolds_number=3e3,
+)
+
+register(
+    id="Airfoil3D-hard-v0",
+    entry_point=AirfoilEnv3D,
+    defaults=AIRFOIL_3D_DEFAULT_CONFIG,
+    reynolds_number=5e3,
+)
+
+
 __all__ = ["config", "make"]

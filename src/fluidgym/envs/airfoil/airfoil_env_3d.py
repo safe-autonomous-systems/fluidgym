@@ -519,7 +519,9 @@ class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
             return domain_3d
 
         try:
-            domain_2d = self._load_2d_domain(EnvMode.TRAIN, idx=0)
+            # Get random 2D initial domain
+            idx = int(self._np_rng.integers(0, 10))
+            domain_2d = self._load_2d_domain(EnvMode.TRAIN, idx=idx)
         except FileNotFoundError as e:
             self._logger.error(
                 "2D initial domain not found on disk but attempting to init from 2D."
@@ -534,12 +536,9 @@ class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
             vel_2d = block_2d.velocity
 
             # Expand 2D velocity to 3D by adding zero z-component
-            vel_3d_new = torch.randn_like(block_3d.velocity) * 0.01
-            vel_3d_new[:, :2, :, :, :] += vel_2d.unsqueeze(2).expand(
+            vel_3d_new = torch.zeros_like(block_3d.velocity)
+            vel_3d_new[:, :2, :, :, :] = vel_2d.unsqueeze(2).expand(
                 -1, -1, vel_3d_new.shape[2], -1, -1
-            )
-            vel_3d_new[:, 2, :, :, :] += (
-                torch.randn_like(vel_3d_new[:, 2, :, :, :]) * 0.05
             )
             vel_3d_new = vel_3d_new.contiguous()
 
