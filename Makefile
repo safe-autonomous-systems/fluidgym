@@ -2,7 +2,6 @@ SRC_DIR=src/fluidgym
 PICT_DIR=src/fluidgym/simulation/pict
 EXAMPLES_DIR=examples
 TEST_DIR=tests
-COVERAGE_REPORT=term-missing
 
 PYTHON ?= python
 PYTEST ?= python -m pytest
@@ -28,10 +27,6 @@ check: check-ruff check-mypy
 docs:
 	cd docs && $(MAKE) html && cd ..
 
-.PHONY: upload-docs
-upload-docs: docs
-	ghp-import -n -p -f docs/build/html
-
 .PHONY: pre-commit
 pre-commit:
 	$(PRECOMMIT) run --all-files || :
@@ -43,12 +38,7 @@ format:
 
 .PHONY: test
 test:
-	pytest --cov=$(SRC_DIR) --cov-report=$(COVERAGE_REPORT) $(TEST_DIR)
-
-# HTML coverage report
-.PHONY: coverage-html
-coverage-html:
-	pytest --cov=$(SRC_DIR) --cov-report=html $(TEST_DIR)
+	pytest $(TEST_DIR)
 
 .PHONY: install
 install: clean build
