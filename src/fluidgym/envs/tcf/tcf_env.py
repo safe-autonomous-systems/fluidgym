@@ -28,7 +28,6 @@ from fluidgym.simulation.helpers import get_cell_centers, get_cell_size
 from fluidgym.simulation.pict.data import TCF_tools
 from fluidgym.simulation.pict.PISOtorch_simulation import (
     append_prep_fn,
-    balance_boundary_fluxes,
 )
 from fluidgym.simulation.pict.util.output import _resample_block_data
 from fluidgym.simulation.simulation import Simulation
@@ -500,14 +499,6 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
 
         control = self._action_to_control(reshaped_action)
         self._bottom_plate.setVelocity(control)
-        out_bounds = [
-            self._inflow,
-            self._outflow,
-            self._bottom_plate,
-        ]
-
-        if not self.scale_actions:
-            balance_boundary_fluxes(self._domain, out_bounds, tol=1e-5)
 
     @property
     def tau_ref(self) -> float:
@@ -1128,18 +1119,6 @@ class TCF3DBothEnv(TCF3DBottomEnv):
 
         self._bottom_plate.setVelocity(control_bottom)
         self._top_plate.setVelocity(control_top)
-
-        if not self.scale_actions:
-            balance_boundary_fluxes(
-                self._domain,
-                [
-                    self._inflow,
-                    self._outflow,
-                    self._bottom_plate,
-                    self._top_plate,
-                ],
-                tol=1e-5,
-            )
 
     def _get_reward(
         self, tau_total: torch.Tensor, tau_bottom: torch.Tensor
