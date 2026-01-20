@@ -1,0 +1,65 @@
+# Dockerfile.devel
+FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Basic build deps for C/C++ + Python extensions
+RUN apt-get update && apt-get install -y \
+    wget git build-essential cmake ninja-build \
+    libssl-dev libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Miniconda
+ENV CONDA_DIR=/opt/conda
+ENV PATH=${CONDA_DIR}/bin:${PATH}
+
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh && \
+    bash miniconda.sh -b -u -p ${CONDA_DIR} && \
+    rm miniconda.sh && \
+    conda clean -ya
+RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+
+# Use bash -lc so that conda is available in RUN commands
+SHELL ["bash", "-lc"]
+RUN conda init bash
+
+# Clone fuildgym repo
+WORKDIR /opt
+RUN git clone https://github.com/safe-autonomous-systems/fluidgym.git
+WORKDIR /opt/fluidgym
+
+# GPU-agnostic build
+ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;9.0+PTX"  
+
+# Create envs for Python 3.10 / 3.11 / 3.12 / 3.13
+RUN conda create -y -n py310 python=3.10
+RUN conda install -y -n py310 pip "gcc_linux-64>=6.0,<=11.5" "gxx_linux-64>=6.0,<=11.5"
+RUN conda run -n py310 pip install torch --index-url https://download.pytorch.org/whl/cu128
+RUN conda install -y -n py310 "cuda-toolkit=12.8" -c "nvidia/label/cuda-12.8.1"
+RUN conda run -n py310 make install-dev
+
+RUN conda create -y -n py311 python=3.11
+RUN conda install -y -n py311 pip "gcc_linux-64>=6.0,<=11.5" "gxx_linux-64>=6.0,<=11.5"
+RUN conda run -n py311 pip install torch --index-url https://download.pytorch.org/whl/cu128
+RUN conda install -y -n py311 "cuda-toolkit=12.8" -c "nvidia/label/cuda-12.8.1"
+RUN conda run -n py311 make install-dev
+
+RUN conda create -y -n py312 python=3.12
+RUN conda install -y -n py312 pip "gcc_linux-64>=6.0,<=11.5" "gxx_linux-64>=6.0,<=11.5"
+RUN conda run -n py312 pip install torch --index-url https://download.pytorch.org/whl/cu128
+RUN conda install -y -n py312 "cuda-toolkit=12.8" -c "nvidia/label/cuda-12.8.1"
+RUN conda run -n py312 make install-dev
+
+RUN conda create -y -n py313 python=3.13
+RUN conda install -y -n py313 pip "gcc_linux-64>=6.0,<=11.5" "gxx_linux-64>=6.0,<=11.5"
+RUN conda run -n py313 pip install torch --index-url https://download.pytorch.org/whl/cu128
+RUN conda install -y -n py313 "cuda-toolkit=12.8" -c "nvidia/label/cuda-12.8.1"
+RUN conda run -n py313 make install-dev
+
+# Set py312 as default env
+ENV CONDA_DEFAULT_ENV=py312
+ENV PATH=${CONDA_DIR}/envs/py311/bin:${PATH}
+
+WORKDIR /workspace
+CMD ["/bin/bash"]

@@ -1,0 +1,48 @@
+# Dockerfile.runtime
+FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Basic build deps for C/C++ + Python extensions
+RUN apt-get update && apt-get install -y \
+    wget git build-essential cmake ninja-build \
+    libssl-dev libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Miniconda
+ENV CONDA_DIR=/opt/conda
+ENV PATH=$CONDA_DIR/bin:$PATH
+
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh && \
+    bash miniconda.sh -b -u -p ${CONDA_DIR} && \
+    rm miniconda.sh && \
+    conda clean -ya
+RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+
+SHELL ["/bin/bash", "-lc"]
+RUN conda init bash
+
+# Create envs for Python 3.10 / 3.11 / 3.12 / 3.13
+RUN conda create -y -n py310 python=3.10
+RUN conda run -n py310 pip install torch --index-url https://download.pytorch.org/whl/cu128 
+RUN conda run -n py310 pip install fluidgym
+
+RUN conda create -y -n py311 python=3.11 
+RUN conda run -n py311 pip install torch --index-url https://download.pytorch.org/whl/cu128 
+RUN conda run -n py311 pip install fluidgym
+
+RUN conda create -y -n py312 python=3.12
+RUN conda run -n py312 pip install torch --index-url https://download.pytorch.org/whl/cu128 
+RUN conda run -n py312 pip install fluidgym
+
+RUN conda create -y -n py313 python=3.13 
+RUN conda run -n py313 pip install torch --index-url https://download.pytorch.org/whl/cu128
+RUN conda run -n py313 pip install fluidgym
+
+# Set py312 as default env
+ENV CONDA_DEFAULT_ENV=py312
+ENV PATH=${CONDA_DIR}/envs/py311/bin:${PATH}
+
+WORKDIR /workspace
+CMD ["/bin/bash"]
