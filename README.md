@@ -22,6 +22,7 @@
     <h3>
       <a href="#-installation">Installation</a> |
       <a href="#-getting-started">Getting Started</a> |
+      <a href="#-reproducing-experiments">Reproducing Experiments</a> |
       <a href="https://safe-autonomous-systems.github.io/fluidgym">Documentation</a> | 
       <a href="#-license-&-citation">License & Citation</a>
     </h3>
@@ -44,7 +45,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cu128
 pip install fluidgym
 ```
 
-### 🐳 Using Docker (coming soon)
+### 🐳 Using Docker 
 
 Instead of installing FluidGym you can use one of our Docker containers:
 
@@ -112,6 +113,11 @@ for _ in range(50):
     if term or trunc:
         break
 ```
+
+## Reproducing Experiments
+
+All commands to reproduce the experiments of the paper can be found in [`experiments.md`](experiments.md).
+The steps to generate the initial domain snapshots and statistics are stated in [`initial_domain_generation.md`](initial_domain_generation.md).
 
 ## License & Citation
 
