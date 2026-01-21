@@ -19,8 +19,8 @@ discount_factor: 0.999
 
 wandb:
   enable: true
-  entity: safe-autonomous-systems
-  project: jbecktepe-fluidgym
+  entity: anonymous-entity  
+  project: fluidgym-project
 
 hydra:
   output_subdir: "."

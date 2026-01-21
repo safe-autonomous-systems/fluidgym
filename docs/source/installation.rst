@@ -35,8 +35,7 @@ First, clone the FluidGym repository from GitHub:
 
 .. code-block:: bash
 
-    git clone https://github.com/safe-autonomous-systems/fluidgym.git 
-    cd fluidgym
+    # Not available in anonymized version
 
 Then, install the package:
 

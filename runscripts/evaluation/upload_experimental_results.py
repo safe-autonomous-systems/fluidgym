@@ -8,7 +8,7 @@ api = HfApi()
 
 api.upload_large_folder(
     folder_path="output",
-    repo_id="safe-autonomous-systems/fluidgym-experiments",
+    repo_id="anonymous-authors/anonymous-experiments",
     repo_type="dataset",
     ignore_patterns=[
         "*.gif",

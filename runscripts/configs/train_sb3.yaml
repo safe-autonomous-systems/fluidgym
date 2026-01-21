@@ -36,8 +36,8 @@ eval_callback:
 
 wandb:
   enable: true
-  entity: safe-autonomous-systems
-  project: jbecktepe-fluidgym
+  entity: anonymous-entity  
+  project: fluidgym-project
 
 hydra:
   output_subdir: "."

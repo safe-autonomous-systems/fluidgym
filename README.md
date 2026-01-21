@@ -9,12 +9,9 @@
 
 <div align="center">
     
-[![PyPI version](https://badge.fury.io/py/fluidgym.svg)](https://badge.fury.io/py/fluidgym)
-![PyPI - Python Version](https://img.shields.io/pypi/pyversions/fluidgym)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.9-EE4C2C?logo=pytorch&logoColor=white)
 ![CUDA](https://img.shields.io/badge/CUDA-12.8-%2376B900)
 ![License](https://img.shields.io/badge/License-MIT-orange)
-[![Linters](https://github.com/safe-autonomous-systems/fluidgym/actions/workflows/linters.yml/badge.svg?branch=main)](https://github.com/safe-autonomous-systems/fluidgym/actions/workflows/linters.yml)
     
 </div>
 
@@ -22,7 +19,7 @@
     <h3>
       <a href="#-installation">Installation</a> |
       <a href="#-getting-started">Getting Started</a> |
-      <a href="https://safe-autonomous-systems.github.io/fluidgym">Documentation</a> | 
+      <a href="#-reproducing-experiments">Reproducing Experiments</a> |
       <a href="#-license-&-citation">License & Citation</a>
     </h3>
 </div>
@@ -33,35 +30,11 @@
 
 ### 📦 Installation from PyPi
 
-1. Ensure the correct PyTorch version is installed (compatible with CUDA 12.8):
-```bash
-pip install torch --index-url https://download.pytorch.org/whl/cu128
-```
+Not available in anonymized version.
 
-2. Install 
+### 🐳 Using Docker 
 
-```bash
-pip install fluidgym
-```
-
-### 🐳 Using Docker (coming soon)
-
-Instead of installing FluidGym you can use one of our Docker containers:
-
-- [fluidgym-runtime](https://hub.docker.com/repository/docker/becktepe/fluidgym-runtime) for running FluidGym
-- [fluidgym-devel](https://hub.docker.com/repository/docker/becktepe/fluidgym-devel) for development
-
-Both containers come with the following Miniconda environments:
-- ```py310```: Python 3.10
-- ```py311```: Python 3.11
-- ```py312```: Python 3.12
-- ```py313```: Python 3.13
-
-Start the containers with:
-```bash
-docker run -it --gpus all fluidgym-runtime bash
-docker run -it --gpus all fluidgym-devel bash
-```
+Not available in anonymized version.
 
 ### 🧱 Build from Source (GitHub)
 
@@ -93,7 +66,7 @@ make install
 
 ## Getting Started
 
-For an easy start refer to our [documentation](https://safe-autonomous-systems.github.io/fluidgym/) and the [`examples`](examples) directory.
+For an easy start refer to our documentation and the [`examples`](examples) directory.
 FluidGym provides a ```gymnasium```-like interface that can be used as follows:
 
 ```python
@@ -112,6 +85,44 @@ for _ in range(50):
     if term or trunc:
         break
 ```
+
+## Reproducing Experiments
+
+All commands to reproduce the experiments of the paper can be found in [`experiments.md`](experiments.md).
+The steps to generate the initial domain snapshots and statistics are stated in [`initial_domain_generation.md`](initial_domain_generation.md).
+
+<div style="border: 2px solid red; padding: 10px; border-radius: 5px;">
+<strong>Note:</strong> 
+
+
+The download of initial domain snapshots is not possible without accessing our huggingface repository.
+Therefore, during the double-blind review phase, environments can only be used with the following arguments:
+```python
+import fluidgym
+
+env = fluidgym.make(
+    "JetCylinder2D-easy-v0",
+    load_initial_domain=False,
+    load_domain_statistics=False
+)
+obs, info = env.reset(seed=42)
+
+for _ in range(50):
+    action = env.sample_action()
+    obs, reward, term, trunc, info = env.step(action)
+    env.render()
+
+    if term or trunc:
+        break
+```
+
+However, rewards are not normalized with uncontrolled values and episodes start with an 
+un-initialized flow field. 
+
+Alternatively, you can create the initial domain snapshots yourself as explained in [`initial_domain_generation.md`](initial_domain_generation.md).
+We note that, depending on the environment, this might take a while.
+
+</div>
 
 ## License & Citation
 

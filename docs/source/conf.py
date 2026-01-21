@@ -6,10 +6,10 @@ importlib.import_module("fluidgym")
 import datetime
 
 project = "FluidGym"
-author = "Jannis Becktepe, Safe Autonomous Systems (SAS), TU Dortmund University"
+author = "Anonymous Authors"
 copyright = (
     f"{datetime.date.today().strftime('%Y')}, "
-    "Safe Autonomous Systems (SAS), TU Dortmund University"
+    "Anonymous Authors"
 )
 release = "0.0.2"
 version = "0.0.2"
@@ -21,9 +21,6 @@ html_theme = "sphinx_rtd_theme"
 html_logo = "_static/img/logo_lm.png"
 html_context = {
     "display_github": True,
-    "github_url": "https://github.com/safe-autonomous-systems/fluidgym",
-    "github_user": "safe-autonomous-systems",
-    "github_repo": "fluidgym",
     "github_version": "main",
     "conf_py_path": "/docs/source/",
 }
