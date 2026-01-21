@@ -5,7 +5,7 @@ description = "Plug-and-Play Benchmarking of Reinforcement Learning Algorithms f
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
-    { name = "Jannis Becktepe", email = "jannis@becktepe.de" }
+    { name = "Anonymous Authors", email = "anonymous@mail.com" }
 ]
 requires-python = ">=3.10,<3.14"
 dependencies = [
