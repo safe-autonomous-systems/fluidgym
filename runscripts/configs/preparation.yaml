@@ -1,0 +1,19 @@
+# @package _global_
+defaults:
+  - _self_
+
+env_id: RBC2D-easy-v0
+env_kwargs: {}
+
+overwrite_existing: false
+
+hydra:
+  output_subdir: "."
+  run: 
+    dir: output/preparation/${env_id}
+  sweep:
+    dir: output/preparation/${env_id}
+    subdir: ""
+  job:
+    chdir: true
+

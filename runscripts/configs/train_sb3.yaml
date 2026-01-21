@@ -1,0 +1,51 @@
+# @package _global_
+defaults:
+  - _self_
+  - algorithm: sb3_ppo
+  - cluster: local
+
+env_id: RBC2D-easy-v0
+env_kwargs: {}
+eval_env_kwargs: {}
+  
+seed: 42
+
+# SARL or MARL
+rl_mode: sarl
+
+# General training
+total_timesteps: 5e4
+
+# Evaluation
+n_eval_steps: 10
+eval_freq: ${eval:${total_timesteps} // ${n_eval_steps}}
+n_eval_episodes: 1
+
+# Checkpointing
+continue_training: false
+checkpoint_latest: true
+
+rl_device: cpu
+
+eval_callback:
+  _target_: fluidgym.integration.sb3.EvalCallback
+  eval_freq: ${eval_freq}
+  n_eval_episodes: ${n_eval_episodes}
+  use_wandb: ${wandb.enable}
+  checkpoint_latest: ${checkpoint_latest}
+
+wandb:
+  enable: true
+  entity: safe-autonomous-systems
+  project: jbecktepe-fluidgym
+
+hydra:
+  output_subdir: "."
+  run: 
+    dir: output/training/${rl_mode}/${env_id}/${algorithm.name}/${seed}
+  sweep:
+    dir: output/training/${rl_mode}/${env_id}/${algorithm.name}/${seed}
+    subdir: ""
+  job:
+    chdir: true
+

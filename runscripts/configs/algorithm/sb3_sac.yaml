@@ -1,0 +1,29 @@
+name: SAC
+obj:
+  _target_: stable_baselines3.sac.sac.SAC
+  policy: MlpPolicy
+  learning_rate: 0.0003
+  buffer_size: 1000000
+  learning_starts: 100
+  batch_size: 256
+  tau: 0.005
+  gamma: 0.99
+  train_freq: 1
+  gradient_steps: -1
+  action_noise: null
+  replay_buffer_class: null
+  replay_buffer_kwargs: null
+  optimize_memory_usage: false
+  ent_coef: auto
+  target_update_interval: 1
+  target_entropy: auto
+  use_sde: False
+  sde_sample_freq: -1
+  use_sde_at_warmup: False
+  stats_window_size: 100
+  tensorboard_log: null
+  policy_kwargs: {}
+  verbose: 0
+  seed: ${seed}
+  device: cuda
+  _init_setup_model: True

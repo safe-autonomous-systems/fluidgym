@@ -1,0 +1,22 @@
+# @package _global_
+defaults:
+  - _self_
+
+env_id: RBC2D-easy-v0
+env_kwargs: 
+  resolution: 8
+
+# Whether to only create training initial domains.
+# For validation, we only consider training domains.
+create_train_only: false
+
+hydra:
+  output_subdir: "."
+  run: 
+    dir: output/preparation/${env_id}/${env_kwargs.resolution}
+  sweep:
+    dir: output/preparation/${env_id}/${env_kwargs.resolution}
+    subdir: ""
+  job:
+    chdir: true
+

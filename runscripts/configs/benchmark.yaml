@@ -1,0 +1,20 @@
+# @package _global_
+defaults:
+  - _self_
+
+env_id: RBC2D-easy-v0
+env_kwargs: {}
+
+n_iterations: 10
+steps: 80
+
+hydra:
+  output_subdir: "."
+  run: 
+    dir: output/benchmark/${env_id}
+  sweep:
+    dir: output/benchmark/${env_id}
+    subdir: ""
+  job:
+    chdir: true
+

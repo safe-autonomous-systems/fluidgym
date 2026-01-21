@@ -1,0 +1,34 @@
+# @package _global_
+defaults:
+  - _self_
+  - cluster: local
+
+env_id: CylinderJet2D-easy-v0
+env_kwargs: {}
+eval_env_kwargs: {}
+  
+seed: 42
+
+rl_mode: sarl
+
+# D-MPC setup
+horizon: 20
+n_iterations: 10
+lr: 0.1
+discount_factor: 0.999
+
+wandb:
+  enable: true
+  entity: safe-autonomous-systems
+  project: jbecktepe-fluidgym
+
+hydra:
+  output_subdir: "."
+  run: 
+    dir: output/D-MPC/${env_id}/${seed}
+  sweep:
+    dir: output/D-MPC/${env_id}/${seed}
+    subdir: ""
+  job:
+    chdir: true
+
