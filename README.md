@@ -7,12 +7,20 @@
     </a>
 </p>
 
-<table>
+<table style="border-collapse: collapse; border: none;">
   <tr>
-    <td><img src="docs/build/html/_static/img/gifs/cylinder.gif" width="220"/></td>
-    <td><img src="docs/build/html/_static/img/gifs/rbc.gif" width="220"/></td>
-    <td><img src="docs/build/html/_static/img/gifs/airfoil.gif" width="220"/></td>
-    <td><img src="docs/build/html/_static/img/gifs/tcf.gif" width="220"/></td>
+    <td style="border: none; padding: 0;">
+      <img src="docs/build/html/_static/img/gifs/cylinder.gif" style="max-width: 100%; height: auto;" />
+    </td>
+    <td style="border: none; padding: 0;">
+      <img src="docs/build/html/_static/img/gifs/rbc.gif" style="max-width: 100%; height: auto;" />
+    </td>
+    <td style="border: none; padding: 0;">
+      <img src="docs/build/html/_static/img/gifs/airfoil.gif" style="max-width: 100%; height: auto;" />
+    </td>
+    <td style="border: none; padding: 0;">
+      <img src="docs/build/html/_static/img/gifs/tcf.gif" style="max-width: 100%; height: auto;" />
+    </td>
   </tr>
 </table>
 
