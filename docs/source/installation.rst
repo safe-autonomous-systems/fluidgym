@@ -23,7 +23,7 @@ just run the following command:
 
 .. code-block:: bash
 
-    pip install fluidgym
+    # Not available in anonymized version
 
 2. Downloading from GitHub
 --------------------------
