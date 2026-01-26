@@ -1202,6 +1202,7 @@ class FluidEnv(ABC):
             color=fluidgym_config.palette[: len(grids)],  # type: ignore
             type="pdf",
             linewidth=0.5,
+            fig_scale=2,
         )
         ax.grid(True)
         fig.savefig(f"{self.id}_grid.pdf")
