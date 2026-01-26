@@ -98,9 +98,9 @@ def print_gpu_hours():
 
     # We do not run medium/hard Airfoil3D experiments
     results_df.loc[
-        results_df["env_name"].str.contains("Airfoil3D") & \
-        ~results_df["difficulty"].str.contains("easy"),
-        "actual_steps"
+        results_df["env_name"].str.contains("Airfoil3D")
+        & ~results_df["difficulty"].str.contains("easy"),
+        "actual_steps",
     ] = 0
 
     results_df["gpu_hours"] = (
