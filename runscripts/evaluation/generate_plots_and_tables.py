@@ -15,6 +15,9 @@ from matplotlib.projections import register_projection
 from matplotlib.projections.polar import PolarAxes
 from matplotlib.spines import Spine
 from matplotlib.transforms import Affine2D
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize, Colormap
+
 from rliable import library as rly
 from rliable import metrics as rly_metrics
 
@@ -324,7 +327,7 @@ def load_training_runs(
         difficulty_levels = ["easy"]
     else:
         difficulty_levels = DIFFICULTY_LEVELS
-        
+
     total_steps = np.inf
 
     for rl_mode in RL_MODES[env_name]:
@@ -416,9 +419,18 @@ def load_single_test_render(
     if final_png.exists() is False or initial_png.exists() is False:
         return {}
 
+    CROP = 170
+
+    def load_and_crop(path):
+        img = plt.imread(path)
+        return img[CROP:-CROP, ...]
+
+    needs_crop = "3D" in env_id
     return {
-        "initial": plt.imread(initial_png),
-        "final": plt.imread(final_png),
+        "initial": load_and_crop(initial_png)
+        if needs_crop
+        else plt.imread(initial_png),
+        "final": load_and_crop(final_png) if needs_crop else plt.imread(final_png),
     }
 
 
@@ -1590,6 +1602,31 @@ def plot_results_combined() -> None:
     plt.savefig(PLOTS_PATH / "results_overview.pdf", format="pdf")
 
 
+def get_cmap_and_range(env_name: str) -> tuple[Colormap, float, float]:
+    if "CylinderJet2D" in env_name or "CylinderRot2D" in env_name:
+        cmap = plt.get_cmap("icefire")
+        vmin, vmax = -10.0, 10.0
+    elif "CylinderJet3D" in env_name:
+        cmap = plt.get_cmap("rainbow")
+        vmin, vmax = 0.0, 1.0
+    elif "RBC2D" in env_name or "RBC3D" in env_name:
+        cmap = plt.get_cmap("rainbow")
+        vmin, vmax = 0.0, 1.75
+    elif "Airfoil2D" in env_name:
+        cmap = plt.get_cmap("icefire")
+        vmin, vmax = -1.0, 1.0
+    elif "Airfoil3D" in env_name:
+        cmap = plt.get_cmap("rainbow")
+        vmin, vmax = 0.0, 1.0
+    elif "TCF" in env_name:
+        cmap = plt.get_cmap("rainbow")
+        vmin, vmax = 0.0, 0.9
+    else:
+        raise ValueError(f"Unknown env_name: {env_name}")
+
+    return cmap, vmin, vmax
+
+
 def plot_qualitative_results(env_name: str, seed: int) -> None:
     images = load_all_test_renders(env_name=env_name, seed=seed)
     algo_order = ["Baseflow", "PPO", "SAC", "MA-PPO", "MA-SAC"]
@@ -1604,7 +1641,7 @@ def plot_qualitative_results(env_name: str, seed: int) -> None:
         return
 
     _, axes = plt.subplots(
-        n_rows, n_cols, figsize=(FIGWIDTH, 2.75 * n_rows), squeeze=False
+        n_rows, n_cols, figsize=(FIGWIDTH, 1.8 * n_rows), squeeze=False
     )
 
     if "Airfoil3D" in env_name:
@@ -1635,6 +1672,15 @@ def plot_qualitative_results(env_name: str, seed: int) -> None:
                 ax.set_ylabel(algo, rotation=90, va="center")
             else:
                 ax.set_ylabel("")
+
+        # We add a colorbar
+        cmap, vmin, vmax = get_cmap_and_range(env_name)
+        norm = Normalize(vmin=vmin, vmax=vmax)
+        sm = ScalarMappable(norm=norm, cmap=cmap)
+        sm.set_array([])
+
+        cax = axes[row, -1].inset_axes([1.02, 0.0, 0.03, 1.0])
+        plt.colorbar(sm, cax=cax)
 
     plt.tight_layout()
     plt.savefig(
