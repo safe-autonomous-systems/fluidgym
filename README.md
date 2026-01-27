@@ -46,6 +46,22 @@
 
 ---
 
+## Key Features
+
+- **Standalone, GPU-accelerated fluid dynamics** implemented fully in PyTorch — no external CFD solvers required.
+- **Fully differentiable environments**, enabling both reinforcement learning and gradient-based control methods.
+- **Gymnasium-like API** with seamless integration into common RL frameworks.
+- **Standardized benchmarks** with fixed train/validation/test splits for fair and reproducible evaluation.
+- **Diverse AFC environments** (2D & 3D) with multiple difficulty levels, covering different regimes.
+- **Single-agent and multi-agent support** for centralized and decentralized control.
+- **Reference baselines and experiments** provided for widely used RL algorithms PPO and SAC.
+
+### Models & Data
+- **All trained models** are publicly available on [HuggingFace](https://huggingface.co/collections/safe-autonomous-systems/fluidgym-benchmark-models).
+- **Complete training and test datasets** with results for all experimental runs are released for transparent comparison and reproducibility via our [HuggingFace dataset](https://huggingface.co/datasets/safe-autonomous-systems/fluidgym-experiments).
+
+---
+
 ## Installation
 
 ### 📦 Installation from PyPi
