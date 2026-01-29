@@ -11,7 +11,7 @@ import torch
 from gymnasium import spaces
 
 from fluidgym.registry import make
-from fluidgym.types import EnvLike, EnvMode
+from fluidgym.types import EnvMode, FluidEnvLike
 
 
 class Command(Enum):
@@ -27,7 +27,7 @@ class Command(Enum):
     LOAD_INITIAL_DOMAIN = "load_initial_domain"
 
 
-class ParallelFluidEnv(EnvLike):
+class ParallelFluidEnv(FluidEnvLike):
     """Parallel FluidGym environment running multiple environments on separate GPUs.
 
     Parameters

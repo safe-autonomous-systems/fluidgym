@@ -9,10 +9,10 @@ import torch
 from gymnasium import spaces
 
 from fluidgym.envs.fluid_env import EnvState, FluidEnv
-from fluidgym.types import EnvLike, EnvMode, EnvT
+from fluidgym.types import EnvMode, EnvT, FluidEnvLike
 
 
-class FluidWrapper(Generic[EnvT]):  # type: ignore[misc]
+class FluidWrapper(FluidEnvLike, Generic[EnvT]):  # type: ignore[misc]
     """A base wrapper class for FluidEnv environments.
 
     Parameters
@@ -21,7 +21,7 @@ class FluidWrapper(Generic[EnvT]):  # type: ignore[misc]
         The environment to wrap.
     """
 
-    def __init__(self, env: EnvLike) -> None:
+    def __init__(self, env: FluidEnvLike) -> None:
         self._env = env
 
     def __getattr__(self, name: str) -> Any:

@@ -3,7 +3,7 @@
 import torch
 from gymnasium import spaces
 
-from fluidgym.types import EnvLike
+from fluidgym.types import FluidEnvLike
 from fluidgym.wrappers.fluid_wrapper import FluidWrapper
 from fluidgym.wrappers.util import flatten_dict_space
 
@@ -21,24 +21,59 @@ class FlattenObservation(FluidWrapper):
         The environment to wrap.
     """
 
-    def __init__(self, env: EnvLike) -> None:
+    def __init__(
+        self, env: FluidEnvLike, airfoil_3d_legacy_compatible: bool = False
+    ) -> None:
         super().__init__(env)
         if not isinstance(self._env.observation_space, spaces.Dict):
             raise ValueError(
                 "FlattenObservation wrapper only supports Dict observation spaces."
             )
-
         self.__observation_space = flatten_dict_space(self._env.observation_space)
+        self.__airfoil_3d_legacy_compatible = airfoil_3d_legacy_compatible
 
     @property
     def observation_space(self) -> spaces.Box:
         """The observation space of the environment."""
         return self.__observation_space
 
+    def __airfoil3d_legacy_compatibility(self, flat_obs: torch.Tensor) -> torch.Tensor:
+        """
+        Insert zero entries at fixed indices to expand the observation from
+        shape [209, ...] to [216, ...].
+        """
+        idxs = [157, 165, 173, 181, 188, 196, 204]
+
+        # Original and new sizes along dim 0
+        old_n = flat_obs.size(0)
+        new_n = old_n + len(idxs)
+
+        # Allocate output (zeros by default)
+        out = flat_obs.new_zeros((new_n, *flat_obs.shape[1:]))
+
+        # Boolean mask of where original values should go
+        mask = torch.ones(new_n, dtype=torch.bool, device=flat_obs.device)
+        mask[idxs] = False
+
+        # Fill non-insert positions with original data
+        out[mask] = flat_obs
+
+        return out
+
     def __flatten_obs(self, obs: dict[str, torch.Tensor]) -> torch.Tensor:
-        return torch.cat(
-            [obs[k].reshape(-1) for k in obs.keys() if k in DEFAULT_KEYS], dim=0
-        )
+        if self.__airfoil_3d_legacy_compatible:
+            return torch.cat(
+                [
+                    self.__airfoil3d_legacy_compatibility(obs[k]).reshape(-1)
+                    for k in obs.keys()
+                    if k in DEFAULT_KEYS
+                ],
+                dim=0,
+            )
+        else:
+            return torch.cat(
+                [obs[k].reshape(-1) for k in obs.keys() if k in DEFAULT_KEYS], dim=0
+            )
 
     def reset(
         self,

@@ -21,7 +21,7 @@ class EnvMode(Enum):
 
 
 @runtime_checkable
-class EnvLike(Protocol):
+class FluidEnvLike(Protocol):
     """Protocol for FluidGym environment-like objects, i.e., FluidEnv and wrappers."""
 
     @property
@@ -244,4 +244,4 @@ class EnvLike(Protocol):
         ...
 
 
-EnvT = TypeVar("EnvT", bound=EnvLike)
+EnvT = TypeVar("EnvT", bound=FluidEnvLike)

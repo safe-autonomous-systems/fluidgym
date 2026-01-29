@@ -158,6 +158,12 @@ class AirfoilEnv3D(AirfoilEnvBase):
                 "n_agents must be a positive integer that evenly divides"
                 "circle_resolution_angular."
             )
+
+        if local_2d_obs and not use_marl:
+            raise ValueError(
+                "Local 2D observations are only supported in multi-agent mode."
+            )
+
         self._local_2d_obs = local_2d_obs
         self._n_agents = n_agents
         self._local_obs_window = local_obs_window
@@ -218,16 +224,8 @@ class AirfoilEnv3D(AirfoilEnvBase):
         velocity_shape: tuple[int, ...]
 
         if self._use_marl:
-            velocity_shape = (
-                self._n_jets,
-                self._n_sensors_per_agent,
-                n_sensors_x_y,
-                self._ndims,
-            )
-        else:
             if self._local_2d_obs:
                 velocity_shape = (
-                    self._n_jets,
                     n_sensors_x_y,
                     self._ndims - 1,
                 )
@@ -238,6 +236,13 @@ class AirfoilEnv3D(AirfoilEnvBase):
                     n_sensors_x_y,
                     self._ndims,
                 )
+        else:
+            velocity_shape = (
+                self._n_agents,
+                self._n_sensors_per_agent,
+                n_sensors_x_y,
+                self._ndims,
+            )
 
         return spaces.Dict(
             {
@@ -294,6 +299,23 @@ class AirfoilEnv3D(AirfoilEnvBase):
                 grid_coords[2].reshape(-1, self._n_sensors_z).T,
             ]
         )
+
+        all_sensors = []
+        indices = []
+        # Filter out airfoil mask
+        for i in range(grid_coords.shape[2]):
+            x_idx = grid_coords[0, :, i]
+            y_idx = grid_coords[1, :, i]
+
+            if self._airfoil_mask[0, y_idx, x_idx].any():
+                indices.append(i)
+                continue
+            all_sensors.append(grid_coords[:, :, i : i + 1])
+
+        print(indices)
+        exit()
+
+        grid_coords = torch.cat(all_sensors, dim=2)
 
         return grid_coords
 

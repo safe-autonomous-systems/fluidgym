@@ -2,7 +2,7 @@
 
 import torch
 
-from fluidgym.types import EnvLike
+from fluidgym.types import FluidEnvLike
 from fluidgym.wrappers.fluid_wrapper import FluidWrapper
 
 
@@ -23,7 +23,7 @@ class ActionNoise(FluidWrapper):
         The random seed for the noise generator.
     """
 
-    def __init__(self, env: EnvLike, sigma: float, seed: int) -> None:
+    def __init__(self, env: FluidEnvLike, sigma: float, seed: int) -> None:
         super().__init__(env)
         self.__sigma = sigma
         self.__torch_rng = torch.Generator(device=self._env.cuda_device).manual_seed(

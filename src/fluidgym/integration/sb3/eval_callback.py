@@ -11,12 +11,11 @@ import wandb
 from stable_baselines3.common.callbacks import BaseCallback
 
 from fluidgym.integration.gymnasium import GymFluidEnv
-from fluidgym.integration.sb3.multi_agent_vec_env import MultiAgentVecEnv
-from fluidgym.integration.sb3.parallel_vec_env import ParallelVecEnv
 from fluidgym.integration.sb3.util import (
     evaluate_model,
     plot_eval_sequence,
 )
+from fluidgym.integration.sb3.vec_env import VecEnv
 
 
 class EvalCallback(BaseCallback):
@@ -26,8 +25,8 @@ class EvalCallback(BaseCallback):
 
     def __init__(
         self,
-        env: GymFluidEnv | MultiAgentVecEnv | ParallelVecEnv,
-        eval_env: GymFluidEnv | MultiAgentVecEnv,
+        env: GymFluidEnv | VecEnv,
+        eval_env: GymFluidEnv | VecEnv,
         eval_freq: int,
         n_eval_episodes: int,
         use_wandb: bool,
@@ -81,9 +80,7 @@ class EvalCallback(BaseCallback):
             "Only Box action spaces are supported."
         )
 
-        if isinstance(env, MultiAgentVecEnv) or (
-            isinstance(env, ParallelVecEnv) and env.is_marl
-        ):
+        if isinstance(env, VecEnv) and env.unwrapped.use_marl:
             self.num_actions = env.num_envs
             self.metrics = ["global_reward"] + env.unwrapped.metrics
         else:
@@ -103,9 +100,7 @@ class EvalCallback(BaseCallback):
     @property
     def _num_env_steps(self) -> int:
         """Return the number of environment steps taken so far."""
-        if isinstance(self.env, MultiAgentVecEnv) or (
-            isinstance(self.env, ParallelVecEnv) and self.env.is_marl
-        ):
+        if isinstance(self.env, VecEnv) and self.env.unwrapped.use_marl:
             return self.num_timesteps // self.env.num_envs
         else:
             return self.num_timesteps
@@ -237,7 +232,7 @@ class EvalCallback(BaseCallback):
 
     def _evaluate_model(
         self,
-        env: GymFluidEnv | MultiAgentVecEnv,
+        env: GymFluidEnv | VecEnv,
         randomize: bool,
         log: bool = False,
         save: bool = False,

@@ -1,10 +1,13 @@
 import fluidgym
-from fluidgym.envs.multi_agent_fluid_env import MultiAgentFluidEnv
+from fluidgym.wrappers import FlattenObservation
 from fluidgym.integration.pettingzoo import PettingZooFluidEnv
 
 # Create a FluidGym environment
 env = fluidgym.make("CylinderJet3D-easy-v0")
-assert isinstance(env, MultiAgentFluidEnv)
+
+# Wrap the environment to extract and flatten observations
+env = FlattenObservation(env)
+
 env.seed(42)
 
 # Wrap the FluidGym environment with the Pettingzoo wrapper

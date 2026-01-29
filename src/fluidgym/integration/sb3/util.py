@@ -11,7 +11,7 @@ import seaborn as sns
 from stable_baselines3.common.base_class import BaseAlgorithm
 
 from fluidgym.integration.gymnasium import GymFluidEnv
-from fluidgym.integration.sb3.multi_agent_vec_env import MultiAgentVecEnv
+from fluidgym.integration.sb3.vec_env import VecEnv
 
 logger = logging.getLogger("fluidgym.integration.sb3")
 
@@ -20,7 +20,7 @@ PLOT_MAX_ACTIONS = 64
 
 
 def __get_sequence_df(
-    env: GymFluidEnv | MultiAgentVecEnv,
+    env: GymFluidEnv | VecEnv,
     metric_sequence: dict[str, list[np.ndarray]],
     action_sequence: list[np.ndarray],
 ) -> pd.DataFrame:
@@ -68,7 +68,7 @@ def __get_sequence_df(
                 }
             )
 
-    if isinstance(env, MultiAgentVecEnv):
+    if isinstance(env, VecEnv):
         sequence_dict["local_reward"] = np.array(metric_sequence["local_reward"])
 
     sequence_dict["reward"] = np.array(metric_sequence["reward"]).flatten()
@@ -77,7 +77,7 @@ def __get_sequence_df(
 
 
 def __env_step(
-    env: GymFluidEnv | MultiAgentVecEnv, action: np.ndarray
+    env: GymFluidEnv | VecEnv, action: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, bool, dict[str, np.ndarray]]:
     """Wraps the environment step function to handle both single-agent and multi-agent
     environments.
@@ -95,7 +95,7 @@ def __env_step(
     tuple[np.ndarray, np.ndarray, bool, dict]
         A tuple containing the observation, reward, done flag, and info dictionary.
     """
-    if isinstance(env, MultiAgentVecEnv):
+    if isinstance(env, VecEnv):
         action = action[:, None]
         obs, reward, dones, infos = env.step(action)
         done = bool(np.any(dones))
@@ -111,7 +111,7 @@ def __env_step(
 
 
 def plot_eval_sequence(
-    env: GymFluidEnv | MultiAgentVecEnv,
+    env: GymFluidEnv | VecEnv,
     uncontrolled_sequence_df: pd.DataFrame | None,
     sequence_df: pd.DataFrame,
     output_file: Path,
@@ -132,7 +132,7 @@ def plot_eval_sequence(
     output_file: Path
         The output file to save the plot to.
     """
-    if isinstance(env, MultiAgentVecEnv) and "reward_0" in sequence_df.columns:
+    if isinstance(env, VecEnv) and "reward_0" in sequence_df.columns:
         metrics = ["global_reward"] + env.unwrapped.metrics
     else:
         metrics = ["reward"] + env.unwrapped.metrics
@@ -212,7 +212,7 @@ def plot_eval_sequence(
 
 
 def evaluate_model(
-    env: GymFluidEnv | MultiAgentVecEnv,
+    env: GymFluidEnv | VecEnv,
     model: BaseAlgorithm,
     randomize: bool,
     save_name: str | None = None,
@@ -260,7 +260,7 @@ def evaluate_model(
     if output_path is None:
         output_path = Path(".")
 
-    is_marl = isinstance(env, MultiAgentVecEnv)
+    is_marl = isinstance(env, VecEnv)
     done = False
     episode_rewards: list[np.ndarray] = []
     episode_metrics: dict[str, float] = defaultdict(float)
@@ -350,7 +350,7 @@ def evaluate_model(
 
 def test_model(
     model: BaseAlgorithm,
-    test_env: GymFluidEnv | MultiAgentVecEnv,
+    test_env: GymFluidEnv | VecEnv,
     n_episodes: int,
     save_frames: bool,
     render_3d: bool,

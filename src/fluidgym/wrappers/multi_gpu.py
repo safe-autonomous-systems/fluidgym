@@ -4,7 +4,7 @@ from enum import Enum
 
 import torch
 
-from fluidgym.types import EnvLike
+from fluidgym.types import FluidEnvLike
 from fluidgym.wrappers.fluid_wrapper import FluidWrapper
 
 
@@ -31,7 +31,7 @@ class MultiGPU(FluidWrapper):
         The environment to wrap.
     """
 
-    def __init__(self, env: EnvLike, GPU_ids: list[int]) -> None:
+    def __init__(self, env: FluidEnvLike, GPU_ids: list[int]) -> None:
         super().__init__(env)
         self.__GPU_ids = GPU_ids
         self.__num_envs = len(GPU_ids)

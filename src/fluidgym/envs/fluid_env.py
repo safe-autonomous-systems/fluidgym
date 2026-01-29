@@ -20,7 +20,7 @@ from fluidgym.simulation.extensions import (
 from fluidgym.simulation.pict.util.domain_io import load_domain, save_domain
 from fluidgym.simulation.pict.util.output import _resample_block_data, plot_grids
 from fluidgym.simulation.simulation import Simulation
-from fluidgym.types import EnvLike, EnvMode
+from fluidgym.types import EnvMode, FluidEnvLike
 from fluidgym.util.data_utils import (
     load_statistics,
     load_uncontrolled_episode,
@@ -61,7 +61,7 @@ N_INITIAL_DOMAINS = 10
 MODE_SEEDS = [100, 200, 300]
 
 
-class FluidEnv(ABC, EnvLike):
+class FluidEnv(ABC, FluidEnvLike):
     """Abstract base class for FluidGym environments.
 
     It provides common functionality for all FluidGym environments,

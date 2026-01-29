@@ -3,7 +3,7 @@
 import torch
 from gymnasium import spaces
 
-from fluidgym.types import EnvLike
+from fluidgym.types import FluidEnvLike
 from fluidgym.wrappers.fluid_wrapper import FluidWrapper
 
 
@@ -21,7 +21,7 @@ class ObsExtraction(FluidWrapper):
         The list of keys to extract from the observation dictionary.
     """
 
-    def __init__(self, env: EnvLike, keys: list[str]) -> None:
+    def __init__(self, env: FluidEnvLike, keys: list[str]) -> None:
         super().__init__(env)
         if len(keys) == 0:
             raise ValueError("Keys list must be non-empty or None.")

@@ -148,6 +148,12 @@ class CylinderJetEnv3D(CylinderEnvBase):
                 "n_agents must be a positive integer that evenly divides"
                 "circle_resolution_angular."
             )
+
+        if local_2d_obs and not use_marl:
+            raise ValueError(
+                "Local 2D observations are only supported in multi-agent mode."
+            )
+
         self._local_2d_obs = local_2d_obs
         self._n_jets = n_jets
         self._local_obs_window = local_obs_window
@@ -202,7 +208,6 @@ class CylinderJetEnv3D(CylinderEnvBase):
         if self._use_marl:
             if self._local_2d_obs:
                 velocity_shape = (
-                    self._n_jets,
                     self._n_sensors_x_y,
                     self._ndims - 1,
                 )

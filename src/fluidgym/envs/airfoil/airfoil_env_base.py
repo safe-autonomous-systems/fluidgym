@@ -665,7 +665,6 @@ class AirfoilEnvBase(FluidEnv):
         all_locations = torch.cat(
             [sensors_wake_coarse, sensors_wake_fine, sensors_airfoil], dim=1
         )
-
         return all_locations
 
     def _get_global_obs(self) -> dict[str, torch.Tensor]:

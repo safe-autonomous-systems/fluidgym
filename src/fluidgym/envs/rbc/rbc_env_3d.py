@@ -143,8 +143,8 @@ class RBCEnv3D(RBCEnvBase):
             )
         else:
             shape = (
-                self._n_sensors_y,
                 (self._n_sensors_per_heater * self._n_heaters),
+                self._n_sensors_y,
                 (self._n_sensors_per_heater * self._n_heaters),
             )
 

@@ -8,7 +8,7 @@ import torch
 from gymnasium.spaces import Box
 from pettingzoo.utils.env import ParallelEnv  # type: ignore
 
-from fluidgym.envs.multi_agent_fluid_env import MultiAgentFluidEnv
+from fluidgym.types import FluidEnvLike
 
 
 class PettingZooFluidEnv(ParallelEnv):
@@ -24,7 +24,7 @@ class PettingZooFluidEnv(ParallelEnv):
     _dones: dict[int, bool] | None = None
     _infos: dict[int, dict[str, np.ndarray]] | None = None
 
-    def __init__(self, env: MultiAgentFluidEnv):
+    def __init__(self, env: FluidEnvLike):
         """Initialize the PettingZooFluidEnv.
 
         Parameters
@@ -32,39 +32,27 @@ class PettingZooFluidEnv(ParallelEnv):
         env: MultiAgentFluidEnv
             The FluidGym multi-agent environment to wrap.
         """
-        if not isinstance(env, MultiAgentFluidEnv):
-            raise ValueError("env must be an instance of MultiAgentFluidEnv.")
+        if not env.use_marl or env.n_agents <= 1:
+            raise ValueError(
+                "PettingZooFluidEnv requires a multi-agent FluidGym environment."
+            )
+
+        if not isinstance(env.observation_space, Box):
+            raise ValueError("PettingZooFluidEnv only supports Box observation spaces.")
+
         super().__init__()
 
         self.__env = env
         self.possible_agents = list(range(env.n_agents))
         self.agents = self.possible_agents[:]
-        self.action_spaces = {i: self.get_action_space() for i in self.agents}
-        self.observation_spaces = {i: self.get_observation_space() for i in self.agents}
+        self.action_spaces = dict.fromkeys(self.agents, env.action_space)
+        self.observation_spaces = dict.fromkeys(self.agents, env.observation_space)
 
     def __to_np(self, data: torch.Tensor) -> np.ndarray:
         return data.detach().cpu().numpy()
 
     def __to_np_dict(self, data: dict[str, torch.Tensor]) -> dict[str, np.ndarray]:
         return {key: value.detach().cpu().numpy() for key, value in data.items()}
-
-    def get_observation_space(self) -> Box:
-        """Get the observation space for a single agent."""
-        return Box(
-            low=self.__env._observation_range[0],
-            high=self.__env._observation_range[1],
-            shape=self.__env.local_observation_space_shape,
-            dtype=np.float32,
-        )
-
-    def get_action_space(self) -> Box:
-        """Get the action space for a single agent."""
-        return Box(
-            low=self.__env._action_range[0],
-            high=self.__env._action_range[1],
-            shape=(1,),
-            dtype=np.float32,
-        )
 
     def reset(
         self,
@@ -93,8 +81,11 @@ class PettingZooFluidEnv(ParallelEnv):
             A tuple containing the initial observations for all agents and an info
             dictionary.
         """
-        local_obs, _ = self.__env.reset_marl(seed=seed, randomize=randomize)
+        local_obs, _ = self.__env.reset(seed=seed, randomize=randomize)
+        assert isinstance(local_obs, torch.Tensor)
+
         local_obs_np = self.__to_np(local_obs)
+
         self._observations = {
             agent: local_obs_np[agent] for agent in self.possible_agents
         }
@@ -136,17 +127,17 @@ class PettingZooFluidEnv(ParallelEnv):
             [
                 torch.as_tensor(
                     actions[agent],
-                    device=self.__env._cuda_device,
-                    dtype=self.__env._dtype,
+                    device=self.__env.cuda_device,
                 )
                 for agent in self.agents
             ]
-        ).squeeze()
+        )
 
-        local_obs, agent_rewards, terminated, truncated, info = self.__env.step_marl(
+        local_obs, agent_rewards, terminated, truncated, info = self.__env.step(
             actions_tensor
         )
         agent_rewards_np = self.__to_np(agent_rewards)
+        assert isinstance(local_obs, torch.Tensor)
         local_obs_np = self.__to_np(local_obs)
 
         self._observations = {agent: local_obs_np[agent] for agent in self.agents}
@@ -188,25 +179,24 @@ class PettingZooFluidEnv(ParallelEnv):
         np.ndarray
             The rendered frame as a numpy array.
         """
-        self.__env.render(
+        return self.__env.render(
             save=save,
             render_3d=render_3d,
             filename=filename,
             output_path=output_path,
         )
-        render_data = self.__env._get_render_data(
-            render_3d=render_3d, output_path=output_path
-        )
-        return render_data[list(render_data.keys())[0]]
 
     def close(self):
         """Closes the rendering window."""
         pass
 
     @property
-    def unwrapped(self) -> MultiAgentFluidEnv:
+    def unwrapped(self) -> FluidEnvLike:
         """Return the unwrapped FluidGym environment."""
-        return self.__env
+        if hasattr(self.__env, "unwrapped"):
+            return self.__env.unwrapped  # type: ignore[attr-defined]
+        else:
+            return self.__env
 
     def seed(self, seed: int) -> None:
         """Set the seed for the environment's random number generator."""
