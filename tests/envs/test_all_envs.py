@@ -7,7 +7,7 @@ from gymnasium import spaces
 all_env_ids = list(fluidgym.registry.registry.ids)
 
 
-def _check_obs(env: FluidEnv, obs: dict[str, torch.Tensor], marl: bool = False) -> None:
+def _check_obs(env: FluidEnv, obs: dict[str, torch.Tensor], marl: bool) -> None:
     obs_space = env.observation_space
 
     assert isinstance(obs_space, spaces.Dict), (
@@ -15,24 +15,25 @@ def _check_obs(env: FluidEnv, obs: dict[str, torch.Tensor], marl: bool = False) 
     )
 
     for key, space in obs_space.spaces.items():
+        assert key in obs, f"Observation missing key: {key}"
         if marl:
             _obs = obs[key][0]
         else:
             _obs = obs[key]
 
-        assert key in obs, f"Observation missing key: {key}"
         assert isinstance(
             _obs, torch.Tensor
         ), f"Observation for key '{key}' should be a torch.Tensor"
         assert _obs.shape == space.shape, (
-            f"Observation shape for key '{key}' is {obs[key].shape}, "
+            f"Observation shape for key '{key}' is {_obs.shape}, "
             f"expected {space.shape}"
         )
 
 def _check_action(
-    env: FluidEnv, action: torch.Tensor, marl: bool = False
+    env: FluidEnv, action: torch.Tensor, marl: bool
 ) -> None:
     action_space = env.action_space
+
     if marl:
         _action = action[0]
     else:
@@ -50,18 +51,18 @@ def _check_action(
     )
     
 
-def _check_env(env_id: str) -> None:
-    env = fluidgym.make(env_id)
+def _check_env_sarl(env_id: str) -> None:
+    env = fluidgym.make(env_id, use_marl=False)
     env.seed(42)
 
     obs, info = env.reset()
 
     action = env.sample_action()
-    _check_action(env, action)
+    _check_action(env, action, marl=False)
 
     obs, reward, terminated, truncated, info = env.step(env.sample_action())
     
-    _check_obs(env, obs)
+    _check_obs(env, obs, marl=False)
     assert isinstance(reward, torch.Tensor), "Reward should be a float"
     assert isinstance(terminated, bool), "Terminated should be a boolean"
     assert isinstance(truncated, bool), "Truncated should be a boolean"
@@ -102,5 +103,9 @@ def test_env(env_id: str):
     if env_id == "Airfoil3D-hard-v0":
         pytest.skip("Airfoil3D-hard-v0 is too computationally expensive for CI.")
 
-    _check_env(env_id)
+    _check_env_sarl(env_id)
     _check_env_marl(env_id)
+
+
+if __name__ == "__main__":
+    test_env("TCFSmall3D-both-easy-v0")

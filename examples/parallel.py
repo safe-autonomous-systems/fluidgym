@@ -4,7 +4,7 @@ if __name__ == "__main__":
     env = ParallelFluidEnv(
         env_id="Airfoil3D-easy-v0",
         cuda_ids=[0, 0],  # List of GPU IDs to use
-        use_marl=False
+        use_marl=False,
     )
     try:
         env.seed(42)
@@ -13,6 +13,6 @@ if __name__ == "__main__":
         action = env.sample_action()
 
         obs, reward, terminated, truncated, info = env.step(action)
-        
+
     finally:
         env.close()

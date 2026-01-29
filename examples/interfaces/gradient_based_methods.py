@@ -14,7 +14,7 @@ for _ in range(50):
     action.requires_grad_(True)
 
     obs, reward, terminated, truncated, info = env.step(action)
-    
+
     if terminated or truncated:
         obs, info = env.reset(seed=42)
 
