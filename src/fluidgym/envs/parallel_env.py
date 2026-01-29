@@ -2,29 +2,32 @@
 
 import multiprocessing as mp
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
+import numpy as np
+import pandas as pd
 import torch
+from gymnasium import spaces
 
-from fluidgym.envs.multi_agent_fluid_env import MultiAgentFluidEnv
 from fluidgym.registry import make
+from fluidgym.types import EnvLike, EnvMode
 
 
 class Command(Enum):
     """Environment commands for inter-process communication."""
 
     STEP = "step"
-    STEP_MARL = "step_marl"
     RESET = "reset"
-    RESET_MARL = "reset_marl"
     SEED = "seed"
     CLOSE = "close"
     TRAIN = "train"
     VAL = "val"
     TEST = "test"
+    LOAD_INITIAL_DOMAIN = "load_initial_domain"
 
 
-class ParallelFluidEnv:
+class ParallelFluidEnv(EnvLike):
     """Parallel FluidGym environment running multiple environments on separate GPUs.
 
     Parameters
@@ -32,31 +35,79 @@ class ParallelFluidEnv:
     env_id: str
         The environment identifier.
 
-    env_kwargs: dict[str, Any]
-        The keyword arguments to pass to the environment constructor.
-
     cuda_ids: list[int]
         The list of CUDA device IDs to use for the parallel environments.
+
+    env_kwargs: dict[str, Any]
+        The keyword arguments to pass to the environment constructor.
     """
 
-    def __init__(self, env_id: str, env_kwargs: dict[str, Any], cuda_ids: list[int]):
-        self._n_envs = len(cuda_ids)
-        self._env_id = env_id
-        self._env_kwargs = env_kwargs
-        self._cuda_ids = cuda_ids
+    def __init__(self, env_id: str, cuda_ids: list[int], **env_kwargs: Any):
+        self.__n_envs = len(cuda_ids)
+        self.__env_kwargs = env_kwargs
+        self.__cuda_ids = cuda_ids
+        self.__env_id = env_id
+
+        if env_kwargs.get("differentiable", False):
+            raise ValueError(
+                "ParallelFluidEnv does not support differentiable environments."
+            )
+
+        self.__dummy_env = make(
+            id=env_id, **env_kwargs, cuda_device=torch.device(f"cuda:{cuda_ids[0]}")
+        )
 
         mp.set_start_method("spawn", force=True)
-        self._pipes, self._processes = self._make_vec_gpu_envs()
+        self.__pipes, self.__processes = self.__make_vec_gpu_envs()
+
+    def __getattr__(self, name: str) -> Any:
+        # Only called if normal attribute lookup fails on self.
+        return getattr(self._env, name)
+
+    @property
+    def action_space(self) -> spaces.Box:
+        """The action space of the environment."""
+        return self.__dummy_env.action_space
+
+    @property
+    def observation_space(self) -> spaces.Dict:
+        """The observation space of the environment."""
+        return self.__dummy_env.observation_space
+
+    @property
+    def differentiable(self) -> bool:
+        """Whether the environment is differentiable."""
+        return False
+
+    @property
+    def n_agents(self) -> int:
+        """The number of agents in the environment."""
+        return self.__n_envs * self.__dummy_env.n_agents
+
+    @property
+    def metrics(self) -> list[str]:
+        """The list of metrics tracked by the environment."""
+        return self.__dummy_env.metrics
+
+    @property
+    def episode_length(self) -> int:
+        """The number of steps per episode."""
+        return self.__dummy_env.episode_length
+
+    @property
+    def use_marl(self) -> bool:
+        """Whether the environment is in multi-agent reinforcement learning mode."""
+        return self.__dummy_env.use_marl
 
     @property
     def num_envs(self) -> int:
         """The number of parallel environments."""
-        return self._n_envs
+        return self.__n_envs
 
     @property
-    def env_id(self) -> str:
-        """The environment identifier of the current environment."""
-        return self._env_id
+    def cuda_device(self) -> torch.device:
+        """The CUDA device used by the environment."""
+        return self.__dummy_env.cuda_device
 
     @staticmethod
     def _worker(
@@ -82,24 +133,6 @@ class ParallelFluidEnv:
                 seed, randomize = data
                 pipe.send(env.reset(seed=seed, randomize=randomize))
 
-            elif cmd == Command.STEP_MARL:
-                actions = data.to(cuda_device)
-                if not isinstance(env, MultiAgentFluidEnv):
-                    raise ValueError(
-                        "step_marl() can only be called on MultiAgentFluidEnv "
-                        "environments."
-                    )
-                pipe.send(env.step_marl(actions))
-
-            elif cmd == Command.RESET_MARL:
-                seed, randomize = data
-                if not isinstance(env, MultiAgentFluidEnv):
-                    raise ValueError(
-                        "reset_marl() can only be called on MultiAgentFluidEnv "
-                        "environments."
-                    )
-                pipe.send(env.reset_marl(seed=seed, randomize=randomize))
-
             elif cmd == Command.SEED:
                 seed = data
                 env.seed(seed)
@@ -113,19 +146,24 @@ class ParallelFluidEnv:
             elif cmd == Command.TEST:
                 env.test()
 
+            elif cmd == Command.LOAD_INITIAL_DOMAIN:
+                idx, mode = data
+                env.load_initial_domain(idx, mode)
+
             elif cmd == Command.CLOSE:
                 break
+
         torch.cuda.empty_cache()
         pipe.close()
 
-    def _make_vec_gpu_envs(self) -> tuple[list[Any], list[mp.Process]]:
+    def __make_vec_gpu_envs(self) -> tuple[list[Any], list[mp.Process]]:
         parent_pipes, processes = [], []
 
-        for rank, gpu in enumerate(self._cuda_ids):
+        for rank, gpu in enumerate(self.__cuda_ids):
             parent_conn, child_conn = mp.Pipe()
             p = mp.Process(
                 target=self._worker,
-                args=(rank, self._env_id, self._env_kwargs, gpu, child_conn),
+                args=(rank, self.__env_id, self.__env_kwargs, gpu, child_conn),
             )
             p.start()
             parent_pipes.append(parent_conn)
@@ -133,11 +171,34 @@ class ParallelFluidEnv:
 
         return parent_pipes, processes
 
+    def __aggregate_obs(
+        self, obs: tuple[dict[str, torch.Tensor]]
+    ) -> dict[str, torch.Tensor]:
+        """Aggregate observations from multiple environments into a single batch.
+
+        Parameters
+        ----------
+        obs: list[dict[str, torch.Tensor]]
+            A list of observations from each environment.
+
+        Returns
+        -------
+        dict[str, torch.Tensor]
+            A dictionary containing the aggregated observations.
+        """
+        aggregated_obs = {}
+        for key in obs[0].keys():
+            if self.__dummy_env.use_marl:
+                aggregated_obs[key] = torch.concatenate(
+                    [o[key].cpu() for o in obs], dim=0
+                )
+            else:
+                aggregated_obs[key] = torch.stack([o[key].cpu() for o in obs], dim=0)
+        return aggregated_obs
+
     def reset(
-        self,
-        seed: int | None = None,
-        randomize: bool | None = None,
-    ) -> tuple[torch.Tensor, list[dict[str, torch.Tensor]]]:
+        self, seed: int | None = None, randomize: bool | None = None
+    ) -> tuple[dict[str, torch.Tensor], list[dict[str, torch.Tensor]]]:
         """Resets the environment to an initial internal state, returning an initial
         observation and info.
 
@@ -153,59 +214,28 @@ class ParallelFluidEnv:
 
         Returns
         -------
-        tuple[torch.Tensor, list[dict[str, torch.Tensor]]]
-            A tuple containing the initial observations and a list of info dictionaries.
+        tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]
+            A tuple containing the initial observation and an info dictionary.
         """
         data = (seed, randomize)
-        for pipe in self._pipes:
+        for pipe in self.__pipes:
             pipe.send((Command.RESET, data))
-        results = [pipe.recv() for pipe in self._pipes]
+        results = [pipe.recv() for pipe in self.__pipes]
         obs, infos = zip(*results, strict=True)
 
-        # Bring tensors to CPU
-        obs_list = [o.cpu() for o in obs]
-        infos_list = [{k: v.detach().cpu() for k, v in info.items()} for info in infos]
+        infos_list = [{k: v.cpu() for k, v in info.items()} for info in infos]
 
-        return torch.stack(obs_list), infos_list
-
-    def reset_marl(
-        self,
-        seed: int | None = None,
-        randomize: bool | None = None,
-    ):
-        """Reset the environment to the initial state for multiple agents.
-
-        Parameters
-        ----------
-        seed: int | None
-            The seed to use for random number generation. If None, the current seed is
-            used.
-
-        randomize: bool | None
-            Whether to randomize the initial state. If None, the default behavior is
-            used.
-
-        Returns
-        -------
-        tuple[torch.Tensor, dict]
-            A tuple containing the initial observations for all agents and a list of
-            info dictionaries.
-        """
-        data = (seed, randomize)
-        for pipe in self._pipes:
-            pipe.send((Command.RESET_MARL, data))
-        results = [pipe.recv() for pipe in self._pipes]
-        obs, infos = zip(*results, strict=True)
-
-        # Bring tensors to CPU
-        obs_list = [o.cpu() for o in obs]
-        infos_list = [{k: v.detach().cpu() for k, v in info.items()} for info in infos]
-
-        return torch.concatenate(obs_list), infos_list
+        return self.__aggregate_obs(obs), infos_list
 
     def step(
-        self, actions: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, list[bool], list[bool], list[dict]]:
+        self, action: torch.Tensor
+    ) -> tuple[
+        dict[str, torch.Tensor],
+        torch.Tensor,
+        list[bool],
+        list[bool],
+        list[dict[str, torch.Tensor]],
+    ]:
         """Run one timestep of the environment's dynamics using the agent actions.
 
         When the end of an episode is reached (``terminated or truncated``), it is
@@ -219,99 +249,193 @@ class ParallelFluidEnv:
 
         Returns
         -------
-        tuple[torch.Tensor, torch.Tensor, bool, bool, dict[str, torch.Tensor]]
+        tuple[dict[str, torch.Tensor], torch.Tensor, list[bool], list[bool],
+        dict[str, torch.Tensor]]
             A tuple containing the observation, reward, terminated flag, truncated flag,
             and info dictionary.
         """
-        assert len(actions) == len(self._pipes), "One action per environment required."
+        if action.shape[0] != self.__n_envs:
+            raise ValueError(
+                f"Expected action batch size {self.__n_envs}, but got {action.shape[0]}"
+            )
 
-        for pipe, action in zip(self._pipes, actions, strict=True):
+        action_chunked = list(torch.chunk(action, self.num_envs, dim=0))
+
+        for pipe, action in zip(self.__pipes, action_chunked, strict=True):
+            if not self.__dummy_env.use_marl:
+                assert action.shape[0] == 1, (
+                    "Expected action shape (1, action_dim) for single-agent mode."
+                )
+                action = action.squeeze(0)
             pipe.send((Command.STEP, action))
 
-        results = [pipe.recv() for pipe in self._pipes]
+        results = [pipe.recv() for pipe in self.__pipes]
         obs, rewards, terms, truncs, infos = zip(*results, strict=True)
 
-        obs_list = [o.cpu() for o in obs]
         rewards_list = [r.cpu() for r in rewards]
         infos_list = [{k: v.detach().cpu() for k, v in info.items()} for info in infos]
 
         return (
-            torch.stack(obs_list),
+            self.__aggregate_obs(obs),
             torch.stack(rewards_list),
             list(terms),
             list(truncs),
             list(infos_list),
         )
 
-    def step_marl(
-        self, actions: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, list[bool], list[bool], list[dict]]:
-        """Take a step in the environment using the given actions for multiple agents.
+    def render(
+        self,
+        save: bool = False,
+        render_3d: bool = False,
+        filename: str | None = None,
+        output_path: Any | None = None,
+    ) -> np.ndarray:
+        """Render the current state of the environment.
 
         Parameters
         ----------
-        actions: torch.Tensor
-            The actions to take for each agent.
+        save: bool
+            Whether to save the rendered frame as a PNG file. Defaults to False.
+
+        render_3d: bool
+            Whether to enable 3d rendering. Defaults to False.
+
+        filename: str | None
+            The filename to save the GIF file. If None, a default name is used.
+            Defaults to None.
+
+        output_path: Path | None
+            The output path to save the rendered files. If None, saves to the current
+            directory. Defaults to None.
 
         Returns
         -------
-        tuple[torch.Tensor, torch.Tensor, bool, bool, dict[str, torch.Tensor]]
-            A tuple containing the observations, rewards, terminated flags, truncated
-            flags, and a list of info dictionaries.
+        np.ndarray
+            The rendered frame as a numpy array.
         """
-        actions_chunked = list(torch.chunk(actions, self.num_envs, dim=0))
-
-        for pipe, action in zip(self._pipes, actions_chunked, strict=True):
-            pipe.send((Command.STEP_MARL, action))
-
-        results = [pipe.recv() for pipe in self._pipes]
-        obs, rewards, terms, truncs, infos = zip(*results, strict=True)
-
-        obs_list = [o.cpu() for o in obs]
-        rewards_list = [r.cpu() for r in rewards]
-        infos_list = [{k: v.detach().cpu() for k, v in info.items()} for info in infos]
-
-        return (
-            torch.concatenate(obs_list),
-            torch.concatenate(rewards_list),
-            list(terms),
-            list(truncs),
-            list(infos_list),
-        )
+        raise NotImplementedError("Rendering is not implemented for ParallelFluidEnv.")
 
     def seed(self, seed: int) -> None:
-        """Set the seed for all environments.
+        """Update the random seeds and seed the random number generators.
 
         Parameters
         ----------
         seed: int
-            The seed to set.
+            The seed to set. If None, the current seed is used.
         """
-        for pipe in self._pipes:
+        self.__dummy_env.seed(seed)
+        for pipe in self.__pipes:
             pipe.send((Command.SEED, seed))
 
     def train(self) -> None:
-        """Set all environments to training mode."""
-        for pipe in self._pipes:
+        """Set the environment to training mode."""
+        for pipe in self.__pipes:
             pipe.send((Command.TRAIN, None))
 
     def val(self) -> None:
-        """Set all environments to validation mode."""
-        for pipe in self._pipes:
+        """Set the environment to validation mode."""
+        for pipe in self.__pipes:
             pipe.send((Command.VAL, None))
 
     def test(self) -> None:
-        """Set all environments to test mode."""
-        for pipe in self._pipes:
+        """Set the environment to test mode."""
+        for pipe in self.__pipes:
             pipe.send((Command.TEST, None))
+
+    def sample_action(self) -> torch.Tensor:
+        """Sample a random action uniformly from the action space.
+
+        Returns
+        -------
+        torch.Tensor
+            A random action.
+        """
+        if self.__dummy_env.use_marl:
+            return torch.concatenate(
+                [self.__dummy_env.sample_action() for _ in range(self.__n_envs)], dim=0
+            )
+        else:
+            return torch.stack(
+                [self.__dummy_env.sample_action() for _ in range(self.__n_envs)]
+            )
+
+    def get_state(self) -> Any:
+        """Get the current state of the environment.
+
+        Returns
+        -------
+        EnvState
+            The current state of the environment.
+        """
+        raise NotImplementedError("get_state is not implemented for ParallelFluidEnv.")
+
+    def set_state(self, state: Any) -> None:
+        """Set the current state of the environment.
+
+        Parameters
+        ----------
+        state: EnvState
+            The state to set the environment to.
+        """
+        raise NotImplementedError("set_state is not implemented for ParallelFluidEnv.")
+
+    def save_gif(self, filename: str, output_path: Path | None = None) -> None:
+        """Save the rendered frames as a GIF file.
+
+        Parameters
+        ----------
+        filename: str
+            The filename for the GIF file.
+
+        output_path: Path | None
+            The output path to save the GIF file. If None, saves to the current
+            directory. Defaults to None.
+        """
+        raise NotImplementedError("save_gif is not implemented for ParallelFluidEnv.")
+
+    def load_initial_domain(self, idx: int, mode: EnvMode | None = None) -> None:
+        """Public method to load the initial domain from disk
+        using the current mode.
+
+        Parameters
+        ----------
+        idx: int
+            Index of the initial domain to load.
+
+        mode: EnvMode | None
+            Environment mode ('train', 'val', 'test'). If None, uses the current mode.
+            Defaults to None.
+        """
+        for pipe in self.__pipes:
+            pipe.send((Command.LOAD_INITIAL_DOMAIN, (idx, mode)))
+
+    def get_uncontrolled_episode_metrics(self) -> pd.DataFrame | None:
+        """Get the uncontrolled episode metrics for the current domain.
+
+        Note: This method returns the metrics for the currently loaded
+        (non-randomized) initial domain. If the environment has been reset
+        with randomization, the metrics may not correspond to the current state.
+
+        Returns
+        -------
+        pd.DataFrame | None
+            The uncontrolled episode metrics, or None if not available.
+        """
+        raise NotImplementedError(
+            "get_uncontrolled_episode_metrics is not implemented for ParallelFluidEnv."
+        )
+
+    def detach(self) -> None:
+        """Detach all tensors in the simulation from the computation graph."""
+        raise NotImplementedError("detach is not implemented for ParallelFluidEnv.")
 
     def close(self):
         """Close all environment processes."""
-        for pipe in self._pipes:
+        for pipe in self.__pipes:
             pipe.send((Command.CLOSE, None))
             pipe.close()
 
-        for p in self._processes:
+        for p in self.__processes:
             p.join()
 
         torch.cuda.empty_cache()

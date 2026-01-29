@@ -1,6 +1,6 @@
 """Rayleigh-Bénard Convection (RBC) environment base class."""
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +10,7 @@ import torch
 
 import fluidgym.simulation.pict.data.shapes as shapes
 from fluidgym import config as global_config
-from fluidgym.envs.multi_agent_fluid_env import MultiAgentFluidEnv
+from fluidgym.envs import FluidEnv
 from fluidgym.simulation import Simulation
 from fluidgym.simulation.extensions import (
     PISOtorch,  # type: ignore[import-untyped,import-not-found]
@@ -19,7 +19,7 @@ from fluidgym.simulation.helpers import get_cell_size
 from fluidgym.simulation.pict.util.output import _resample_block_data
 
 
-class RBCEnvBase(MultiAgentFluidEnv, ABC):
+class RBCEnvBase(FluidEnv):
     """Abstract base class for Rayleigh-Bénard Convection (RBC)
     environments.
 
@@ -62,6 +62,9 @@ class RBCEnvBase(MultiAgentFluidEnv, ABC):
     aspect_ratio: float
         The aspect ratio (L/H) of the domain in multiples of π.
 
+    use_marl: bool
+        Whether to enable multi-agent reinforcement learning mode.
+
     dtype: torch.dtype
         The data type for the simulation tensors. Defaults to torch.float32.
 
@@ -98,7 +101,8 @@ class RBCEnvBase(MultiAgentFluidEnv, ABC):
     Combustion, Dec. 2024, doi: 10.1007/s10494-024-00619-2.
     """
 
-    metadata = {"render_modes": ["human"], "render_fps": 20}
+    _default_render_key: str = "temperature"
+    _supports_marl = True
 
     _T_cold: float = 0.0
     _T_hot: float = 1.0
@@ -135,6 +139,7 @@ class RBCEnvBase(MultiAgentFluidEnv, ABC):
         local_reward_weight: float | None,
         uniform_grid: bool,
         aspect_ratio: float,
+        use_marl: bool,
         dtype: torch.dtype = torch.float32,
         cuda_device: torch.device | None = None,
         load_initial_domain: bool = True,
@@ -147,6 +152,9 @@ class RBCEnvBase(MultiAgentFluidEnv, ABC):
         self._prandtl_number = prandtl_number
         self._heater_width = resolution
         self._n_heaters = n_heaters
+        self._local_reward_weight = local_reward_weight
+        self._local_obs_window = local_obs_window
+        self._uniform_grid = uniform_grid
 
         super().__init__(
             dt=dt,
@@ -155,6 +163,7 @@ class RBCEnvBase(MultiAgentFluidEnv, ABC):
             episode_length=episode_length,
             ndims=self._ndims,
             dtype=dtype,
+            use_marl=use_marl,
             cuda_device=cuda_device,
             load_initial_domain=load_initial_domain,
             load_domain_statistics=load_domain_statistics,
@@ -162,9 +171,6 @@ class RBCEnvBase(MultiAgentFluidEnv, ABC):
             enable_actions=enable_actions,
             differentiable=differentiable,
         )
-        self._local_reward_weight = local_reward_weight
-        self._local_obs_window = local_obs_window
-        self._uniform_grid = uniform_grid
 
         self._aspect_ratio = aspect_ratio * torch.pi
 
@@ -410,6 +416,17 @@ class RBCEnvBase(MultiAgentFluidEnv, ABC):
             return 0.0
 
     @property
+    def n_agents(self) -> int:
+        """The number of agents in the environment."""
+        if self._use_marl:
+            if self._ndims == 2:
+                return self._n_heaters
+            else:
+                return self._n_heaters**2
+        else:
+            return 1
+
+    @property
     def _n_sensors_x(self) -> int:
         return self._n_heaters * self._n_sensors_per_heater
 
@@ -521,22 +538,6 @@ class RBCEnvBase(MultiAgentFluidEnv, ABC):
             T=T.unsqueeze(0), u_y=u_y.unsqueeze(0), cell_size=cell_size
         )
 
-    @abstractmethod
-    def _get_obs(self) -> tuple[torch.Tensor, torch.Tensor]:
-        """Return the current observed temperature and velocity fields.
-
-        Returns
-        -------
-        T : torch.Tensor
-            Temperature field of shape (n_sensors_y, n_sensors_x) for 2D and
-            (n_sensors_z, n_sensors_y, n_sensors_x) for 3D.
-
-        u : torch.Tensor
-            Velocity field of shape (n_sensors_y, n_sensors_x, 2) for 2D and
-            (n_sensors_z, n_sensors_y, n_sensors_x, 3) for 3D.
-        """
-        raise NotImplementedError
-
     def _get_render_data(
         self,
         render_3d: bool,
@@ -577,15 +578,14 @@ class RBCEnvBase(MultiAgentFluidEnv, ABC):
 
     def _step_impl(
         self, action: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, bool, dict[str, torch.Tensor]]:
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         if self._enable_actions:
             self._apply_action(action)
         for _ in range(self._n_sim_steps):
             self._sim.single_step()
 
         nu = self.compute_global_nusselt()
-        T, u = self._get_obs()
-        obs = torch.cat([T.flatten(), u.flatten()], dim=0)
+        obs = self._get_global_obs()
 
         reward = self.nu_ref - nu
         info = {
@@ -610,55 +610,13 @@ class RBCEnvBase(MultiAgentFluidEnv, ABC):
             f"_NH{self._n_heaters}_HW{self._heater_width}"
         )
 
-    def reset_marl(
-        self,
-        seed: int | None = None,
-        randomize: bool | None = None,
-    ) -> tuple[torch.Tensor, dict]:
-        """Reset the environment to the initial state for multiple agents.
-
-        Parameters
-        ----------
-        seed: int | None
-            The seed to use for random number generation. If None, the current seed is
-            used.
-
-        randomize: bool | None
-            Whether to randomize the initial state. If None, the default behavior is
-            used.
-
-        Returns
-        -------
-        tuple[torch.Tensor, dict]
-            A tuple containing the initial observations for all agents and an info
-            dictionary.
-        """
-        _, info = self.reset(seed=seed, randomize=randomize)
-
-        local_obs = self._get_local_obs()
-
-        return local_obs, info
-
-    def step_marl(
+    def _step_marl_impl(
         self, actions: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, bool, bool, dict[str, torch.Tensor]]:
-        """Take a step in the environment using the given actions for multiple agents.
-
-        Parameters
-        ----------
-        actions: torch.Tensor
-            The actions to take for each agent.
-
-        Returns
-        -------
-        tuple[torch.Tensor, torch.Tensor, bool, bool, dict[str, torch.Tensor]]
-            A tuple containing the observations, rewards, terminated flag, truncated
-            flag, and info dictionary.
-        """
+    ) -> tuple[torch.Tensor, torch.Tensor, bool, dict[str, torch.Tensor]]:
         if self._local_reward_weight is None:
             raise ValueError("local_reward_weight must be set for multi-agent step.")
 
-        _, global_reward, terminated, truncated, info = self.step(actions)
+        _, global_reward, terminated, info = self._step_impl(actions)
 
         local_obs = self._get_local_obs()
 
@@ -676,7 +634,7 @@ class RBCEnvBase(MultiAgentFluidEnv, ABC):
 
         info["global_reward"] = global_reward
 
-        return local_obs, agent_rewards, terminated, truncated, info
+        return local_obs, agent_rewards, terminated, info
 
     def plot(self, output_path: Path | None = None) -> None:
         """Plot the environments configuration.

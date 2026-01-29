@@ -25,7 +25,7 @@ PLOT_MAX_ACTIONS = 64
 class ParallelVecEnv(VecEnv):
     """The stable-baselines3 VecEnv interface for ParallelFluidEnv environments."""
 
-    metadata = {"render_modes": ["human"]}
+    metadata = {"render_modes": ["rbg_array"]}
 
     def __init__(self, env: ParallelFluidEnv, rl_mode: str, auto_reset: bool = True):
         self.__env = env

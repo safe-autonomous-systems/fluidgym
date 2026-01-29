@@ -13,6 +13,20 @@ from skimage import measure
 DEFAULT_VIEW_KWARGS = {"elev": 15, "azim": 45}
 
 
+def _crop_img(
+    img: np.ndarray,
+    x_margin: int = 0,
+    y_margin: int = 170,
+) -> np.ndarray:
+    x_0 = max(x_margin, 0)
+    x_1 = min(img.shape[1] - x_margin, img.shape[1])
+
+    y_0 = max(y_margin, 0)
+    y_1 = min(img.shape[0] - y_margin, img.shape[0])
+
+    return img[y_0:y_1, x_0:x_1, :]
+
+
 def _format_3d(fig: Figure, ax: Axes) -> None:
     """Format 3D plot with labels and aspect ratio."""
     fig.patch.set_alpha(0)
@@ -63,10 +77,12 @@ def _get_savefig_kwargs(filename: str) -> dict[str, str | float]:
 def _fig_to_array(fig: Figure) -> np.ndarray:
     fig.canvas.draw()  # Render the figure to the canvas
     w, h = fig.canvas.get_width_height()
-    return np.frombuffer(
+    img_np = np.frombuffer(
         fig.canvas.tostring_rgb(),  # type: ignore
         dtype=np.uint8,
     ).reshape(h, w, 3)
+
+    return _crop_img(img_np)
 
 
 def _add_cylinder(

@@ -3,6 +3,215 @@
 import torch
 import torch.nn.functional as F
 
+from fluidgym.envs import FluidEnv
+from fluidgym.simulation.pict.util.output import _resample_block_data
+
+
+def extract_global_2d_obs(
+    env: FluidEnv, sensor_locations: torch.Tensor
+) -> dict[str, torch.Tensor]:
+    """Extracts global 2D observations for agents arranged in a 2D domain.
+
+    Parameters
+    ----------
+    env: FluidEnv
+        The fluid environment.
+
+    sensor_locations: torch.Tensor
+        Tensor of shape [2, n_agents * n_sensors_per_agent] containing the
+        (x, y) coordinates of the sensors.
+
+    Returns
+    -------
+        Global observations with shape [n_agents * n_sensors_per_agent, ...].
+    """
+    u_list = [block.velocity for block in env._domain.getBlocks()]
+    p_list = [block.pressure for block in env._domain.getBlocks()]
+
+    u = _resample_block_data(
+        u_list,
+        env._sim.output_resampling_coords,
+        env._sim.output_resampling_shape,
+        env._ndims,
+        fill_max_steps=env._sim.output_resampling_fill_max_steps,
+    )
+    u = u.squeeze()
+    u = u.permute(1, 2, 0)
+    u_x = u[sensor_locations[1], sensor_locations[0], 0]
+    u_y = u[sensor_locations[1], sensor_locations[0], 1]
+    u = torch.stack([u_x, u_y], dim=-1)
+
+    p = _resample_block_data(
+        p_list,
+        env._sim.output_resampling_coords,
+        env._sim.output_resampling_shape,
+        env._ndims,
+        fill_max_steps=env._sim.output_resampling_fill_max_steps,
+    )
+    p = p.squeeze()
+    p = p[sensor_locations[1], sensor_locations[0]]
+
+    return {
+        "velocity": u,
+        "pressure": p,
+    }
+
+
+def extract_global_3d_obs(
+    env: FluidEnv,
+    sensor_locations: torch.Tensor,
+    n_agents: int,
+    n_sensors_per_agent: int,
+    n_sensors_z: int,
+    local_2d_obs: bool = False,
+) -> dict[str, torch.Tensor]:
+    """Extracts global 3D observations for agents arranged in a 3D domain.
+
+    Parameters
+    ----------
+    env: FluidEnv
+        The fluid environment.
+
+    sensor_locations: torch.Tensor
+        Tensor of shape [3, n_agents * n_sensors_per_agent] containing the
+        (x, y, z) coordinates of the sensors.
+
+    n_agents: int
+        Number of agents.
+
+    n_sensors_per_agent: int
+        Number of sensors per agent.
+
+    n_sensors_z: int
+        Number of sensors along the z-axis.
+
+    local_2d_obs: bool
+        Whether the local observations are 2D (True) or 3D (False).
+
+    Returns
+    -------
+        Global observations with shape [n_agents * n_sensors_per_agent, ...].
+    """
+    u_list = [block.velocity for block in env._domain.getBlocks()]
+    p_list = [block.pressure for block in env._domain.getBlocks()]
+
+    u = _resample_block_data(
+        u_list,
+        env._sim.output_resampling_coords,
+        env._sim.output_resampling_shape,
+        env._ndims,
+        fill_max_steps=env._sim.output_resampling_fill_max_steps,
+    )
+    u = u.squeeze()
+    u = u.permute(1, 2, 3, 0)
+
+    p = _resample_block_data(
+        p_list,
+        env._sim.output_resampling_coords,
+        env._sim.output_resampling_shape,
+        env._ndims,
+        fill_max_steps=env._sim.output_resampling_fill_max_steps,
+    )
+    p = p.squeeze()
+
+    sensor_locations = sensor_locations.flatten(start_dim=1)
+    u_x = u[
+        sensor_locations[2],
+        sensor_locations[1],
+        sensor_locations[0],
+        0,
+    ]
+    u_y = u[
+        sensor_locations[2],
+        sensor_locations[1],
+        sensor_locations[0],
+        1,
+    ]
+    u_z = u[
+        sensor_locations[2],
+        sensor_locations[1],
+        sensor_locations[0],
+        2,
+    ]
+
+    u_x = u_x.view(n_sensors_z, -1)
+    u_y = u_y.view(n_sensors_z, -1)
+    u_z = u_z.view(n_sensors_z, -1)
+
+    u_x = u_x.view(n_agents, n_sensors_per_agent, -1)
+    u_y = u_y.view(n_agents, n_sensors_per_agent, -1)
+    u_z = u_z.view(n_agents, n_sensors_per_agent, -1)
+
+    p = p[
+        sensor_locations[2],
+        sensor_locations[1],
+        sensor_locations[0],
+    ]
+    p = p.view(n_sensors_z, -1)
+    p = p.view(n_agents, n_sensors_per_agent, -1)
+
+    if local_2d_obs:
+        u = torch.stack([u_x, u_y], dim=-1)
+    else:
+        u = torch.stack([u_x, u_y, u_z], dim=-1)
+
+    return {
+        "velocity": u,
+        "pressure": p,
+    }
+
+
+def transform_global_to_local_obs_3d(
+    global_obs: dict[str, torch.Tensor],
+    local_obs_window: int,
+    n_agents: int,
+    local_2d_obs: bool = False,
+) -> dict[str, torch.Tensor]:
+    """Transforms global observations into local observations for agents arranged
+    in a 3D domain.
+
+    Parameters
+    ----------
+    global_obs: dict[str, torch.Tensor]
+        Global observations with shape [n_agents * n_sensors_per_agent, ...].
+
+    local_obs_window: int
+        Size of the local observation window (in number of agents).
+
+    n_agents: int
+        Number of agents.
+
+    local_2d_obs: bool
+        Whether the local observations are 2D (True) or 3D (False).
+
+    Returns
+    -------
+        Local observations with shape [n_agents, local_obs_window, ...].
+
+    """
+    offset = local_obs_window // 2
+
+    local_obs = {}
+    for k, v in global_obs.items():
+        # First, shift the global obs to start with the first agents sensor
+        # window at zero
+        shifted_obs = torch.roll(v, shifts=offset, dims=0)
+
+        local_obs_list = []
+        for _ in range(n_agents):
+            window = shifted_obs[:local_obs_window]
+
+            if local_2d_obs:
+                window = window.squeeze()
+
+            local_obs_list += [window]
+
+            shifted_obs = torch.roll(shifted_obs, shifts=-1, dims=0)
+
+        local_obs[k] = torch.stack(local_obs_list, dim=0)
+
+    return local_obs
+
 
 def extract_moving_window_2d(
     field: torch.Tensor, n_agents: int, agent_width: int, n_agents_per_window: int

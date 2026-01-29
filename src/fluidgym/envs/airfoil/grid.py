@@ -191,7 +191,7 @@ def _ray_rectangle_intersection(
             torch.linspace(
                 0,
                 -width_left,
-                angles_upper.shape[-1] - n_fill_x_top + 1,
+                int(angles_upper.shape[-1] - n_fill_x_top + 1),
                 device=origin.device,
             )[1:-1],
             torch.tensor([-width_left] * (n_fill_x_top + 1), device=origin.device),
@@ -206,7 +206,7 @@ def _ray_rectangle_intersection(
             torch.linspace(
                 -width_left,
                 0,
-                angles_lower.shape[-1] - closest_idx_bot + 1,
+                int(angles_lower.shape[-1] - closest_idx_bot + 1),
                 device=origin.device,
             )[1:-1],
         ],
@@ -220,7 +220,7 @@ def _ray_rectangle_intersection(
             torch.linspace(
                 half_height,
                 0,
-                angles_upper.shape[-1] - x_fill_y_top + 2,
+                int(angles_upper.shape[-1] - x_fill_y_top + 2),
                 device=origin.device,
             )[1:-1],
         ],
@@ -266,6 +266,7 @@ def make_airfoil_domain(
     attack_angle_deg: float,
     viscosity: torch.Tensor,
     resolution_div: int,
+    tail_grow_mul: float,
     cpu_device: torch.device,
     cuda_device: torch.device,
     dtype: torch.dtype = torch.float32,
@@ -301,6 +302,9 @@ def make_airfoil_domain(
     resolution_div: int
         Resolution divisor for the airfoil grid.
 
+    tail_grow_mul: float
+        Growth multiplier for the tail grid spacing.
+
     cpu_device: torch.device
         CPU device.
 
@@ -321,7 +325,6 @@ def make_airfoil_domain(
     offset_left = 1.5
     front_x_width = 0.5
     grid_half_height = H / 2
-    tail_grow_mul = 1.01
 
     normal_res = 96 // resolution_div
     normal_base = 0.97

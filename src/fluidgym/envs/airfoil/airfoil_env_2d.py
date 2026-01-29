@@ -1,9 +1,11 @@
 """Environment for 2D airfoil aerodynamic efficiency improvement."""
 
+import numpy as np
 import torch
+from gymnasium import spaces
 
 from fluidgym.envs.airfoil.airfoil_env_base import AirfoilEnvBase
-from fluidgym.simulation.pict.util.output import _resample_block_data
+from fluidgym.envs.util.obs_extraction import extract_global_2d_obs
 
 AIRFOIL_2D_DEFAULT_CONFIG = {
     "reynolds_number": 3e3,
@@ -12,6 +14,7 @@ AIRFOIL_2D_DEFAULT_CONFIG = {
     "adaptive_cfl": 0.8,
     "episode_length": 300,
     "attack_angle_deg": 10.0,
+    "use_marl": False,
     "dtype": torch.float32,
     "load_initial_domain": True,
     "load_domain_statistics": True,
@@ -54,6 +57,9 @@ class AirfoilEnv2D(AirfoilEnvBase):
     attack_angle_deg: float
         The angle of attack of the airfoil in degrees.
 
+    use_marl: bool
+        Whether to enable multi-agent reinforcement learning mode.
+
     dtype: torch.dtype
         The data type to use for the simulation.
 
@@ -89,6 +95,7 @@ class AirfoilEnv2D(AirfoilEnvBase):
         episode_length: int,
         dt: float,
         attack_angle_deg: float,
+        use_marl: bool,
         dtype: torch.dtype = torch.float32,
         cuda_device: torch.device | None = None,
         debug: bool = False,
@@ -106,6 +113,7 @@ class AirfoilEnv2D(AirfoilEnvBase):
             episode_length=episode_length,
             dt=dt,
             attack_angle_deg=attack_angle_deg,
+            use_marl=use_marl,
             dtype=dtype,
             cuda_device=cuda_device,
             debug=debug,
@@ -117,32 +125,46 @@ class AirfoilEnv2D(AirfoilEnvBase):
         )
 
     @property
-    def action_space_shape(self) -> tuple[int, ...]:
-        """The shape of the action space."""
-        return (self._n_jets,)
+    def n_agents(self) -> int:
+        """The number of agents in the environment."""
+        return self._n_jets
 
-    @property
-    def observation_space_shape(self) -> tuple[int, ...]:
-        """The shape of the observation space."""
-        return (self._sensors_locations.shape[-1] * self._ndims,)
-
-    def _get_global_obs(self) -> torch.Tensor:
-        """Return the current observation."""
-        u_list = [block.velocity for block in self._domain.getBlocks()]
-
-        u = _resample_block_data(
-            u_list,
-            self._sim.output_resampling_coords,
-            self._sim.output_resampling_shape,
-            self._ndims,
-            fill_max_steps=self._sim.output_resampling_fill_max_steps,
+    def _get_action_space(self) -> spaces.Box:
+        return spaces.Box(
+            low=-1.0,
+            high=1.0,
+            shape=(self._n_jets,),
+            dtype=np.float32,
         )
-        u = u.squeeze()
-        u = u.permute(1, 2, 0)
-        u = u[self._sensors_locations[1], self._sensors_locations[0], :]
-        u = u.view(-1)
 
-        return u
+    def _get_observation_space(self) -> spaces.Dict:
+        n_sensors_x_y = self._sensor_locations.shape[-1]
+
+        return spaces.Dict(
+            {
+                "velocity": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=(
+                        n_sensors_x_y,
+                        self._ndims,
+                    ),
+                    dtype=np.float32,
+                ),
+                "pressure": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=(n_sensors_x_y,),
+                    dtype=np.float32,
+                ),
+            }
+        )
+
+    def _get_global_obs(self) -> dict[str, torch.Tensor]:
+        return extract_global_2d_obs(
+            env=self,
+            sensor_locations=self._sensor_locations,
+        )
 
     def _action_to_control(self, action: torch.Tensor) -> torch.Tensor:
         assert self._jet_locations_top is not None
@@ -167,30 +189,3 @@ class AirfoilEnv2D(AirfoilEnvBase):
             ] *= v_action[i]
 
         return top_profile
-
-    def reset(
-        self,
-        seed: int | None = None,
-        randomize: bool | None = None,
-    ) -> tuple[torch.Tensor, dict]:
-        """Resets the environment to an initial internal state, returning an initial
-        observation and info.
-
-        Parameters
-        ----------
-        seed: int | None
-            The seed to use for random number generation. If None, the current seed is
-            used.
-
-        randomize: bool | None
-            Whether to randomize the initial state. If None, the default behavior is
-            used.
-
-        Returns
-        -------
-        tuple[torch.Tensor, dict]
-            A tuple containing the initial observation and an info dictionary.
-        """
-        obs, info = super().reset(seed=seed, randomize=randomize)
-        info.pop("full_obs")
-        return obs, info

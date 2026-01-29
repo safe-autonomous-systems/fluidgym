@@ -24,6 +24,7 @@ from fluidgym.envs.util.forces import (
     compute_forces_3d,
     wall_distance_from_vertices,
 )
+from fluidgym.envs.util.obs_extraction import extract_global_2d_obs
 from fluidgym.envs.util.profiles import get_jet_profile
 from fluidgym.simulation.extensions import (
     PISOtorch,  # type: ignore[import-untyped,import-not-found]
@@ -32,7 +33,6 @@ from fluidgym.simulation.pict.PISOtorch_simulation import (
     balance_boundary_fluxes,
     update_advective_boundaries,
 )
-from fluidgym.simulation.pict.util.output import _resample_block_data
 from fluidgym.simulation.simulation import Simulation
 
 VORTICITY_RENDER_RANGE = {
@@ -61,7 +61,7 @@ class AirfoilEnvBase(FluidEnv):
     doi: 10.48550/arXiv.2509.10185.
     """
 
-    metadata = {"render_modes": ["human"], "render_fps": 15}
+    _default_render_key: str = "vorticity"
 
     _action_smoothing_alpha: float = 0.1
 
@@ -102,6 +102,7 @@ class AirfoilEnvBase(FluidEnv):
         episode_length: int,
         dt: float,
         attack_angle_deg: float,
+        use_marl: bool,
         dtype: torch.dtype = torch.float32,
         cuda_device: torch.device | None = None,
         debug: bool = False,
@@ -122,12 +123,24 @@ class AirfoilEnvBase(FluidEnv):
         self._step_length = step_length
         self._attack_angle_deg = attack_angle_deg
 
+        self._ndims = ndims
+        _, self._airfoil_coords = read_airfoil(
+            path=self._airfoil_path,
+            attack_angle_deg=self._attack_angle_deg,
+            cpu_device=torch.device("cpu"),
+            dtype=torch.float32,
+        )
+        self._airfoil_coords = self._airfoil_coords.squeeze()
+        self._airfoil_mask = self._get_airfoil_mask()
+        self._sensor_locations = self._get_sensor_locations()
+
         super().__init__(
             dt=dt,
             adaptive_cfl=adaptive_cfl,
             step_length=step_length,
             episode_length=episode_length,
             ndims=ndims,
+            use_marl=use_marl,
             dtype=dtype,
             cuda_device=cuda_device,
             load_initial_domain=load_initial_domain,
@@ -147,15 +160,6 @@ class AirfoilEnvBase(FluidEnv):
 
         self.__last_control = torch.zeros((1,), device=self._cuda_device)
         self._viscosity = self._viscosity.to(self._cuda_device)
-        _, self._airfoil_coords = read_airfoil(
-            path=self._airfoil_path,
-            attack_angle_deg=self._attack_angle_deg,
-            cpu_device=self._cpu_device,
-            dtype=self._dtype,
-        )
-        self._airfoil_coords = self._airfoil_coords.squeeze()
-        self._airfoil_mask = self._get_airfoil_mask()
-        self._sensors_locations = self._get_sensor_locations()
 
     @property
     def render_shape(self) -> tuple[int, ...]:
@@ -216,6 +220,12 @@ class AirfoilEnvBase(FluidEnv):
         return mask
 
     def _get_domain(self) -> PISOtorch.Domain:
+        # For the hard case in 3D we need a finer grid at the outflow
+        if self._ndims == 3 and self._reynolds_number >= 5000:
+            tail_grow_mul = 1.001
+        else:
+            tail_grow_mul = 1.01
+
         domain = make_airfoil_domain(
             n_dims=self._ndims,
             res_z=self._res_z,
@@ -226,6 +236,7 @@ class AirfoilEnvBase(FluidEnv):
             attack_angle_deg=self._attack_angle_deg,
             viscosity=self._viscosity.to(self._cpu_device),
             resolution_div=1,
+            tail_grow_mul=tail_grow_mul,
             cpu_device=self._cpu_device,
             cuda_device=self._cuda_device,
         )
@@ -657,23 +668,11 @@ class AirfoilEnvBase(FluidEnv):
 
         return all_locations
 
-    def _get_global_obs(self) -> torch.Tensor:
-        """Return the current observation."""
-        u_list = [block.velocity for block in self._domain.getBlocks()]
-
-        u = _resample_block_data(
-            u_list,
-            self._sim.output_resampling_coords,
-            self._sim.output_resampling_shape,
-            self._ndims,
-            fill_max_steps=self._sim.output_resampling_fill_max_steps,
+    def _get_global_obs(self) -> dict[str, torch.Tensor]:
+        return extract_global_2d_obs(
+            env=self,
+            sensor_locations=self._sensor_locations,
         )
-        u = u.squeeze()
-        u = u.permute(1, 2, 0)
-        u = u[self._sensors_locations[1], self._sensors_locations[0], :]
-        u = u.view(-1)
-
-        return u
 
     def _get_render_data(
         self,
@@ -715,38 +714,6 @@ class AirfoilEnvBase(FluidEnv):
 
         return render_data
 
-    def reset(
-        self,
-        seed: int | None = None,
-        randomize: bool | None = None,
-    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        """Resets the environment to an initial internal state, returning an initial
-        observation and info.
-
-        Parameters
-        ----------
-        seed: int | None
-            The seed to use for random number generation. If None, the current seed is
-            used.
-
-        randomize: bool | None
-            Whether to randomize the initial state. If None, the default behavior is
-            used.
-
-        Returns
-        -------
-        tuple[torch.Tensor, dict]
-            A tuple containing the initial observation and an info dictionary.
-        """
-        obs, info = super().reset(seed=seed, randomize=randomize)
-
-        self.__last_control = torch.zeros(
-            (self.action_space_shape[-1],), device=self._cuda_device
-        )
-        flat_obs = obs.flatten()
-        info["full_obs"] = obs
-        return flat_obs, info
-
     @abstractmethod
     def _action_to_control(self, action: torch.Tensor) -> torch.Tensor:
         """Convert the action to boundary control values."""
@@ -765,7 +732,7 @@ class AirfoilEnvBase(FluidEnv):
 
     def _step_impl(
         self, action: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, bool, dict[str, torch.Tensor]]:
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         all_cds = []
         all_cls = []
         for _ in range(self._n_sim_steps):
@@ -783,7 +750,6 @@ class AirfoilEnvBase(FluidEnv):
             all_cls += [_cl]
 
         obs = self._get_global_obs()
-        flat_obs = obs.flatten()
 
         all_cds_tensor = torch.stack(all_cds).mean(dim=0)
         all_cls_tensor = torch.stack(all_cls).mean(dim=0)
@@ -797,10 +763,9 @@ class AirfoilEnvBase(FluidEnv):
         info = {
             "drag": all_cds_tensor,
             "lift": all_cls_tensor,
-            "full_obs": obs,
         }
 
-        return flat_obs, reward, False, info
+        return obs, reward, False, info
 
     def plot(self, output_path: Path | None = None) -> None:
         """Plot the environments configuration.
@@ -841,7 +806,7 @@ class AirfoilEnvBase(FluidEnv):
         )
 
         # Then, we add the sensor locations
-        for sensor in self._sensors_locations.T:
+        for sensor in self._sensor_locations.T:
             plt.scatter(
                 sensor[0], sensor[1], color=colors[2], label="Sensor Location", s=5
             )

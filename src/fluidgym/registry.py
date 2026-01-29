@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
-from fluidgym.envs import FluidEnv, MultiAgentFluidEnv
+from fluidgym.envs.fluid_env import FluidEnv
 
 T = TypeVar("T")
 
@@ -72,7 +72,8 @@ class EnvRegistry:
             raise ValueError(f"Environment {id} not found. Did you register it?")
         spec = self.env_specs[id]
         _kwargs = {**spec.kwargs, **kwargs}
-        env = spec.entry_point(**_kwargs)
+        env: FluidEnv = spec.entry_point(**_kwargs)
+
         return env
 
     @property
@@ -97,6 +98,19 @@ def register(
     registry.register(id, entry_point, defaults, **kwargs)
 
 
-def make(id: str, **kwargs: Any) -> FluidEnv | MultiAgentFluidEnv:
-    """Create an environment instance with the given ID and optional kwargs."""
+def make(id: str, **kwargs: Any) -> FluidEnv:
+    """Create an environment instance with the given ID and optional kwargs.
+
+    Parameters
+    ----------
+    id: str
+        The unique identifier of the environment to create.
+
+    kwargs: Any
+        Additional keyword arguments to pass to the environment constructor.
+
+    Returns
+    -------
+    FluidEnv
+    """
     return registry.make(id, **kwargs)

@@ -8,10 +8,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from gymnasium import spaces
 
 from fluidgym.config import config as global_config
-from fluidgym.envs.fluid_env import EnvMode, Stats
-from fluidgym.envs.multi_agent_fluid_env import MultiAgentFluidEnv
+from fluidgym.envs.fluid_env import FluidEnv, Stats
 from fluidgym.envs.tcf.grid import (
     get_van_driest_sqr,
     make_channel_flow_domain,
@@ -31,6 +31,7 @@ from fluidgym.simulation.pict.PISOtorch_simulation import (
 )
 from fluidgym.simulation.pict.util.output import _resample_block_data
 from fluidgym.simulation.simulation import Simulation
+from fluidgym.types import EnvMode
 
 Q_CRITERION_ISOS = {
     np.pi / 2: {
@@ -70,6 +71,7 @@ SMALL_TCF_3D_DEFAULT_CONFIG = {
     "episode_length": 1000,
     "local_obs_window": 1,
     "local_reward_weight": 0.0,
+    "use_marl": False,
     "C_smag": 0.0,
     "use_van_driest": False,
     "init_with_noise": True,
@@ -89,7 +91,7 @@ LARGE_TCF_3D_DEFAULT_CONFIG = {
 }
 
 
-class TCF3DBottomEnv(MultiAgentFluidEnv):
+class TCF3DBottomEnv(FluidEnv):
     """Environment for turbulent channel flow control.
 
     Parameters
@@ -127,6 +129,9 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
 
     local_reward_weight: float
         The weight of the local reward in the total reward.
+
+    use_marl: bool
+        Whether to enable multi-agent reinforcement learning mode.
 
     C_smag: float
         The Smagorinsky constant for the LES model. If 0, no LES model is used.
@@ -176,8 +181,10 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
     doi: 10.48550/arXiv.2510.03360.
     """
 
-    metadata = {"render_modes": ["human"], "render_fps": 45}
+    _default_render_key: str = "3d_q_criterion"
+
     _actuation: str = "bottom"
+    _supports_marl: bool = True
 
     # We need to be able to disable action scaling for opposition control
     _scale_actions: bool = True
@@ -218,6 +225,7 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
         episode_length: int,
         local_obs_window: int,
         local_reward_weight: float,
+        use_marl: bool,
         C_smag: float = 0.0,
         use_van_driest: bool = False,
         init_with_noise: bool = True,
@@ -245,6 +253,9 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
         self._C_smag = C_smag
         self._use_van_driest = use_van_driest
         self._init_with_noise = init_with_noise
+        self._actor_size = actor_size
+        self._local_obs_window = local_obs_window
+        self._local_reward_weight = local_reward_weight
 
         # We dt from wall units to physical units
         step_length = self._t_wall_to_t(step_length)
@@ -258,6 +269,7 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
             step_length=step_length,
             episode_length=episode_length,
             ndims=3,
+            use_marl=use_marl,
             dtype=dtype,
             cuda_device=cuda_device,
             load_initial_domain=load_initial_domain,
@@ -266,9 +278,6 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
             enable_actions=enable_actions,
             differentiable=differentiable,
         )
-        self._actor_size = actor_size
-        self._local_obs_window = local_obs_window
-        self._local_reward_weight = local_reward_weight
         self._viscosity = self._viscosity.to(self._cpu_device)
 
         target_t = TCF_tools.ETT_to_t(
@@ -355,23 +364,56 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
         """The number of agents in the environment."""
         return self._n_actors_x * self._n_actors_z
 
-    @property
-    def action_space_shape(self) -> tuple[int, ...]:
-        """The shape of the action space."""
-        return (
-            self.n_agents,
-            1,
+    def _get_action_space(self) -> spaces.Box:
+        """Per-agent action space."""
+        shape: tuple[int, ...]
+
+        if self.use_marl:
+            shape = (1,)
+        else:
+            shape = (
+                self.n_agents,
+                1,
+            )
+
+        return spaces.Box(
+            low=-1.0,
+            high=1.0,
+            shape=shape,
+            dtype=np.float32,
         )
 
-    @property
-    def observation_space_shape(self) -> tuple[int, ...]:
-        """The shape of the observation space."""
-        return (self._x * self._z * 2,)
+    def _get_observation_space(self) -> spaces.Dict:
+        """Per-agent observation space."""
+        shape: tuple[int, ...]
 
-    @property
-    def local_observation_space_shape(self) -> tuple[int, ...]:
-        """The shape of the local observation space for each agent."""
-        return (self._local_obs_window**2 * 2,)
+        if self._use_marl:
+            shape = (
+                self._local_obs_window,
+                self._local_obs_window,
+            )
+        else:
+            shape = (
+                self._z,
+                self._x,
+            )
+
+        return spaces.Dict(
+            {
+                "velocity": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=shape + (2,),
+                    dtype=np.float32,
+                ),
+                "pressure": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=shape,
+                    dtype=np.float32,
+                ),
+            }
+        )
 
     @property
     def scale_actions(self) -> bool:
@@ -590,13 +632,17 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
 
         return Q
 
-    def _get_global_obs(self, y_idx: int | None = None) -> torch.Tensor:
+    def _get_global_obs(self, y_idx: int | None = None) -> dict[str, torch.Tensor]:
         """Return the current observation."""
         if y_idx is None:
             y_idx = self._y_obs_bottom_idx
 
         u: torch.Tensor = self._domain.getBlock(0).getVelocity(False)
         u = u.squeeze()
+
+        p: torch.Tensor = self._domain.getBlock(0).pressure
+        p = p.squeeze()
+
         cell_size = get_cell_size(self._domain.getBlock(0))
         cell_size = cell_size.squeeze()
 
@@ -611,9 +657,13 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
             :,
             y_idx,
             :,
-        ]
+        ].permute(1, 2, 0)
+        p_slice = p[:, y_idx, :]
 
-        return u_slice.flatten()
+        return {
+            "velocity": u_slice,
+            "pressure": p_slice,
+        }
 
     def _get_render_data(
         self,
@@ -726,7 +776,7 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
 
     def _step_impl(
         self, action: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, bool, dict[str, torch.Tensor]]:
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         flat_action = action.squeeze()
 
         if self._enable_actions:
@@ -752,7 +802,7 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
             tau_bottom=tau_bottom,
         )
 
-        flat_obs = self._get_global_obs().flatten()
+        obs = self._get_global_obs()
 
         info = {
             "wall_stress": tau_total,
@@ -760,7 +810,7 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
             "wall_stress_top": tau_top,
         }
 
-        return flat_obs, reward, False, info
+        return obs, reward, False, info
 
     def plot(self, output_path: Path | None = None) -> None:
         """Plot the environments configuration.
@@ -856,29 +906,15 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
 
     def _get_local_obs(
         self, y_idx: int | None = None, flip_obs: bool = False
-    ) -> torch.Tensor:
-        """Return the local observations for all agents.
-
-        Parameters
-        ----------
-        y_idx : int, optional
-            The y-index at which to extract the observation. If None, uses the bottom
-            wall observation index. Defaults to None.
-
-        flip_obs : bool, optional
-            Whether to flip the observation along the z-axis. This is useful for top
-            wall observations to maintain consistent orientation. Default is False.
-
-        Returns
-        -------
-        torch.Tensor
-            The local observations for all agents, shape [n_agents, local_obs_size].
-        """
+    ) -> dict[str, torch.Tensor]:
         if y_idx is None:
             y_idx = self._y_obs_bottom_idx
 
         u: torch.Tensor = self._domain.getBlock(0).getVelocity(False)
         u = u.squeeze()
+
+        p: torch.Tensor = self._domain.getBlock(0).pressure
+        p = p.squeeze()
 
         u_slice = u[
             :2,  # We only take u_x and u_y components
@@ -886,6 +922,7 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
             y_idx,
             :,
         ]
+        p_slice = p[:, y_idx, :]
 
         # Compute spatial mean velocity for the slice
         mean_u = u_slice.mean(dim=(1, 2), keepdim=True)
@@ -906,7 +943,6 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
         )
         if flip_obs:
             local_obs_u_x = torch.flip(local_obs_u_x, dims=[2])
-        local_obs_u_x = local_obs_u_x.flatten(start_dim=1)
 
         local_obs_u_y = extract_moving_window_2d_x_z(
             field=u_y,
@@ -924,87 +960,33 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
             local_obs_u_y = torch.flip(local_obs_u_y, dims=[2])
             local_obs_u_y *= -1
 
-        local_obs_u_y = local_obs_u_y.flatten(start_dim=1)
+        local_obs_p = extract_moving_window_2d_x_z(
+            field=p_slice,
+            n_agents_x=self._n_actors_x,
+            n_agents_z=self._n_actors_z,
+            agent_width=self._actor_size,
+            n_agents_per_window_x=self._local_obs_window,
+            n_agents_per_window_z=self._local_obs_window,
+            pad_x=self._local_obs_window,
+            pad_z=self._local_obs_window // 2,
+        )
+        if flip_obs:
+            local_obs_p = torch.flip(local_obs_p, dims=[1])
 
-        local_obs = torch.cat((local_obs_u_x, local_obs_u_y), dim=1)  # [n_agents, ...]
+        local_obs_u = torch.stack((local_obs_u_x, local_obs_u_y), dim=-1)
 
-        return local_obs
+        return {
+            "velocity": local_obs_u,
+            "pressure": local_obs_p,
+        }
 
-    def reset(
-        self,
-        seed: int | None = None,
-        randomize: bool | None = None,
-    ) -> tuple[torch.Tensor, dict]:
-        """Resets the environment to an initial internal state, returning an initial
-        observation and info.
-
-        Parameters
-        ----------
-        seed: int | None
-            The seed to use for random number generation. If None, the current seed is
-            used.
-
-        randomize: bool | None
-            Whether to randomize the initial state. If None, the default behavior is
-            used.
-
-        Returns
-        -------
-        tuple[torch.Tensor, dict]
-            A tuple containing the initial observation and an info dictionary.
-        """
-        obs, info = super().reset(seed=seed, randomize=randomize)
-        return obs, info
-
-    def reset_marl(
-        self,
-        seed: int | None = None,
-        randomize: bool | None = None,
-    ) -> tuple[torch.Tensor, dict]:
-        """Reset the environment to the initial state for multiple agents.
-
-        Parameters
-        ----------
-        seed: int | None
-            The seed to use for random number generation. If None, the current seed is
-            used.
-
-        randomize: bool | None
-            Whether to randomize the initial state. If None, the default behavior is
-            used.
-
-        Returns
-        -------
-        tuple[torch.Tensor, dict]
-            A tuple containing the initial observations for all agents and an info
-            dictionary.
-        """
-        _, info = self.reset(seed=seed, randomize=randomize)
-
-        local_obs = self._get_local_obs()
-
-        return local_obs, info
-
-    def step_marl(
+    def _step_marl_impl(
         self, actions: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, bool, bool, dict[str, torch.Tensor]]:
-        """Take a step in the environment using the given actions for multiple agents.
-
-        Parameters
-        ----------
-        actions: torch.Tensor
-            The actions to take for each agent.
-
-        Returns
-        -------
-        tuple[torch.Tensor, torch.Tensor, bool, bool, dict[str, torch.Tensor]]
-            A tuple containing the observations, rewards, terminated flag, truncated
-            flag, and info dictionary.
-        """
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         if self._local_reward_weight is None:
             raise ValueError("local_reward_weight must be set for multi-agent step.")
 
-        _, global_reward, terminated, truncated, info = self.step(actions)
+        _, global_reward, terminated, info = self._step_impl(actions)
 
         local_obs = self._get_local_obs()
         agent_rewards = global_reward * torch.ones(
@@ -1014,7 +996,7 @@ class TCF3DBottomEnv(MultiAgentFluidEnv):
         )
         info["global_reward"] = global_reward
 
-        return local_obs, agent_rewards, terminated, truncated, info
+        return local_obs, agent_rewards, terminated, info
 
     def _load_domain_statistics(self) -> dict[str, dict[str, float]]:
         stats = super()._load_domain_statistics()
@@ -1085,10 +1067,38 @@ class TCF3DBothEnv(TCF3DBottomEnv):
 
     _actuation: str = "both"
 
-    @property
-    def observation_space_shape(self) -> tuple[int, ...]:
-        """The shape of the observation space."""
-        return (self._x * self._z * 2 * 2,)
+    def _get_observation_space(self) -> spaces.Dict:
+        """Per-agent observation space."""
+        shape: tuple[int, ...]
+
+        if self._use_marl:
+            shape = (
+                self._local_obs_window,
+                self._local_obs_window,
+            )
+        else:
+            shape = (
+                2,
+                self._z,
+                self._x,
+            )
+
+        return spaces.Dict(
+            {
+                "velocity": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=shape + (2,),
+                    dtype=np.float32,
+                ),
+                "pressure": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=shape,
+                    dtype=np.float32,
+                ),
+            }
+        )
 
     @property
     def n_agents(self) -> int:
@@ -1130,30 +1140,32 @@ class TCF3DBothEnv(TCF3DBottomEnv):
         # We take both the stress at both plates for local rewards
         return 1 - full_wall_stress.flatten() / self.tau_ref
 
-    def _get_global_obs(self, y_idx: int | None = None) -> torch.Tensor:
+    def _get_global_obs(self, y_idx: int | None = None) -> dict[str, torch.Tensor]:
         """Return the current observation."""
         bottom_obs = super()._get_global_obs(y_idx=self._y_obs_bottom_idx)
         top_obs = super()._get_global_obs(y_idx=self._y_obs_top_idx)
 
-        full_obs = torch.cat((bottom_obs, top_obs), dim=0)
+        full_obs = {
+            "velocity": torch.stack(
+                (bottom_obs["velocity"], top_obs["velocity"]), dim=0
+            ),
+            "pressure": torch.stack(
+                (bottom_obs["pressure"], top_obs["pressure"]), dim=0
+            ),
+        }
 
         return full_obs
 
     def _get_local_obs(
         self, y_idx: int | None = None, flip_obs: bool = False
-    ) -> torch.Tensor:
-        """Return the local observations for all agents from both walls.
-
-        Returns
-        -------
-        torch.Tensor
-            The local observations for all agents, shape [n_agents, local_obs_size].
-        """
-        bottom_local_obs = super()._get_local_obs(
+    ) -> dict[str, torch.Tensor]:
+        bottom_obs = super()._get_local_obs(
             y_idx=self._y_obs_bottom_idx, flip_obs=False
         )
-        top_local_obs = super()._get_local_obs(y_idx=self._y_obs_top_idx, flip_obs=True)
+        top_obs = super()._get_local_obs(y_idx=self._y_obs_top_idx, flip_obs=True)
 
-        local_obs = torch.cat((bottom_local_obs, top_local_obs), dim=0)
-
-        return local_obs
+        full_obs = {
+            "velocity": torch.cat((bottom_obs["velocity"], top_obs["velocity"]), dim=0),
+            "pressure": torch.cat((bottom_obs["pressure"], top_obs["pressure"]), dim=0),
+        }
+        return full_obs

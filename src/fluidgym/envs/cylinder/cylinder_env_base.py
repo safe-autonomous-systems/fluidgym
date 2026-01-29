@@ -9,6 +9,7 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from gymnasium import spaces
 
 from fluidgym import config as fluidgym_config
 from fluidgym.envs.cylinder.grid import make_vortex_street_domain
@@ -20,13 +21,13 @@ from fluidgym.envs.util.forces import (
     compute_forces_3d,
     wall_distance_from_vertices,
 )
+from fluidgym.envs.util.obs_extraction import extract_global_2d_obs
 from fluidgym.simulation.extensions import (
     PISOtorch,  # type: ignore[import-untyped,import-not-found]
 )
 from fluidgym.simulation.pict.PISOtorch_simulation import (
     update_advective_boundaries,
 )
-from fluidgym.simulation.pict.util.output import _resample_block_data
 from fluidgym.simulation.simulation import Simulation
 
 VORTICITY_RENDER_RANGE = (-10, 10)
@@ -60,6 +61,9 @@ class CylinderEnvBase(FluidEnv, ABC):
 
     lift_penalty: float
         Penalty factor for the lift coefficient in the reward computation.
+
+    use_marl: bool
+        Whether to enable multi-agent reinforcement learning mode.
 
     dtype: torch.dtype, optional
         Data type for the simulation. Defaults to torch.float32.
@@ -114,21 +118,18 @@ class CylinderEnvBase(FluidEnv, ABC):
     p. 113, June 2025, doi: 10.1038/s44172-025-00446-x.
     """
 
-    metadata = {"render_modes": ["human"], "render_fps": 15}
-
+    _default_render_key: str = "vorticity"
     _action_smoothing_alpha: float = 0.1
 
     H: float = 4.1
     L: float = 22.0
     D: float = 4.0  # in case of 3D
     cylinder_diameter: float = 1.0
-    U_mean: float = 1.0
+    _U_mean: float = 1.0
     cylinder_offset_y: float = 0.05
+    _n_sensors_x_y: int = 151
 
     _vortex_street_refinement_base: float = 0.95
-
-    _action_range = (-1.0, 1.0)
-    _observation_range = (-2.5, 2.5)
 
     _metrics: list[str] = ["drag", "lift"]
     _vorticity_stats: Stats | None = None
@@ -151,6 +152,7 @@ class CylinderEnvBase(FluidEnv, ABC):
         episode_length: int,
         ndims: int,
         lift_penalty: float,
+        use_marl: bool,
         dtype: torch.dtype = torch.float32,
         cuda_device: torch.device | None = None,
         debug: bool = False,
@@ -170,6 +172,7 @@ class CylinderEnvBase(FluidEnv, ABC):
             step_length=step_length,
             episode_length=episode_length,
             ndims=ndims,
+            use_marl=use_marl,
             dtype=dtype,
             cuda_device=cuda_device,
             load_initial_domain=load_initial_domain,
@@ -181,7 +184,7 @@ class CylinderEnvBase(FluidEnv, ABC):
 
         self._debug = debug
         self._viscosity = torch.tensor(
-            [self.U_mean / self._reynolds_number], device=self._cuda_device
+            [self._U_mean / self._reynolds_number], device=self._cuda_device
         )
 
         (
@@ -194,19 +197,39 @@ class CylinderEnvBase(FluidEnv, ABC):
         self.__last_control = torch.zeros(
             (1,), device=self._cuda_device, requires_grad=False
         )
-        self._sensors_locations = self._get_sensor_locations()
+        self._sensor_locations = self._get_sensor_locations()
         self._cylinder_mask = self._get_cylinder_mask()
 
-    @property
-    def action_space_shape(self) -> tuple[int, ...]:
-        """The shape of the action space."""
-        return (1,)
+    def _get_action_space(self) -> spaces.Box:
+        """Per-agent action space."""
+        return spaces.Box(
+            low=-1.0,
+            high=1.0,
+            shape=(1,),
+            dtype=np.float32,
+        )
 
-    @property
-    def observation_space_shape(self) -> tuple[int, ...]:
-        """The shape of the observation space."""
-        n_sensors_x_y = 151
-        return (n_sensors_x_y * self._ndims,)
+    def _get_observation_space(self) -> spaces.Dict:
+        """Per-agent observation space."""
+        return spaces.Dict(
+            {
+                "velocity": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=(
+                        self._n_sensors_x_y,
+                        self._ndims,
+                    ),
+                    dtype=np.float32,
+                ),
+                "pressure": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=(self._n_sensors_x_y,),
+                    dtype=np.float32,
+                ),
+            }
+        )
 
     @property
     def render_shape(self) -> tuple[int, int, int]:
@@ -215,6 +238,11 @@ class CylinderEnvBase(FluidEnv, ABC):
         y_res = z_res
         x_res = int(z_res / self.H * self.L)
         return (x_res, y_res, z_res)
+
+    @property
+    def n_agents(self) -> int:
+        """The number of agents in the environment."""
+        return 1
 
     def _get_domain(self) -> PISOtorch.Domain:
         domain = make_vortex_street_domain(
@@ -249,11 +277,11 @@ class CylinderEnvBase(FluidEnv, ABC):
     def _get_prep_fn(self, domain: PISOtorch.Domain) -> dict[str, Any]:
         if self._ndims == 2:
             char_vel = torch.tensor(
-                [[self.U_mean, 0.0]], device=self._cuda_device, dtype=self._dtype
+                [[self._U_mean, 0.0]], device=self._cuda_device, dtype=self._dtype
             )
         else:
             char_vel = torch.tensor(
-                [[self.U_mean, 0.0, 0.0]], device=self._cuda_device, dtype=self._dtype
+                [[self._U_mean, 0.0, 0.0]], device=self._cuda_device, dtype=self._dtype
             )
 
         bound = domain.getBlock(self._vortex_street_block_idx).getBoundary("+x")
@@ -335,7 +363,7 @@ class CylinderEnvBase(FluidEnv, ABC):
     def _randomize_domain(self) -> None:
         strouhal_number = 0.3
         vortex_shedding_period = 1 / (
-            strouhal_number * self.U_mean / self.cylinder_diameter
+            strouhal_number * self._U_mean / self.cylinder_diameter
         )
         velocity_noise = 0.025
         pressure_noise = 0.025
@@ -510,23 +538,11 @@ class CylinderEnvBase(FluidEnv, ABC):
         """Apply the given action to the simulation."""
         raise NotImplementedError
 
-    def _get_global_obs(self) -> torch.Tensor:
-        """Return the current observation."""
-        u_list = [block.velocity for block in self._domain.getBlocks()]
-
-        u = _resample_block_data(
-            u_list,
-            self._sim.output_resampling_coords,
-            self._sim.output_resampling_shape,
-            self._ndims,
-            fill_max_steps=self._sim.output_resampling_fill_max_steps,
+    def _get_global_obs(self) -> dict[str, torch.Tensor]:
+        return extract_global_2d_obs(
+            env=self,
+            sensor_locations=self._sensor_locations,
         )
-        u = u.squeeze()
-        u = u.permute(1, 2, 0)
-        u = u[self._sensors_locations[1], self._sensors_locations[0], :]
-        u = u.view(-1)
-
-        return u
 
     def __collect_boundary_coords(
         self,
@@ -675,8 +691,8 @@ class CylinderEnvBase(FluidEnv, ABC):
         drag = forces[0]
         lift = forces[1]
 
-        cd = drag / (0.5 * self.U_mean**2 * self.cylinder_diameter)
-        cl = lift / (0.5 * self.U_mean**2 * self.cylinder_diameter)
+        cd = drag / (0.5 * self._U_mean**2 * self.cylinder_diameter)
+        cl = lift / (0.5 * self._U_mean**2 * self.cylinder_diameter)
 
         return cd, cl
 
@@ -721,41 +737,9 @@ class CylinderEnvBase(FluidEnv, ABC):
 
         return render_data
 
-    def reset(
-        self,
-        seed: int | None = None,
-        randomize: bool | None = None,
-    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        """Resets the environment to an initial internal state, returning an initial
-        observation and info.
-
-        Parameters
-        ----------
-        seed: int | None
-            The seed to use for random number generation. If None, the current seed is
-            used.
-
-        randomize: bool | None
-            Whether to randomize the initial state. If None, the default behavior is
-            used.
-
-        Returns
-        -------
-        tuple[torch.Tensor, dict]
-            A tuple containing the initial observation and an info dictionary.
-        """
-        obs, info = super().reset(seed=seed, randomize=randomize)
-
-        self.__last_control = torch.zeros(
-            (1,), device=self._cuda_device, requires_grad=False
-        )
-        flat_obs = obs.flatten()
-        info["full_obs"] = obs
-        return flat_obs, info
-
     def _step_impl(
         self, action: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, bool, dict[str, torch.Tensor]]:
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         all_cds = []
         all_cls = []
         for _ in range(self._n_sim_steps):
@@ -773,7 +757,6 @@ class CylinderEnvBase(FluidEnv, ABC):
             all_cls += [_cl]
 
         obs = self._get_global_obs()
-        flat_obs = obs.flatten()
 
         all_cds_tensor = torch.stack(all_cds).mean(dim=0)
         all_cls_tensor = torch.stack(all_cls).mean(dim=0)
@@ -787,10 +770,9 @@ class CylinderEnvBase(FluidEnv, ABC):
         info = {
             "drag": all_cds_tensor,
             "lift": all_cls_tensor,
-            "full_obs": obs,
         }
 
-        return flat_obs, reward, False, info
+        return obs, reward, False, info
 
     def plot(self, output_path: Path | None = None) -> None:
         """Plot the environments configuration.

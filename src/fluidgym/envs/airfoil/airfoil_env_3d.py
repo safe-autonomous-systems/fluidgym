@@ -4,16 +4,19 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from gymnasium import spaces
 
 from fluidgym.envs.airfoil.airfoil_env_base import AirfoilEnvBase
-from fluidgym.envs.fluid_env import EnvMode
-from fluidgym.envs.multi_agent_fluid_env import MultiAgentFluidEnv
+from fluidgym.envs.util.obs_extraction import (
+    extract_global_3d_obs,
+    transform_global_to_local_obs_3d,
+)
 from fluidgym.envs.util.visualization import render_3d_iso
 from fluidgym.simulation.extensions import (
     PISOtorch,  # type: ignore[import-untyped,import-not-found]
 )
 from fluidgym.simulation.pict.util.domain_io import load_domain
-from fluidgym.simulation.pict.util.output import _resample_block_data
+from fluidgym.types import EnvMode
 
 VORTICITY_RENDER_LEVELS = {
     1000: 2.0,
@@ -31,6 +34,7 @@ AIRFOIL_3D_DEFAULT_CONFIG = {
     "episode_length": 200,
     "attack_angle_deg": 10.0,
     "local_obs_window": 1,
+    "use_marl": True,
     "local_reward_weight": 0.5,  # Based on doi.org/10.48550/arXiv.2509.10185
     "local_2d_obs": False,
     "init_from_2d": True,
@@ -43,8 +47,8 @@ AIRFOIL_3D_DEFAULT_CONFIG = {
 }
 
 
-class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
-    """Environment for 3D airfoil drag and lift reduction.
+class AirfoilEnv3D(AirfoilEnvBase):
+    """Environment for 3D airfoil aerodynamic efficiency improvement.
 
     Parameters
     ----------
@@ -71,6 +75,9 @@ class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
 
     local_obs_window: int
         The size of the local observation window for each agent.
+
+    use_marl: bool
+        Whether to enable multi-agent reinforcement learning mode.
 
     local_reward_weight: float | None
         The weight of the local reward in the combined reward for each agent. Has to be
@@ -118,7 +125,10 @@ class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
     doi: 10.48550/arXiv.2509.10185.
     """
 
+    _default_render_key: str = "3d_vorticity"
+
     _n_sensors_per_agent: int = 1
+    _supports_marl: bool = True
 
     def __init__(
         self,
@@ -130,6 +140,7 @@ class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
         dt: float,
         attack_angle_deg: float,
         local_obs_window: int,
+        use_marl: bool,
         local_reward_weight: float | None,
         local_2d_obs: bool = False,
         init_from_2d: bool = True,
@@ -174,6 +185,7 @@ class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
             episode_length=episode_length,
             dt=dt,
             attack_angle_deg=attack_angle_deg,
+            use_marl=use_marl,
             dtype=dtype,
             cuda_device=cuda_device,
             debug=debug,
@@ -184,34 +196,65 @@ class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
             differentiable=differentiable,
         )
 
-    @property
-    def action_space_shape(self) -> tuple[int, ...]:
-        """The shape of the action space."""
-        return (
-            self._n_agents,
-            self._n_jets,
+    def _get_action_space(self) -> spaces.Box:
+        shape: tuple[int, ...]
+        if self._use_marl:
+            shape = (self._n_jets,)
+        else:
+            shape = (
+                self._n_agents,
+                self._n_jets,
+            )
+
+        return spaces.Box(
+            low=-1.0,
+            high=1.0,
+            shape=shape,
+            dtype=np.float32,
         )
 
-    @property
-    def observation_space_shape(self) -> tuple[int, ...]:
-        """The shape of the observation space."""
-        n_sensors_x_y = self._sensors_locations.shape[-1]
-        n_sensors_total = n_sensors_x_y * self._n_agents * self._n_sensors_per_agent
-        return (n_sensors_total * self._ndims,)
+    def _get_observation_space(self) -> spaces.Dict:
+        n_sensors_x_y = self._sensor_locations.shape[-1]
+        velocity_shape: tuple[int, ...]
 
-    @property
-    def local_observation_space_shape(self) -> tuple[int, ...]:
-        """The shape of the local observation space for each agent."""
-        n_sensors_x_y = self._sensors_locations.shape[-1]
-        if self._local_2d_obs:
-            return (n_sensors_x_y * 2,)
-        else:
-            return (
-                self._n_sensors_per_agent
-                * self._local_obs_window
-                * n_sensors_x_y
-                * self._ndims,
+        if self._use_marl:
+            velocity_shape = (
+                self._n_jets,
+                self._n_sensors_per_agent,
+                n_sensors_x_y,
+                self._ndims,
             )
+        else:
+            if self._local_2d_obs:
+                velocity_shape = (
+                    self._n_jets,
+                    n_sensors_x_y,
+                    self._ndims - 1,
+                )
+            else:
+                velocity_shape = (
+                    self._local_obs_window,
+                    self._n_sensors_per_agent,
+                    n_sensors_x_y,
+                    self._ndims,
+                )
+
+        return spaces.Dict(
+            {
+                "velocity": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=velocity_shape,
+                    dtype=np.float32,
+                ),
+                "pressure": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=velocity_shape[:-1],
+                    dtype=np.float32,
+                ),
+            }
+        )
 
     @property
     def n_agents(self) -> int:
@@ -269,50 +312,25 @@ class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
 
         return sensor_locations_3d
 
-    def _get_global_obs(self) -> torch.Tensor:
+    def _get_global_obs(self) -> dict[str, torch.Tensor]:
         """Return the current observation."""
-        u_list = [block.velocity for block in self._domain.getBlocks()]
-
-        u = _resample_block_data(
-            u_list,
-            self._sim.output_resampling_coords,
-            self._sim.output_resampling_shape,
-            self._ndims,
-            fill_max_steps=self._sim.output_resampling_fill_max_steps,
+        return extract_global_3d_obs(
+            env=self,
+            sensor_locations=self._sensor_locations,
+            n_agents=self._n_agents,
+            n_sensors_per_agent=self._n_sensors_per_agent,
+            n_sensors_z=self._n_sensors_z,
+            local_2d_obs=self._local_2d_obs,
         )
 
-        if self._local_2d_obs:
-            u = u[:, :2, :, :, :]
-        u = u.squeeze()
-        u = u.permute(1, 2, 3, 0)
-
-        sensor_locations = self._sensors_locations.flatten(start_dim=1)
-        u = u[
-            sensor_locations[2],
-            sensor_locations[1],
-            sensor_locations[0],
-            :,
-        ]
-        u = u.view(self._n_sensors_z, -1)
-        u = u.view(self._n_agents, self._n_sensors_per_agent, -1)
-
-        return u
-
-    def _get_local_obs(self, global_obs: torch.Tensor) -> torch.Tensor:
-        offset = self._local_obs_window // 2
-
-        # First, shift the global obs to start with the first agents sensor
-        # window at zero
-        shifted_obs = torch.roll(global_obs, shifts=offset, dims=0)
-
-        local_obs = []
-        for _ in range(self._n_agents):
-            window = shifted_obs[: self._local_obs_window].reshape(-1)
-            local_obs += [window]
-
-            shifted_obs = torch.roll(shifted_obs, shifts=-1, dims=0)
-
-        return torch.stack(local_obs, dim=0)
+    def _get_local_obs(self) -> dict[str, torch.Tensor]:
+        global_obs = self._get_global_obs()
+        return transform_global_to_local_obs_3d(
+            global_obs=global_obs,
+            local_obs_window=self._local_obs_window,
+            n_agents=self._n_agents,
+            local_2d_obs=self._local_2d_obs,
+        )
 
     def _get_base_jet_profiles(self) -> torch.Tensor:
         base_profile_2d = super()._get_base_jet_profiles()
@@ -342,7 +360,6 @@ class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
 
         # Expand action to full z-resolution
         v_action = v_action.repeat_interleave(self._nz_per_agent, dim=0)
-
         top_profile = self._top_base_profile.clone()
 
         for i in range(self._n_jets):
@@ -360,7 +377,7 @@ class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
 
     def _step_impl(
         self, action: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, bool, dict[str, torch.Tensor]]:
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         obs, reward, term, info = super()._step_impl(action)
 
         all_cds = info.pop("drag")
@@ -380,55 +397,15 @@ class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
 
         return obs, reward, term, info
 
-    def reset_marl(
-        self,
-        seed: int | None = None,
-        randomize: bool | None = None,
-    ) -> tuple[torch.Tensor, dict]:
-        """Reset the environment to the initial state for multiple agents.
-
-        Parameters
-        ----------
-        seed: int | None
-            The seed to use for random number generation. If None, the current seed is
-            used.
-
-        randomize: bool | None
-            Whether to randomize the initial state. If None, the default behavior is
-            used.
-
-        Returns
-        -------
-        tuple[torch.Tensor, dict]
-            A tuple containing the initial observations for all agents and an info
-            dictionary.
-        """
-        _, info = self.reset(seed=seed, randomize=randomize)
-        local_obs = self._get_local_obs(info.pop("full_obs"))
-        return local_obs, info
-
-    def step_marl(
+    def _step_marl_impl(
         self, actions: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, bool, bool, dict[str, torch.Tensor]]:
-        """Take a step in the environment using the given actions for multiple agents.
-
-        Parameters
-        ----------
-        actions: torch.Tensor
-            The actions to take for each agent.
-
-        Returns
-        -------
-        tuple[torch.Tensor, torch.Tensor, bool, bool, dict[str, torch.Tensor]]
-            A tuple containing the observations, rewards, terminated flag, truncated
-            flag, and info dictionary.
-        """
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         if self._local_reward_weight is None:
             raise ValueError("local_reward_weight must be set for multi-agent step.")
 
-        _, global_reward, terminated, truncated, info = self.step(actions)
+        _, global_reward, terminated, info = self._step_impl(actions)
 
-        local_obs = self._get_local_obs(info.pop("full_obs"))
+        local_obs = self._get_local_obs()
 
         all_cds = info.pop("all_cds")
         lift = info.pop("all_cls")
@@ -447,7 +424,7 @@ class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
         )
         info["global_reward"] = global_reward
 
-        return local_obs, agent_rewards, terminated, truncated, info
+        return local_obs, agent_rewards, terminated, info
 
     def _get_render_data(
         self,
@@ -534,6 +511,14 @@ class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
             domain_3d.getBlocks(), domain_2d.getBlocks(), strict=False
         ):
             vel_2d = block_2d.velocity
+
+            if block_3d.velocity[:, :2, 0, :, :].shape != vel_2d.shape:
+                self._logger.error(
+                    "Shape mismatch when initializing 3D domain from 2D:"
+                    f"vel_3d: {block_3d.velocity[:, :2, 0, :, :].shape}, vel_2d:"
+                    f" {vel_2d.shape}. Using 3D initial domain as fallback."
+                )
+                return domain_3d
 
             # Expand 2D velocity to 3D by adding zero z-component
             vel_3d_new = torch.zeros_like(block_3d.velocity)

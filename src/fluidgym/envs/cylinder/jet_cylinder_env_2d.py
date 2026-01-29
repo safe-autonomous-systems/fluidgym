@@ -13,6 +13,7 @@ CYLINDER_JET_2D_DEFAULT_CONFIG = {
     "step_length": 0.25,
     "episode_length": 80,
     "lift_penalty": 1.0,
+    "use_marl": False,
     "dtype": torch.float32,
     "load_initial_domain": True,
     "load_domain_statistics": True,
@@ -48,6 +49,9 @@ class CylinderJetEnv2D(CylinderEnvBase):
 
     lift_penalty: float
         The penalty factor for lift in the reward calculation.
+
+    use_marl: bool
+        Whether to enable multi-agent reinforcement learning mode.
 
     dtype: torch.dtype
         The data type to use for the simulation. Defaults to torch.float32.
@@ -95,6 +99,7 @@ class CylinderJetEnv2D(CylinderEnvBase):
         step_length: float,
         episode_length: int,
         lift_penalty: float,
+        use_marl: bool,
         dtype: torch.dtype = torch.float32,
         cuda_device: torch.device | None = None,
         load_initial_domain: bool = True,
@@ -112,6 +117,7 @@ class CylinderJetEnv2D(CylinderEnvBase):
             episode_length=episode_length,
             ndims=2,
             lift_penalty=lift_penalty,
+            use_marl=use_marl,
             dtype=dtype,
             cuda_device=cuda_device,
             load_initial_domain=load_initial_domain,
