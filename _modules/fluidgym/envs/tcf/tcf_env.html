@@ -5,7 +5,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>fluidgym.envs.tcf.tcf_env &mdash; FluidGym 0.0.2 documentation</title>
+  <title>fluidgym.envs.tcf.tcf_env &mdash; FluidGym 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../../../../_static/css/theme.css?v=e59714d7" />
 
@@ -48,8 +48,15 @@
 <li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/gymnasium.html">Gymnasium</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/torchrl.html">TorchRL</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/pettingzoo.html">Pettingzoo</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/sb3_marl.html">Stable-Baselines3</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/sb3_vec_env.html">Stable-Baselines3</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/gradient_based_methods.html">Gradient-Based Methods</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../basic_usage/wrappers/index.html">Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/wrappers/flatten_observation.html">FlattenObservation Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/wrappers/obs_extraction.html">ObsExtraction Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/wrappers/action_noise.html">ActionNoise Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/wrappers/sensor_noise.html">SensorNoise Wrapper</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../basic_usage/rendering.html">Rendering Environments</a></li>
@@ -62,6 +69,17 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../api/fluidenv.html">FluidGym Environments</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.fluid_env.FluidEnv.html">FluidEnv</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../api/wrappers.html">FluidGym Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.wrappers.flatten_obs.FlattenObservation.html">FlattenObservation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.wrappers.obs_extraction.ObsExtraction.html">ObsExtraction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.wrappers.action_noise.ActionNoise.html">ActionNoise</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.wrappers.sensor_noise.SensorNoise.html">SensorNoise</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../api/cylinder.html">Flow Past Cylinder</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.cylinder.CylinderJetEnv2D.html">CylinderJetEnv2D</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.cylinder.CylinderRotEnv2D.html">CylinderRotEnv2D</a></li>
@@ -124,10 +142,10 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">gymnasium</span><span class="w"> </span><span class="kn">import</span> <span class="n">spaces</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">config</span> <span class="k">as</span> <span class="n">global_config</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.envs.fluid_env</span><span class="w"> </span><span class="kn">import</span> <span class="n">EnvMode</span><span class="p">,</span> <span class="n">Stats</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.envs.multi_agent_fluid_env</span><span class="w"> </span><span class="kn">import</span> <span class="n">MultiAgentFluidEnv</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.envs.fluid_env</span><span class="w"> </span><span class="kn">import</span> <span class="n">FluidEnv</span><span class="p">,</span> <span class="n">Stats</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.envs.tcf.grid</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">get_van_driest_sqr</span><span class="p">,</span>
     <span class="n">make_channel_flow_domain</span><span class="p">,</span>
@@ -144,10 +162,10 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.simulation.pict.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">TCF_tools</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.simulation.pict.PISOtorch_simulation</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">append_prep_fn</span><span class="p">,</span>
-    <span class="n">balance_boundary_fluxes</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.simulation.pict.util.output</span><span class="w"> </span><span class="kn">import</span> <span class="n">_resample_block_data</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.simulation.simulation</span><span class="w"> </span><span class="kn">import</span> <span class="n">Simulation</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">EnvMode</span>
 
 <span class="n">Q_CRITERION_ISOS</span> <span class="o">=</span> <span class="p">{</span>
     <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="mi">2</span><span class="p">:</span> <span class="p">{</span>
@@ -187,6 +205,7 @@
     <span class="s2">&quot;episode_length&quot;</span><span class="p">:</span> <span class="mi">1000</span><span class="p">,</span>
     <span class="s2">&quot;local_obs_window&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
     <span class="s2">&quot;local_reward_weight&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span>
+    <span class="s2">&quot;use_marl&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
     <span class="s2">&quot;C_smag&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span>
     <span class="s2">&quot;use_van_driest&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
     <span class="s2">&quot;init_with_noise&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
@@ -208,7 +227,7 @@
 
 <div class="viewcode-block" id="TCF3DBottomEnv">
 <a class="viewcode-back" href="../../../../api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">TCF3DBottomEnv</span><span class="p">(</span><span class="n">MultiAgentFluidEnv</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TCF3DBottomEnv</span><span class="p">(</span><span class="n">FluidEnv</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Environment for turbulent channel flow control.</span>
 
 <span class="sd">    Parameters</span>
@@ -246,6 +265,9 @@
 
 <span class="sd">    local_reward_weight: float</span>
 <span class="sd">        The weight of the local reward in the total reward.</span>
+
+<span class="sd">    use_marl: bool</span>
+<span class="sd">        Whether to enable multi-agent reinforcement learning mode.</span>
 
 <span class="sd">    C_smag: float</span>
 <span class="sd">        The Smagorinsky constant for the LES model. If 0, no LES model is used.</span>
@@ -295,8 +317,10 @@
 <span class="sd">    doi: 10.48550/arXiv.2510.03360.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="n">metadata</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;render_modes&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;human&quot;</span><span class="p">],</span> <span class="s2">&quot;render_fps&quot;</span><span class="p">:</span> <span class="mi">45</span><span class="p">}</span>
+    <span class="n">_default_render_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;3d_q_criterion&quot;</span>
+
     <span class="n">_actuation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;bottom&quot;</span>
+    <span class="n">_supports_marl</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
 
     <span class="c1"># We need to be able to disable action scaling for opposition control</span>
     <span class="n">_scale_actions</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
@@ -337,6 +361,7 @@
         <span class="n">episode_length</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
         <span class="n">local_obs_window</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
         <span class="n">local_reward_weight</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">use_marl</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
         <span class="n">C_smag</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
         <span class="n">use_van_driest</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">init_with_noise</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
@@ -364,6 +389,9 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_C_smag</span> <span class="o">=</span> <span class="n">C_smag</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_use_van_driest</span> <span class="o">=</span> <span class="n">use_van_driest</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_init_with_noise</span> <span class="o">=</span> <span class="n">init_with_noise</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_actor_size</span> <span class="o">=</span> <span class="n">actor_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span> <span class="o">=</span> <span class="n">local_obs_window</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_local_reward_weight</span> <span class="o">=</span> <span class="n">local_reward_weight</span>
 
         <span class="c1"># We dt from wall units to physical units</span>
         <span class="n">step_length</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_t_wall_to_t</span><span class="p">(</span><span class="n">step_length</span><span class="p">)</span>
@@ -377,6 +405,7 @@
             <span class="n">step_length</span><span class="o">=</span><span class="n">step_length</span><span class="p">,</span>
             <span class="n">episode_length</span><span class="o">=</span><span class="n">episode_length</span><span class="p">,</span>
             <span class="n">ndims</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+            <span class="n">use_marl</span><span class="o">=</span><span class="n">use_marl</span><span class="p">,</span>
             <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span>
             <span class="n">cuda_device</span><span class="o">=</span><span class="n">cuda_device</span><span class="p">,</span>
             <span class="n">load_initial_domain</span><span class="o">=</span><span class="n">load_initial_domain</span><span class="p">,</span>
@@ -385,9 +414,6 @@
             <span class="n">enable_actions</span><span class="o">=</span><span class="n">enable_actions</span><span class="p">,</span>
             <span class="n">differentiable</span><span class="o">=</span><span class="n">differentiable</span><span class="p">,</span>
         <span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_actor_size</span> <span class="o">=</span> <span class="n">actor_size</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span> <span class="o">=</span> <span class="n">local_obs_window</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_local_reward_weight</span> <span class="o">=</span> <span class="n">local_reward_weight</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_viscosity</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_viscosity</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cpu_device</span><span class="p">)</span>
 
         <span class="n">target_t</span> <span class="o">=</span> <span class="n">TCF_tools</span><span class="o">.</span><span class="n">ETT_to_t</span><span class="p">(</span>
@@ -474,23 +500,67 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;The number of agents in the environment.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_n_actors_x</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_n_actors_z</span>
 
-    <span class="nd">@property</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">action_space_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;The shape of the action space.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">n_agents</span><span class="p">,</span>
-            <span class="mi">1</span><span class="p">,</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_action_space</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Per-agent action space.&quot;&quot;&quot;</span>
+        <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_marl</span><span class="p">:</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">n_agents</span><span class="p">,</span>
+                <span class="mi">1</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">(</span>
+            <span class="n">low</span><span class="o">=-</span><span class="mf">1.0</span><span class="p">,</span>
+            <span class="n">high</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+            <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
         <span class="p">)</span>
 
-    <span class="nd">@property</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">observation_space_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;The shape of the observation space.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_x</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_z</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_observation_space</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Per-agent observation space.&quot;&quot;&quot;</span>
+        <span class="n">velocity_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+        <span class="n">pressure_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
 
-    <span class="nd">@property</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">local_observation_space_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;The shape of the local observation space for each agent.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_use_marl</span><span class="p">:</span>
+            <span class="n">velocity_shape</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
+                <span class="mi">2</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">pressure_shape</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">velocity_shape</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="mi">2</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_z</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_x</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">pressure_shape</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_z</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_x</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Dict</span><span class="p">(</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;velocity&quot;</span><span class="p">:</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">(</span>
+                    <span class="n">low</span><span class="o">=-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
+                    <span class="n">high</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
+                    <span class="n">shape</span><span class="o">=</span><span class="n">velocity_shape</span><span class="p">,</span>
+                    <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="s2">&quot;pressure&quot;</span><span class="p">:</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">(</span>
+                    <span class="n">low</span><span class="o">=-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
+                    <span class="n">high</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
+                    <span class="n">shape</span><span class="o">=</span><span class="n">pressure_shape</span><span class="p">,</span>
+                    <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
+                <span class="p">),</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">scale_actions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
@@ -618,14 +688,6 @@
 
         <span class="n">control</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_action_to_control</span><span class="p">(</span><span class="n">reshaped_action</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_bottom_plate</span><span class="o">.</span><span class="n">setVelocity</span><span class="p">(</span><span class="n">control</span><span class="p">)</span>
-        <span class="n">out_bounds</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_inflow</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_outflow</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_bottom_plate</span><span class="p">,</span>
-        <span class="p">]</span>
-
-        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale_actions</span><span class="p">:</span>
-            <span class="n">balance_boundary_fluxes</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="p">,</span> <span class="n">out_bounds</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">tau_ref</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
@@ -717,13 +779,17 @@
 
         <span class="k">return</span> <span class="n">Q</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_get_global_obs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y_idx</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_global_obs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y_idx</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the current observation.&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="n">y_idx</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">y_idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_y_obs_bottom_idx</span>
 
         <span class="n">u</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="o">.</span><span class="n">getBlock</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">getVelocity</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
         <span class="n">u</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span>
+
+        <span class="n">p</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="o">.</span><span class="n">getBlock</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">pressure</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span>
+
         <span class="n">cell_size</span> <span class="o">=</span> <span class="n">get_cell_size</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="o">.</span><span class="n">getBlock</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
         <span class="n">cell_size</span> <span class="o">=</span> <span class="n">cell_size</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span>
 
@@ -739,8 +805,12 @@
             <span class="n">y_idx</span><span class="p">,</span>
             <span class="p">:,</span>
         <span class="p">]</span>
+        <span class="n">p_slice</span> <span class="o">=</span> <span class="n">p</span><span class="p">[:,</span> <span class="n">y_idx</span><span class="p">,</span> <span class="p">:]</span>
 
-        <span class="k">return</span> <span class="n">u_slice</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;velocity&quot;</span><span class="p">:</span> <span class="n">u_slice</span><span class="p">,</span>
+            <span class="s2">&quot;pressure&quot;</span><span class="p">:</span> <span class="n">p_slice</span><span class="p">,</span>
+        <span class="p">}</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_render_data</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -853,7 +923,7 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_step_impl</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="nb">bool</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]]:</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="nb">bool</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]]:</span>
         <span class="n">flat_action</span> <span class="o">=</span> <span class="n">action</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_enable_actions</span><span class="p">:</span>
@@ -879,7 +949,7 @@
             <span class="n">tau_bottom</span><span class="o">=</span><span class="n">tau_bottom</span><span class="p">,</span>
         <span class="p">)</span>
 
-        <span class="n">flat_obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_global_obs</span><span class="p">()</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+        <span class="n">obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_global_obs</span><span class="p">()</span>
 
         <span class="n">info</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s2">&quot;wall_stress&quot;</span><span class="p">:</span> <span class="n">tau_total</span><span class="p">,</span>
@@ -887,7 +957,7 @@
             <span class="s2">&quot;wall_stress_top&quot;</span><span class="p">:</span> <span class="n">tau_top</span><span class="p">,</span>
         <span class="p">}</span>
 
-        <span class="k">return</span> <span class="n">flat_obs</span><span class="p">,</span> <span class="n">reward</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="n">info</span>
+        <span class="k">return</span> <span class="n">obs</span><span class="p">,</span> <span class="n">reward</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="n">info</span>
 
 <div class="viewcode-block" id="TCF3DBottomEnv.plot">
 <a class="viewcode-back" href="../../../../api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.plot">[docs]</a>
@@ -986,29 +1056,15 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_local_obs</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">y_idx</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">flip_obs</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the local observations for all agents.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        y_idx : int, optional</span>
-<span class="sd">            The y-index at which to extract the observation. If None, uses the bottom</span>
-<span class="sd">            wall observation index. Defaults to None.</span>
-
-<span class="sd">        flip_obs : bool, optional</span>
-<span class="sd">            Whether to flip the observation along the z-axis. This is useful for top</span>
-<span class="sd">            wall observations to maintain consistent orientation. Default is False.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        torch.Tensor</span>
-<span class="sd">            The local observations for all agents, shape [n_agents, local_obs_size].</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
         <span class="k">if</span> <span class="n">y_idx</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">y_idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_y_obs_bottom_idx</span>
 
         <span class="n">u</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="o">.</span><span class="n">getBlock</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">getVelocity</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
         <span class="n">u</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span>
+
+        <span class="n">p</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="o">.</span><span class="n">getBlock</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">pressure</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span>
 
         <span class="n">u_slice</span> <span class="o">=</span> <span class="n">u</span><span class="p">[</span>
             <span class="p">:</span><span class="mi">2</span><span class="p">,</span>  <span class="c1"># We only take u_x and u_y components</span>
@@ -1016,6 +1072,7 @@
             <span class="n">y_idx</span><span class="p">,</span>
             <span class="p">:,</span>
         <span class="p">]</span>
+        <span class="n">p_slice</span> <span class="o">=</span> <span class="n">p</span><span class="p">[:,</span> <span class="n">y_idx</span><span class="p">,</span> <span class="p">:]</span>
 
         <span class="c1"># Compute spatial mean velocity for the slice</span>
         <span class="n">mean_u</span> <span class="o">=</span> <span class="n">u_slice</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -1036,7 +1093,6 @@
         <span class="p">)</span>
         <span class="k">if</span> <span class="n">flip_obs</span><span class="p">:</span>
             <span class="n">local_obs_u_x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">flip</span><span class="p">(</span><span class="n">local_obs_u_x</span><span class="p">,</span> <span class="n">dims</span><span class="o">=</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
-        <span class="n">local_obs_u_x</span> <span class="o">=</span> <span class="n">local_obs_u_x</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="n">start_dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 
         <span class="n">local_obs_u_y</span> <span class="o">=</span> <span class="n">extract_moving_window_2d_x_z</span><span class="p">(</span>
             <span class="n">field</span><span class="o">=</span><span class="n">u_y</span><span class="p">,</span>
@@ -1054,95 +1110,33 @@
             <span class="n">local_obs_u_y</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">flip</span><span class="p">(</span><span class="n">local_obs_u_y</span><span class="p">,</span> <span class="n">dims</span><span class="o">=</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
             <span class="n">local_obs_u_y</span> <span class="o">*=</span> <span class="o">-</span><span class="mi">1</span>
 
-        <span class="n">local_obs_u_y</span> <span class="o">=</span> <span class="n">local_obs_u_y</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="n">start_dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">local_obs_p</span> <span class="o">=</span> <span class="n">extract_moving_window_2d_x_z</span><span class="p">(</span>
+            <span class="n">field</span><span class="o">=</span><span class="n">p_slice</span><span class="p">,</span>
+            <span class="n">n_agents_x</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_n_actors_x</span><span class="p">,</span>
+            <span class="n">n_agents_z</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_n_actors_z</span><span class="p">,</span>
+            <span class="n">agent_width</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_actor_size</span><span class="p">,</span>
+            <span class="n">n_agents_per_window_x</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
+            <span class="n">n_agents_per_window_z</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
+            <span class="n">pad_x</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
+            <span class="n">pad_z</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">flip_obs</span><span class="p">:</span>
+            <span class="n">local_obs_p</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">flip</span><span class="p">(</span><span class="n">local_obs_p</span><span class="p">,</span> <span class="n">dims</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
 
-        <span class="n">local_obs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">((</span><span class="n">local_obs_u_x</span><span class="p">,</span> <span class="n">local_obs_u_y</span><span class="p">),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># [n_agents, ...]</span>
+        <span class="n">local_obs_u</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">((</span><span class="n">local_obs_u_x</span><span class="p">,</span> <span class="n">local_obs_u_y</span><span class="p">),</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="n">local_obs</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;velocity&quot;</span><span class="p">:</span> <span class="n">local_obs_u</span><span class="p">,</span>
+            <span class="s2">&quot;pressure&quot;</span><span class="p">:</span> <span class="n">local_obs_p</span><span class="p">,</span>
+        <span class="p">}</span>
 
-<div class="viewcode-block" id="TCF3DBottomEnv.reset">
-<a class="viewcode-back" href="../../../../api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.reset">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">reset</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span>
-        <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">randomize</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resets the environment to an initial internal state, returning an initial</span>
-<span class="sd">        observation and info.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        seed: int | None</span>
-<span class="sd">            The seed to use for random number generation. If None, the current seed is</span>
-<span class="sd">            used.</span>
-
-<span class="sd">        randomize: bool | None</span>
-<span class="sd">            Whether to randomize the initial state. If None, the default behavior is</span>
-<span class="sd">            used.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        tuple[torch.Tensor, dict]</span>
-<span class="sd">            A tuple containing the initial observation and an info dictionary.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">obs</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span> <span class="n">randomize</span><span class="o">=</span><span class="n">randomize</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">obs</span><span class="p">,</span> <span class="n">info</span></div>
-
-
-<div class="viewcode-block" id="TCF3DBottomEnv.reset_marl">
-<a class="viewcode-back" href="../../../../api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.reset_marl">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">reset_marl</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span>
-        <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">randomize</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Reset the environment to the initial state for multiple agents.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        seed: int | None</span>
-<span class="sd">            The seed to use for random number generation. If None, the current seed is</span>
-<span class="sd">            used.</span>
-
-<span class="sd">        randomize: bool | None</span>
-<span class="sd">            Whether to randomize the initial state. If None, the default behavior is</span>
-<span class="sd">            used.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        tuple[torch.Tensor, dict]</span>
-<span class="sd">            A tuple containing the initial observations for all agents and an info</span>
-<span class="sd">            dictionary.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span> <span class="n">randomize</span><span class="o">=</span><span class="n">randomize</span><span class="p">)</span>
-
-        <span class="n">local_obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_local_obs</span><span class="p">()</span>
-
-        <span class="k">return</span> <span class="n">local_obs</span><span class="p">,</span> <span class="n">info</span></div>
-
-
-<div class="viewcode-block" id="TCF3DBottomEnv.step_marl">
-<a class="viewcode-back" href="../../../../api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.step_marl">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">step_marl</span><span class="p">(</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_step_marl_impl</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">actions</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="nb">bool</span><span class="p">,</span> <span class="nb">bool</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Take a step in the environment using the given actions for multiple agents.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        actions: torch.Tensor</span>
-<span class="sd">            The actions to take for each agent.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        tuple[torch.Tensor, torch.Tensor, bool, bool, dict[str, torch.Tensor]]</span>
-<span class="sd">            A tuple containing the observations, rewards, terminated flag, truncated</span>
-<span class="sd">            flag, and info dictionary.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="nb">bool</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]]:</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_local_reward_weight</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;local_reward_weight must be set for multi-agent step.&quot;</span><span class="p">)</span>
 
-        <span class="n">_</span><span class="p">,</span> <span class="n">global_reward</span><span class="p">,</span> <span class="n">terminated</span><span class="p">,</span> <span class="n">truncated</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="n">actions</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">global_reward</span><span class="p">,</span> <span class="n">terminated</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_step_impl</span><span class="p">(</span><span class="n">actions</span><span class="p">)</span>
 
         <span class="n">local_obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_local_obs</span><span class="p">()</span>
         <span class="n">agent_rewards</span> <span class="o">=</span> <span class="n">global_reward</span> <span class="o">*</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span>
@@ -1152,8 +1146,7 @@
         <span class="p">)</span>
         <span class="n">info</span><span class="p">[</span><span class="s2">&quot;global_reward&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">global_reward</span>
 
-        <span class="k">return</span> <span class="n">local_obs</span><span class="p">,</span> <span class="n">agent_rewards</span><span class="p">,</span> <span class="n">terminated</span><span class="p">,</span> <span class="n">truncated</span><span class="p">,</span> <span class="n">info</span></div>
-
+        <span class="k">return</span> <span class="n">local_obs</span><span class="p">,</span> <span class="n">agent_rewards</span><span class="p">,</span> <span class="n">terminated</span><span class="p">,</span> <span class="n">info</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_load_domain_statistics</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]:</span>
         <span class="n">stats</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_load_domain_statistics</span><span class="p">()</span>
@@ -1233,10 +1226,50 @@
 
     <span class="n">_actuation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;both&quot;</span>
 
-    <span class="nd">@property</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">observation_space_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;The shape of the observation space.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_x</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_z</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_observation_space</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Per-agent observation space.&quot;&quot;&quot;</span>
+        <span class="n">velocity_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+        <span class="n">pressure_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_use_marl</span><span class="p">:</span>
+            <span class="n">velocity_shape</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
+                <span class="mi">2</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">pressure_shape</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">velocity_shape</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="mi">2</span><span class="p">,</span>
+                <span class="mi">2</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_z</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_x</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">pressure_shape</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="mi">2</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_z</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_x</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Dict</span><span class="p">(</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;velocity&quot;</span><span class="p">:</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">(</span>
+                    <span class="n">low</span><span class="o">=-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
+                    <span class="n">high</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
+                    <span class="n">shape</span><span class="o">=</span><span class="n">velocity_shape</span><span class="p">,</span>
+                    <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="s2">&quot;pressure&quot;</span><span class="p">:</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">(</span>
+                    <span class="n">low</span><span class="o">=-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
+                    <span class="n">high</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
+                    <span class="n">shape</span><span class="o">=</span><span class="n">pressure_shape</span><span class="p">,</span>
+                    <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
+                <span class="p">),</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">n_agents</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
@@ -1268,18 +1301,6 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_bottom_plate</span><span class="o">.</span><span class="n">setVelocity</span><span class="p">(</span><span class="n">control_bottom</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_top_plate</span><span class="o">.</span><span class="n">setVelocity</span><span class="p">(</span><span class="n">control_top</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale_actions</span><span class="p">:</span>
-            <span class="n">balance_boundary_fluxes</span><span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="p">,</span>
-                <span class="p">[</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_inflow</span><span class="p">,</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_outflow</span><span class="p">,</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_bottom_plate</span><span class="p">,</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_top_plate</span><span class="p">,</span>
-                <span class="p">],</span>
-                <span class="n">tol</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">,</span>
-            <span class="p">)</span>
-
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_reward</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">tau_total</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">tau_bottom</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
@@ -1290,33 +1311,35 @@
         <span class="c1"># We take both the stress at both plates for local rewards</span>
         <span class="k">return</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">full_wall_stress</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">tau_ref</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_get_global_obs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y_idx</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_global_obs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y_idx</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the current observation.&quot;&quot;&quot;</span>
         <span class="n">bottom_obs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_get_global_obs</span><span class="p">(</span><span class="n">y_idx</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_y_obs_bottom_idx</span><span class="p">)</span>
         <span class="n">top_obs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_get_global_obs</span><span class="p">(</span><span class="n">y_idx</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_y_obs_top_idx</span><span class="p">)</span>
 
-        <span class="n">full_obs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">((</span><span class="n">bottom_obs</span><span class="p">,</span> <span class="n">top_obs</span><span class="p">),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">full_obs</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;velocity&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span>
+                <span class="p">(</span><span class="n">bottom_obs</span><span class="p">[</span><span class="s2">&quot;velocity&quot;</span><span class="p">],</span> <span class="n">top_obs</span><span class="p">[</span><span class="s2">&quot;velocity&quot;</span><span class="p">]),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span>
+            <span class="p">),</span>
+            <span class="s2">&quot;pressure&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span>
+                <span class="p">(</span><span class="n">bottom_obs</span><span class="p">[</span><span class="s2">&quot;pressure&quot;</span><span class="p">],</span> <span class="n">top_obs</span><span class="p">[</span><span class="s2">&quot;pressure&quot;</span><span class="p">]),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span>
+            <span class="p">),</span>
+        <span class="p">}</span>
 
         <span class="k">return</span> <span class="n">full_obs</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_local_obs</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">y_idx</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">flip_obs</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the local observations for all agents from both walls.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        torch.Tensor</span>
-<span class="sd">            The local observations for all agents, shape [n_agents, local_obs_size].</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">bottom_local_obs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_get_local_obs</span><span class="p">(</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+        <span class="n">bottom_obs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_get_local_obs</span><span class="p">(</span>
             <span class="n">y_idx</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_y_obs_bottom_idx</span><span class="p">,</span> <span class="n">flip_obs</span><span class="o">=</span><span class="kc">False</span>
         <span class="p">)</span>
-        <span class="n">top_local_obs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_get_local_obs</span><span class="p">(</span><span class="n">y_idx</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_y_obs_top_idx</span><span class="p">,</span> <span class="n">flip_obs</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">top_obs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_get_local_obs</span><span class="p">(</span><span class="n">y_idx</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_y_obs_top_idx</span><span class="p">,</span> <span class="n">flip_obs</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
-        <span class="n">local_obs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">((</span><span class="n">bottom_local_obs</span><span class="p">,</span> <span class="n">top_local_obs</span><span class="p">),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-
-        <span class="k">return</span> <span class="n">local_obs</span></div>
+        <span class="n">full_obs</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;velocity&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">((</span><span class="n">bottom_obs</span><span class="p">[</span><span class="s2">&quot;velocity&quot;</span><span class="p">],</span> <span class="n">top_obs</span><span class="p">[</span><span class="s2">&quot;velocity&quot;</span><span class="p">]),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
+            <span class="s2">&quot;pressure&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">((</span><span class="n">bottom_obs</span><span class="p">[</span><span class="s2">&quot;pressure&quot;</span><span class="p">],</span> <span class="n">top_obs</span><span class="p">[</span><span class="s2">&quot;pressure&quot;</span><span class="p">]),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">full_obs</span></div>
 
 </pre></div>
 

@@ -1,6 +1,10 @@
 FluidGym Documentation
 ======================
 
+Welcome to the FluidGym documentation! Here you will find all the information you need 
+to get started with FluidGym, including installation instructions, basic and advanced 
+usage guides, API references, and more.
+
 .. toctree::
    :hidden:
    :maxdepth: 2

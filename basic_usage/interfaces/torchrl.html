@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TorchRL &mdash; FluidGym 0.0.2 documentation</title>
+  <title>TorchRL &mdash; FluidGym 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
 
@@ -51,8 +51,15 @@
 <li class="toctree-l3"><a class="reference internal" href="gymnasium.html">Gymnasium</a></li>
 <li class="toctree-l3 current"><a class="current reference internal" href="#">TorchRL</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pettingzoo.html">Pettingzoo</a></li>
-<li class="toctree-l3"><a class="reference internal" href="sb3_marl.html">Stable-Baselines3</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sb3_vec_env.html">Stable-Baselines3</a></li>
 <li class="toctree-l3"><a class="reference internal" href="gradient_based_methods.html">Gradient-Based Methods</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../wrappers/index.html">Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../wrappers/flatten_observation.html">FlattenObservation Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../wrappers/obs_extraction.html">ObsExtraction Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../wrappers/action_noise.html">ActionNoise Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../wrappers/sensor_noise.html">SensorNoise Wrapper</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../rendering.html">Rendering Environments</a></li>
@@ -65,6 +72,17 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../api.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/fluidenv.html">FluidGym Environments</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.envs.fluid_env.FluidEnv.html">FluidEnv</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/wrappers.html">FluidGym Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.wrappers.flatten_obs.FlattenObservation.html">FlattenObservation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.wrappers.obs_extraction.ObsExtraction.html">ObsExtraction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.wrappers.action_noise.ActionNoise.html">ActionNoise</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.wrappers.sensor_noise.SensorNoise.html">SensorNoise</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../../api/cylinder.html">Flow Past Cylinder</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.envs.cylinder.CylinderJetEnv2D.html">CylinderJetEnv2D</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.envs.cylinder.CylinderRotEnv2D.html">CylinderRotEnv2D</a></li>
@@ -124,7 +142,7 @@
 integration with various RL libraries that support TorchRL. This is especially
 useful to leverage PyTorch’s automatic differentiation capabilities for RL.</p>
 <p>Due to the complexity of the TorchRL interface, we provide only a minimal example here
-from <code class="docutils literal notranslate"><span class="pre">examples/interfaces/torchrl_env.py</span></code>:</p>
+from <code class="docutils literal notranslate"><span class="pre">examples/interfaces/torchrl.py</span></code>:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">fluidgym</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.integration.torchrl</span><span class="w"> </span><span class="kn">import</span> <span class="n">TorchRLFluidEnv</span>
@@ -132,6 +150,7 @@ from <code class="docutils literal notranslate"><span class="pre">examples/inter
 <span class="n">env</span> <span class="o">=</span> <span class="n">fluidgym</span><span class="o">.</span><span class="n">make</span><span class="p">(</span><span class="s2">&quot;CylinderJet2D-easy-v0&quot;</span><span class="p">)</span>
 <span class="n">env</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
 
+<span class="c1"># For the TorchRL interface, wrap the FluidGym environment</span>
 <span class="n">trl_env</span> <span class="o">=</span> <span class="n">TorchRLFluidEnv</span><span class="p">(</span><span class="n">env</span><span class="p">)</span>
 
 <span class="c1"># use with torchrl ...</span>

@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pettingzoo &mdash; FluidGym 0.0.2 documentation</title>
+  <title>Pettingzoo &mdash; FluidGym 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
 
@@ -19,7 +19,7 @@
     <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Stable-Baselines3" href="sb3_marl.html" />
+    <link rel="next" title="Stable-Baselines3" href="sb3_vec_env.html" />
     <link rel="prev" title="TorchRL" href="torchrl.html" /> 
 </head>
 
@@ -51,8 +51,15 @@
 <li class="toctree-l3"><a class="reference internal" href="gymnasium.html">Gymnasium</a></li>
 <li class="toctree-l3"><a class="reference internal" href="torchrl.html">TorchRL</a></li>
 <li class="toctree-l3 current"><a class="current reference internal" href="#">Pettingzoo</a></li>
-<li class="toctree-l3"><a class="reference internal" href="sb3_marl.html">Stable-Baselines3</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sb3_vec_env.html">Stable-Baselines3</a></li>
 <li class="toctree-l3"><a class="reference internal" href="gradient_based_methods.html">Gradient-Based Methods</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../wrappers/index.html">Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../wrappers/flatten_observation.html">FlattenObservation Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../wrappers/obs_extraction.html">ObsExtraction Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../wrappers/action_noise.html">ActionNoise Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../wrappers/sensor_noise.html">SensorNoise Wrapper</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../rendering.html">Rendering Environments</a></li>
@@ -65,6 +72,17 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../api.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/fluidenv.html">FluidGym Environments</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.envs.fluid_env.FluidEnv.html">FluidEnv</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/wrappers.html">FluidGym Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.wrappers.flatten_obs.FlattenObservation.html">FlattenObservation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.wrappers.obs_extraction.ObsExtraction.html">ObsExtraction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.wrappers.action_noise.ActionNoise.html">ActionNoise</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.wrappers.sensor_noise.SensorNoise.html">SensorNoise</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../../api/cylinder.html">Flow Past Cylinder</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.envs.cylinder.CylinderJetEnv2D.html">CylinderJetEnv2D</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.envs.cylinder.CylinderRotEnv2D.html">CylinderRotEnv2D</a></li>
@@ -124,17 +142,20 @@
 allowing seamless integration with various RL libraries that support Pettingzoo.</p>
 <p>To use a FluidGym environment with Pettingzoo, you can create an instance of the desired
 environment using the <code class="docutils literal notranslate"><span class="pre">make</span></code> function from FluidGym and the <code class="docutils literal notranslate"><span class="pre">PettingZooFluidEnv</span></code> wrapper.</p>
-<p>Here is a simple example from <code class="docutils literal notranslate"><span class="pre">examples/interfaces/pettingzoo_env.py</span></code>:</p>
+<p>Here is a simple example from <code class="docutils literal notranslate"><span class="pre">examples/interfaces/pettingzoo.py</span></code>:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">fluidgym</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.envs.multi_agent_fluid_env</span><span class="w"> </span><span class="kn">import</span> <span class="n">MultiAgentFluidEnv</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.wrappers</span><span class="w"> </span><span class="kn">import</span> <span class="n">FlattenObservation</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.integration.pettingzoo</span><span class="w"> </span><span class="kn">import</span> <span class="n">PettingZooFluidEnv</span>
 
-<span class="c1"># Create a FluidGym environment</span>
-<span class="n">env</span> <span class="o">=</span> <span class="n">fluidgym</span><span class="o">.</span><span class="n">make</span><span class="p">(</span><span class="s2">&quot;CylinderJet3D-easy-v0&quot;</span><span class="p">)</span>
-<span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="n">MultiAgentFluidEnv</span><span class="p">)</span>
+<span class="c1"># Create a FluidGym environment, it has to be a multi-agent environment</span>
+<span class="n">env</span> <span class="o">=</span> <span class="n">fluidgym</span><span class="o">.</span><span class="n">make</span><span class="p">(</span><span class="s2">&quot;CylinderJet3D-easy-v0&quot;</span><span class="p">,</span> <span class="n">use_marl</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># We flatten the observation space to receive a 1D array of observations</span>
+<span class="n">env</span> <span class="o">=</span> <span class="n">FlattenObservation</span><span class="p">(</span><span class="n">env</span><span class="p">)</span>
+
 <span class="n">env</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
 
-<span class="c1"># Wrap the FluidGym environment with the Pettingzoo wrapper</span>
+<span class="c1"># For the PettingZoo interface, wrap the FluidGym environment</span>
 <span class="n">pz_env</span> <span class="o">=</span> <span class="n">PettingZooFluidEnv</span><span class="p">(</span><span class="n">env</span><span class="p">)</span>
 
 <span class="n">obs</span> <span class="o">=</span> <span class="n">pz_env</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
@@ -142,6 +163,7 @@ environment using the <code class="docutils literal notranslate"><span class="pr
 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
     <span class="n">action</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="n">space</span><span class="o">.</span><span class="n">sample</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">space</span> <span class="ow">in</span> <span class="n">pz_env</span><span class="o">.</span><span class="n">action_spaces</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
     <span class="n">obs</span><span class="p">,</span> <span class="n">reward</span><span class="p">,</span> <span class="n">term</span><span class="p">,</span> <span class="n">trunc</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">pz_env</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">term</span><span class="p">,</span> <span class="n">trunc</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">agent</span><span class="p">,</span> <span class="n">reward</span> <span class="ow">in</span> <span class="n">reward</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
         <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Agent </span><span class="si">{</span><span class="n">agent</span><span class="si">}</span><span class="s2"> Step </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">: Reward = </span><span class="si">{</span><span class="n">reward</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
@@ -149,8 +171,9 @@ environment using the <code class="docutils literal notranslate"><span class="pr
 
     <span class="c1"># Important: All FluidGym environments only set the</span>
     <span class="c1"># truncation flag to True since they do not naturally</span>
-    <span class="c1"># terminate</span>
-    <span class="k">if</span> <span class="n">term</span> <span class="ow">or</span> <span class="n">trunc</span><span class="p">:</span>
+    <span class="c1"># terminate. For MARL, all we can do is check the first agent</span>
+    <span class="c1"># since all agents share the same term and trunc flags.</span>
+    <span class="k">if</span> <span class="n">term</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">or</span> <span class="n">trunc</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
         <span class="k">break</span>
 </pre></div>
 </div>
@@ -161,7 +184,7 @@ environment using the <code class="docutils literal notranslate"><span class="pr
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="torchrl.html" class="btn btn-neutral float-left" title="TorchRL" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="sb3_marl.html" class="btn btn-neutral float-right" title="Stable-Baselines3" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="sb3_vec_env.html" class="btn btn-neutral float-right" title="Stable-Baselines3" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

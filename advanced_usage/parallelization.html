@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Running FluidGym on multiple GPUs in parallel &mdash; FluidGym 0.0.2 documentation</title>
+  <title>Running FluidGym on multiple GPUs in parallel &mdash; FluidGym 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
 
@@ -51,8 +51,15 @@
 <li class="toctree-l3"><a class="reference internal" href="../basic_usage/interfaces/gymnasium.html">Gymnasium</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../basic_usage/interfaces/torchrl.html">TorchRL</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../basic_usage/interfaces/pettingzoo.html">Pettingzoo</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../basic_usage/interfaces/sb3_marl.html">Stable-Baselines3</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../basic_usage/interfaces/sb3_vec_env.html">Stable-Baselines3</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../basic_usage/interfaces/gradient_based_methods.html">Gradient-Based Methods</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../basic_usage/wrappers/index.html">Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../basic_usage/wrappers/flatten_observation.html">FlattenObservation Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../basic_usage/wrappers/obs_extraction.html">ObsExtraction Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../basic_usage/wrappers/action_noise.html">ActionNoise Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../basic_usage/wrappers/sensor_noise.html">SensorNoise Wrapper</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../basic_usage/rendering.html">Rendering Environments</a></li>
@@ -65,6 +72,17 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../api.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../api/fluidenv.html">FluidGym Environments</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/generated/fluidgym.envs.fluid_env.FluidEnv.html">FluidEnv</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../api/wrappers.html">FluidGym Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/generated/fluidgym.wrappers.flatten_obs.FlattenObservation.html">FlattenObservation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/generated/fluidgym.wrappers.obs_extraction.ObsExtraction.html">ObsExtraction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/generated/fluidgym.wrappers.action_noise.ActionNoise.html">ActionNoise</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/generated/fluidgym.wrappers.sensor_noise.SensorNoise.html">SensorNoise</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../api/cylinder.html">Flow Past Cylinder</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../api/generated/fluidgym.envs.cylinder.CylinderJetEnv2D.html">CylinderJetEnv2D</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../api/generated/fluidgym.envs.cylinder.CylinderRotEnv2D.html">CylinderRotEnv2D</a></li>
@@ -128,16 +146,29 @@ issues page.</p>
 <cite>ParallelFluidEnv</cite> class to speed up training of RL agents.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.envs.parallel_env</span><span class="w"> </span><span class="kn">import</span> <span class="n">ParallelFluidEnv</span>
 
-<span class="n">env</span> <span class="o">=</span> <span class="n">ParallelFluidEnv</span><span class="p">(</span>
-    <span class="n">env_id</span><span class="o">=</span><span class="s2">&quot;CylinderJet3D-easy-v0&quot;</span><span class="p">,</span>
-    <span class="n">cuda_ids</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>  <span class="c1"># List of GPU IDs to use</span>
-<span class="p">)</span>
+<span class="c1"># Since the process is forked, we need to protect the entry point</span>
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="c1"># Instead of using fluidgym.make, we directly create a ParallelFluidEnv</span>
+    <span class="n">env</span> <span class="o">=</span> <span class="n">ParallelFluidEnv</span><span class="p">(</span>
+        <span class="n">env_id</span><span class="o">=</span><span class="s2">&quot;Airfoil3D-easy-v0&quot;</span><span class="p">,</span>
+        <span class="n">cuda_ids</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>  <span class="c1"># List of GPU IDs to use</span>
+        <span class="n">use_marl</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="c1"># From now on, everything works as usual with the first dimension</span>
+        <span class="c1"># being the number of parallel environments for SARL or</span>
+        <span class="c1"># number of parallel envs * number of agents for MARL.</span>
+        <span class="n">env</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+
+        <span class="n">obs</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+        <span class="n">action</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">sample_action</span><span class="p">()</span>
+
+        <span class="n">obs</span><span class="p">,</span> <span class="n">reward</span><span class="p">,</span> <span class="n">terminated</span><span class="p">,</span> <span class="n">truncated</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
+
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="n">env</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>However, as of now, the <code class="docutils literal notranslate"><span class="pre">ParallelFluidEnv</span></code> class is not directly integrated with the
-general <code class="docutils literal notranslate"><span class="pre">FluidEnv</span></code> and <code class="docutils literal notranslate"><span class="pre">MultiAgentFluidEnv</span></code> classes. Therefore, not all herited functions
-and properties are available when using <code class="docutils literal notranslate"><span class="pre">ParallelFluidEnv</span></code>. We plan to address this
-in future releases.</p>
 </section>
 
 

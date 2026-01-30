@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gradient-Based Methods &mdash; FluidGym 0.0.2 documentation</title>
+  <title>Gradient-Based Methods &mdash; FluidGym 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
 
@@ -19,8 +19,8 @@
     <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Rendering Environments" href="../rendering.html" />
-    <link rel="prev" title="Stable-Baselines3" href="sb3_marl.html" /> 
+    <link rel="next" title="Wrappers" href="../wrappers/index.html" />
+    <link rel="prev" title="Stable-Baselines3" href="sb3_vec_env.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -51,8 +51,15 @@
 <li class="toctree-l3"><a class="reference internal" href="gymnasium.html">Gymnasium</a></li>
 <li class="toctree-l3"><a class="reference internal" href="torchrl.html">TorchRL</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pettingzoo.html">Pettingzoo</a></li>
-<li class="toctree-l3"><a class="reference internal" href="sb3_marl.html">Stable-Baselines3</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sb3_vec_env.html">Stable-Baselines3</a></li>
 <li class="toctree-l3 current"><a class="current reference internal" href="#">Gradient-Based Methods</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../wrappers/index.html">Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../wrappers/flatten_observation.html">FlattenObservation Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../wrappers/obs_extraction.html">ObsExtraction Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../wrappers/action_noise.html">ActionNoise Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../wrappers/sensor_noise.html">SensorNoise Wrapper</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../rendering.html">Rendering Environments</a></li>
@@ -65,6 +72,17 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../api.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/fluidenv.html">FluidGym Environments</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.envs.fluid_env.FluidEnv.html">FluidEnv</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/wrappers.html">FluidGym Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.wrappers.flatten_obs.FlattenObservation.html">FlattenObservation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.wrappers.obs_extraction.ObsExtraction.html">ObsExtraction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.wrappers.action_noise.ActionNoise.html">ActionNoise</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.wrappers.sensor_noise.SensorNoise.html">SensorNoise</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../../api/cylinder.html">Flow Past Cylinder</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.envs.cylinder.CylinderJetEnv2D.html">CylinderJetEnv2D</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../api/generated/fluidgym.envs.cylinder.CylinderRotEnv2D.html">CylinderRotEnv2D</a></li>
@@ -131,17 +149,17 @@ techniques DPC to be applied directly within FluidGym environments.</p>
 <p>Here is a simple example from <code class="docutils literal notranslate"><span class="pre">examples/interfaces/gradient_based_methods.py</span></code>:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">fluidgym</span>
 
+<span class="c1"># Create a FluidGym environment</span>
 <span class="n">env</span> <span class="o">=</span> <span class="n">fluidgym</span><span class="o">.</span><span class="n">make</span><span class="p">(</span>
-    <span class="s2">&quot;JetCylinder2D-easy-v0&quot;</span><span class="p">,</span>
-    <span class="n">differentiable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="s2">&quot;CylinderJet2D-easy-v0&quot;</span><span class="p">,</span>
+    <span class="n">differentiable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># This flag enables backpropagation through the environment</span>
 <span class="p">)</span>
-
-<span class="n">env</span><span class="o">.</span><span class="n">init</span><span class="p">()</span>
-
 <span class="n">obs</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
 
 <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">50</span><span class="p">):</span>
     <span class="n">action</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">sample_action</span><span class="p">()</span>
+
+    <span class="c1"># Enable gradient tracking for the action</span>
     <span class="n">action</span><span class="o">.</span><span class="n">requires_grad_</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="n">obs</span><span class="p">,</span> <span class="n">reward</span><span class="p">,</span> <span class="n">terminated</span><span class="p">,</span> <span class="n">truncated</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
@@ -151,6 +169,9 @@ techniques DPC to be applied directly within FluidGym environments.</p>
 
     <span class="n">reward</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Action gradients:&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+
+    <span class="c1"># To detach the environment from the computation graph, use:</span>
+    <span class="n">env</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span>
 
     <span class="n">env</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>
 <span class="n">env</span><span class="o">.</span><span class="n">save_gif</span><span class="p">(</span><span class="s2">&quot;cylinder.gif&quot;</span><span class="p">)</span>
@@ -162,8 +183,8 @@ techniques DPC to be applied directly within FluidGym environments.</p>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="sb3_marl.html" class="btn btn-neutral float-left" title="Stable-Baselines3" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="../rendering.html" class="btn btn-neutral float-right" title="Rendering Environments" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="sb3_vec_env.html" class="btn btn-neutral float-left" title="Stable-Baselines3" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../wrappers/index.html" class="btn btn-neutral float-right" title="Wrappers" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

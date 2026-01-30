@@ -5,14 +5,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>fluidgym.envs.cylinder.jet_cylinder_env_2d &mdash; FluidGym 0.0.1 documentation</title>
+  <title>fluidgym.envs.cylinder.jet_cylinder_env_2d &mdash; FluidGym 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../../../../_static/css/theme.css?v=e59714d7" />
 
   
       <script src="../../../../_static/jquery.js?v=5d32c60e"></script>
       <script src="../../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="../../../../_static/documentation_options.js?v=d45e8c67"></script>
+      <script src="../../../../_static/documentation_options.js?v=5929fcd5"></script>
       <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
       <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/js/theme.js"></script>
@@ -30,6 +30,7 @@
           
           <a href="../../../../index.html" class="icon icon-home">
             FluidGym
+              <img src="../../../../_static/logo_lm.png" class="logo" alt="Logo"/>
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
@@ -41,9 +42,67 @@
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../../installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../basic_usage/index.html">Basic Usage</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../advanced_usage/index.html">Advanced Usage</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../basic_usage/index.html">Basic Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../basic_usage/interfaces/index.html">Interfaces</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/fluidgym.html">FluidGym</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/gymnasium.html">Gymnasium</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/torchrl.html">TorchRL</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/pettingzoo.html">Pettingzoo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/sb3_vec_env.html">Stable-Baselines3</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/gradient_based_methods.html">Gradient-Based Methods</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../basic_usage/wrappers/index.html">Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/wrappers/flatten_observation.html">FlattenObservation Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/wrappers/obs_extraction.html">ObsExtraction Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/wrappers/action_noise.html">ActionNoise Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/wrappers/sensor_noise.html">SensorNoise Wrapper</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../basic_usage/rendering.html">Rendering Environments</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../advanced_usage/index.html">Advanced Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../advanced_usage/parallelization.html">Running FluidGym on multiple GPUs in parallel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../advanced_usage/custom_environments.html">Adding Custom Environments to FluidGym</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../advanced_usage/configuration.html">Additional Configuration Options</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../api/fluidenv.html">FluidGym Environments</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.fluid_env.FluidEnv.html">FluidEnv</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../api/wrappers.html">FluidGym Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.wrappers.flatten_obs.FlattenObservation.html">FlattenObservation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.wrappers.obs_extraction.ObsExtraction.html">ObsExtraction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.wrappers.action_noise.ActionNoise.html">ActionNoise</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.wrappers.sensor_noise.SensorNoise.html">SensorNoise</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../api/cylinder.html">Flow Past Cylinder</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.cylinder.CylinderJetEnv2D.html">CylinderJetEnv2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.cylinder.CylinderRotEnv2D.html">CylinderRotEnv2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.cylinder.CylinderJetEnv3D.html">CylinderJetEnv3D</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../api/rbc.html">Rayleigh-Bénard Convection (RBC)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.rbc.RBCEnv2D.html">RBCEnv2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.rbc.RBCEnv3D.html">RBCEnv3D</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../api/airfoil.html">Flow Past Airfoil</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.airfoil.AirfoilEnv2D.html">AirfoilEnv2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.airfoil.AirfoilEnv3D.html">AirfoilEnv3D</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../api/tcf.html">Turbulent Channel Flow (TCF)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html">TCF3DBottomEnv</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.tcf.TCF3DBothEnv.html">TCF3DBothEnv</a></li>
+</ul>
+</li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../glossary.html">Glossary</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../faq.html">Frequently Asked Questions</a></li>
 </ul>
@@ -88,6 +147,7 @@
     <span class="s2">&quot;step_length&quot;</span><span class="p">:</span> <span class="mf">0.25</span><span class="p">,</span>
     <span class="s2">&quot;episode_length&quot;</span><span class="p">:</span> <span class="mi">80</span><span class="p">,</span>
     <span class="s2">&quot;lift_penalty&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+    <span class="s2">&quot;use_marl&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
     <span class="s2">&quot;dtype&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
     <span class="s2">&quot;load_initial_domain&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
     <span class="s2">&quot;load_domain_statistics&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
@@ -98,7 +158,7 @@
 
 
 <div class="viewcode-block" id="CylinderJetEnv2D">
-<a class="viewcode-back" href="../../../../api/generated/fluidgym.envs.cylinder.jet_cylinder_env_2d.CylinderJetEnv2D.html#fluidgym.envs.cylinder.jet_cylinder_env_2d.CylinderJetEnv2D">[docs]</a>
+<a class="viewcode-back" href="../../../../api/generated/fluidgym.envs.cylinder.CylinderJetEnv2D.html#fluidgym.envs.cylinder.CylinderJetEnv2D">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">CylinderJetEnv2D</span><span class="p">(</span><span class="n">CylinderEnvBase</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Environment for flow around a cylinder with jet actuation.</span>
 
@@ -125,6 +185,9 @@
 
 <span class="sd">    lift_penalty: float</span>
 <span class="sd">        The penalty factor for lift in the reward calculation.</span>
+
+<span class="sd">    use_marl: bool</span>
+<span class="sd">        Whether to enable multi-agent reinforcement learning mode.</span>
 
 <span class="sd">    dtype: torch.dtype</span>
 <span class="sd">        The data type to use for the simulation. Defaults to torch.float32.</span>
@@ -172,6 +235,7 @@
         <span class="n">step_length</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">episode_length</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
         <span class="n">lift_penalty</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">use_marl</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
         <span class="n">dtype</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
         <span class="n">cuda_device</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">load_initial_domain</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
@@ -189,6 +253,7 @@
             <span class="n">episode_length</span><span class="o">=</span><span class="n">episode_length</span><span class="p">,</span>
             <span class="n">ndims</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
             <span class="n">lift_penalty</span><span class="o">=</span><span class="n">lift_penalty</span><span class="p">,</span>
+            <span class="n">use_marl</span><span class="o">=</span><span class="n">use_marl</span><span class="p">,</span>
             <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span>
             <span class="n">cuda_device</span><span class="o">=</span><span class="n">cuda_device</span><span class="p">,</span>
             <span class="n">load_initial_domain</span><span class="o">=</span><span class="n">load_initial_domain</span><span class="p">,</span>
@@ -201,6 +266,8 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_additional_initialization</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_additional_initialization</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_top_velocity</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bottom_velocity</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_boundary_velocities</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_top_velocity</span><span class="o">.</span><span class="n">grad_fn</span> <span class="ow">is</span> <span class="kc">None</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bottom_velocity</span><span class="o">.</span><span class="n">grad_fn</span> <span class="ow">is</span> <span class="kc">None</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_boundary_velocities</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
         <span class="k">def</span><span class="w"> </span><span class="nf">coords_to_velocities</span><span class="p">(</span>
@@ -270,7 +337,7 @@
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2025, Safe Autonomous Systems (SAS), TU Dortmund University.</p>
+    <p>&#169; Copyright 2026, Safe Autonomous Systems (SAS), TU Dortmund University.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

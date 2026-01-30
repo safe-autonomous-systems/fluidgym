@@ -1,0 +1,562 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FluidEnv &mdash; FluidGym 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="FluidGym Wrappers" href="../wrappers.html" />
+    <link rel="prev" title="FluidGym Environments" href="../fluidenv.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            FluidGym
+              <img src="../../_static/logo_lm.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../basic_usage/index.html">Basic Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../basic_usage/interfaces/index.html">Interfaces</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/interfaces/fluidgym.html">FluidGym</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/interfaces/gymnasium.html">Gymnasium</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/interfaces/torchrl.html">TorchRL</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/interfaces/pettingzoo.html">Pettingzoo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/interfaces/sb3_vec_env.html">Stable-Baselines3</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/interfaces/gradient_based_methods.html">Gradient-Based Methods</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../basic_usage/wrappers/index.html">Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/wrappers/flatten_observation.html">FlattenObservation Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/wrappers/obs_extraction.html">ObsExtraction Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/wrappers/action_noise.html">ActionNoise Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../basic_usage/wrappers/sensor_noise.html">SensorNoise Wrapper</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../basic_usage/rendering.html">Rendering Environments</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../advanced_usage/index.html">Advanced Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../advanced_usage/parallelization.html">Running FluidGym on multiple GPUs in parallel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../advanced_usage/custom_environments.html">Adding Custom Environments to FluidGym</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../advanced_usage/configuration.html">Additional Configuration Options</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="reference internal" href="../../api.html">API Reference</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="../fluidenv.html">FluidGym Environments</a><ul class="current">
+<li class="toctree-l3 current"><a class="current reference internal" href="#">FluidEnv</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../wrappers.html">FluidGym Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.wrappers.flatten_obs.FlattenObservation.html">FlattenObservation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.wrappers.obs_extraction.ObsExtraction.html">ObsExtraction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.wrappers.action_noise.ActionNoise.html">ActionNoise</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.wrappers.sensor_noise.SensorNoise.html">SensorNoise</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../cylinder.html">Flow Past Cylinder</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.cylinder.CylinderJetEnv2D.html">CylinderJetEnv2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.cylinder.CylinderRotEnv2D.html">CylinderRotEnv2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.cylinder.CylinderJetEnv3D.html">CylinderJetEnv3D</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../rbc.html">Rayleigh-Bénard Convection (RBC)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.rbc.RBCEnv2D.html">RBCEnv2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.rbc.RBCEnv3D.html">RBCEnv3D</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../airfoil.html">Flow Past Airfoil</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.airfoil.AirfoilEnv2D.html">AirfoilEnv2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.airfoil.AirfoilEnv3D.html">AirfoilEnv3D</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../tcf.html">Turbulent Channel Flow (TCF)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.tcf.TCF3DBottomEnv.html">TCF3DBottomEnv</a></li>
+<li class="toctree-l3"><a class="reference internal" href="fluidgym.envs.tcf.TCF3DBothEnv.html">TCF3DBothEnv</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../faq.html">Frequently Asked Questions</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">FluidGym</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../api.html">API Reference</a></li>
+          <li class="breadcrumb-item"><a href="../fluidenv.html">FluidGym Environments</a></li>
+      <li class="breadcrumb-item active">FluidEnv</li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/safe-autonomous-systems/fluidgym/blob/main/docs/source/api/generated/fluidgym.envs.fluid_env.FluidEnv.rst" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="fluidenv">
+<h1>FluidEnv<a class="headerlink" href="#fluidenv" title="Link to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">fluidgym.envs.fluid_env.</span></span><span class="sig-name descname"><span class="pre">FluidEnv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">adaptive_cfl</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step_length</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">episode_length</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ndims</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_marl</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dtype</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">torch.float32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cuda_device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">device</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cpu_device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">device</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">auto_render</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">load_initial_domain</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">load_domain_statistics</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">randomize_initial_state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable_actions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">differentiable</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">ABC</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">FluidEnvLike</span></code></p>
+<p>Abstract base class for FluidGym environments.</p>
+<p>It provides common functionality for all FluidGym environments,
+such as managing the simulation, rendering, and saving/loading initial domains.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>RuntimeError</strong> – If CUDA is not available.</p></li>
+<li><p><strong>ValueError</strong> – If ndims is not 2 or 3.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>The environment must be reset before calling step().
+The initial domain must be generated by calling init() before using the environment
+for training or evaluation.
+The initial domain is saved to disk when init() is called, and loaded when reset()
+is called.</p>
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.action_space">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">action_space</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Box</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.action_space" title="Link to this definition"></a></dt>
+<dd><p>The action space of the environment.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.cuda_device">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cuda_device</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">device</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.cuda_device" title="Link to this definition"></a></dt>
+<dd><p>The CUDA device used by the environment.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.detach">
+<span class="sig-name descname"><span class="pre">detach</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.detach"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.detach" title="Link to this definition"></a></dt>
+<dd><p>Detach all tensors in the simulation from the computation graph.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.differentiable">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">differentiable</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.differentiable" title="Link to this definition"></a></dt>
+<dd><p>Whether the environment is differentiable.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.dt">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">dt</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.dt" title="Link to this definition"></a></dt>
+<dd><p>The simulation time step.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.episode_length">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">episode_length</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.episode_length" title="Link to this definition"></a></dt>
+<dd><p>The number of steps per episode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.get_pressure">
+<span class="sig-name descname"><span class="pre">get_pressure</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.get_pressure"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.get_pressure" title="Link to this definition"></a></dt>
+<dd><p>Get the pressure field of the fluid.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The pressure field as a tensor of shape (1, NDIM, H, W) for 2D or (1, NDIM,
+H, W, D) for 3D.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.get_state">
+<span class="sig-name descname"><span class="pre">get_state</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EnvState</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.get_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.get_state" title="Link to this definition"></a></dt>
+<dd><p>Get the current state of the environment.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The current state of the environment.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>EnvState</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.get_uncontrolled_episode_metrics">
+<span class="sig-name descname"><span class="pre">get_uncontrolled_episode_metrics</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">DataFrame</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.get_uncontrolled_episode_metrics"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.get_uncontrolled_episode_metrics" title="Link to this definition"></a></dt>
+<dd><p>Get the uncontrolled episode metrics for the current domain.</p>
+<p>Note: This method returns the metrics for the currently loaded
+(non-randomized) initial domain. If the environment has been reset
+with randomization, the metrics may not correspond to the current state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The uncontrolled episode metrics, or None if not available.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>pd.DataFrame | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.get_velocity">
+<span class="sig-name descname"><span class="pre">get_velocity</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.get_velocity"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.get_velocity" title="Link to this definition"></a></dt>
+<dd><p>Get the velocity field of the fluid.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The velocity field as a tensor.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.get_vorticity">
+<span class="sig-name descname"><span class="pre">get_vorticity</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.get_vorticity"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.get_vorticity" title="Link to this definition"></a></dt>
+<dd><p>Get the vorticity field of the fluid.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The vorticity field as a tensor.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.id">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">id</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.id" title="Link to this definition"></a></dt>
+<dd><p>Unique identifier for the environment.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.init"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.init" title="Link to this definition"></a></dt>
+<dd><p>Generate and save the initial domain if it does not already exist.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.initial_domain_id">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">initial_domain_id</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.initial_domain_id" title="Link to this definition"></a></dt>
+<dd><p>Unique identifier for the initial domain.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.load_initial_domain">
+<span class="sig-name descname"><span class="pre">load_initial_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">idx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EnvMode</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.load_initial_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.load_initial_domain" title="Link to this definition"></a></dt>
+<dd><p>Public method to load the initial domain from disk
+using the current mode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>idx</strong> (<em>int</em>) – Index of the initial domain to load.</p></li>
+<li><p><strong>mode</strong> (<em>EnvMode</em><em> | </em><em>None</em>) – Environment mode (‘train’, ‘val’, ‘test’). If None, uses the current mode.
+Defaults to None.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.metadata">
+<span class="sig-name descname"><span class="pre">metadata</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'render_fps':</span> <span class="pre">24,</span> <span class="pre">'render_modes':</span> <span class="pre">['rbg_array']}</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.metadata" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.metrics">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">metrics</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.metrics" title="Link to this definition"></a></dt>
+<dd><p>The list of metrics tracked by the environment.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.mode">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">mode</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">EnvMode</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.mode" title="Link to this definition"></a></dt>
+<dd><p>The current mode of the environment (‘train’, ‘val’, or ‘test’).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.n_agents">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">n_agents</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.n_agents" title="Link to this definition"></a></dt>
+<dd><p>The number of agents in the environment.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.n_sim_steps">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">n_sim_steps</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.n_sim_steps" title="Link to this definition"></a></dt>
+<dd><p>The number of simulation steps per environment step.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.ndims">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ndims</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.ndims" title="Link to this definition"></a></dt>
+<dd><p>The number of spatial dimensions (2 or 3).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.observation_space">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">observation_space</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Dict</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.observation_space" title="Link to this definition"></a></dt>
+<dd><p>The observation space of the environment.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.plot">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.plot"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.plot" title="Link to this definition"></a></dt>
+<dd><p>Plot the environments configuration.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>output_path</strong> (<em>Path</em><em> | </em><em>None</em>) – Path to save the plot. If None, the current directory is used. Defaults to
+None.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.plot_grid">
+<span class="sig-name descname"><span class="pre">plot_grid</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.plot_grid"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.plot_grid" title="Link to this definition"></a></dt>
+<dd><p>Plot the simulation grid.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.render">
+<span class="sig-name descname"><span class="pre">render</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">save</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">render_3d</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.render"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.render" title="Link to this definition"></a></dt>
+<dd><p>Render the current state of the environment.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>save</strong> (<em>bool</em>) – Whether to save the rendered frame as a PNG file. Defaults to False.</p></li>
+<li><p><strong>render_3d</strong> (<em>bool</em>) – Whether to enable 3d rendering. Defaults to False.</p></li>
+<li><p><strong>filename</strong> (<em>str</em><em> | </em><em>None</em>) – The filename to save the GIF file. If None, a default name is used.
+Defaults to None.</p></li>
+<li><p><strong>output_path</strong> (<em>Path</em><em> | </em><em>None</em>) – The output path to save the rendered files. If None, saves to the current
+directory. Defaults to None.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The rendered frame as a numpy array.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.render_shape">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">render_shape</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.render_shape" title="Link to this definition"></a></dt>
+<dd><p>The shape of the rendered domain.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">randomize</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.reset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.reset" title="Link to this definition"></a></dt>
+<dd><p>Resets the environment to an initial internal state, returning an initial
+observation and info.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>seed</strong> (<em>int</em><em> | </em><em>None</em>) – The seed to use for random number generation. If None, the current seed is
+used.</p></li>
+<li><p><strong>randomize</strong> (<em>bool</em><em> | </em><em>None</em>) – Whether to randomize the initial state. If None, the default behavior is
+used.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A tuple containing the initial observation and an info dictionary.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.sample_action">
+<span class="sig-name descname"><span class="pre">sample_action</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.sample_action"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.sample_action" title="Link to this definition"></a></dt>
+<dd><p>Sample a random action uniformly from the action space.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A random action.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.save_gif">
+<span class="sig-name descname"><span class="pre">save_gif</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.save_gif"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.save_gif" title="Link to this definition"></a></dt>
+<dd><p>Save the rendered frames as a GIF file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>filename</strong> (<em>str</em>) – The filename for the GIF file.</p></li>
+<li><p><strong>output_path</strong> (<em>Path</em><em> | </em><em>None</em>) – The output path to save the GIF file. If None, saves to the current
+directory. Defaults to None.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.seed">
+<span class="sig-name descname"><span class="pre">seed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.seed"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.seed" title="Link to this definition"></a></dt>
+<dd><p>Update the random seeds and seed the random number generators.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>seed</strong> (<em>int</em>) – The seed to set. If None, the current seed is used.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.set_state">
+<span class="sig-name descname"><span class="pre">set_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EnvState</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.set_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.set_state" title="Link to this definition"></a></dt>
+<dd><p>Set the current state of the environment.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>state</strong> (<em>EnvState</em>) – The state to set the environment to.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.step">
+<span class="sig-name descname"><span class="pre">step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">action</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">bool</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">bool</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.step"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.step" title="Link to this definition"></a></dt>
+<dd><p>Run one timestep of the environment’s dynamics using the agent actions.</p>
+<p>When the end of an episode is reached (<code class="docutils literal notranslate"><span class="pre">terminated</span> <span class="pre">or</span> <span class="pre">truncated</span></code>), it is
+necessary to call <a class="reference internal" href="#fluidgym.envs.fluid_env.FluidEnv.reset" title="fluidgym.envs.fluid_env.FluidEnv.reset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">reset()</span></code></a> to reset this environment’s state for the next
+episode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>action</strong> (<em>torch.Tensor</em>) – The action to take.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>tuple[</em></p></li>
+<li><p><em>dict[str, torch.Tensor], torch.Tensor, bool, bool, dict[str, torch.Tensor]]</em> – A tuple containing the observation, reward, terminated flag, truncated flag,
+and info dictionary.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.step_length">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">step_length</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.step_length" title="Link to this definition"></a></dt>
+<dd><p>The length of each environment step in non-dimensional time units.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.test">
+<span class="sig-name descname"><span class="pre">test</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.test"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.test" title="Link to this definition"></a></dt>
+<dd><p>Set the environment to test mode.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.time_passed">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">time_passed</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.time_passed" title="Link to this definition"></a></dt>
+<dd><p>The total time passed in the current episode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.train">
+<span class="sig-name descname"><span class="pre">train</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.train"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.train" title="Link to this definition"></a></dt>
+<dd><p>Set the environment to training mode.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.use_marl">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">use_marl</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.use_marl" title="Link to this definition"></a></dt>
+<dd><p>Whether the environment is in multi-agent reinforcement learning mode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fluidgym.envs.fluid_env.FluidEnv.val">
+<span class="sig-name descname"><span class="pre">val</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/fluidgym/envs/fluid_env.html#FluidEnv.val"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fluidgym.envs.fluid_env.FluidEnv.val" title="Link to this definition"></a></dt>
+<dd><p>Set the environment to evaluation mode.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../fluidenv.html" class="btn btn-neutral float-left" title="FluidGym Environments" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../wrappers.html" class="btn btn-neutral float-right" title="FluidGym Wrappers" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Safe Autonomous Systems (SAS), TU Dortmund University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

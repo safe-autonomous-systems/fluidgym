@@ -5,7 +5,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Index &mdash; FluidGym 0.0.2 documentation</title>
+  <title>Index &mdash; FluidGym 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
@@ -48,8 +48,15 @@
 <li class="toctree-l3"><a class="reference internal" href="basic_usage/interfaces/gymnasium.html">Gymnasium</a></li>
 <li class="toctree-l3"><a class="reference internal" href="basic_usage/interfaces/torchrl.html">TorchRL</a></li>
 <li class="toctree-l3"><a class="reference internal" href="basic_usage/interfaces/pettingzoo.html">Pettingzoo</a></li>
-<li class="toctree-l3"><a class="reference internal" href="basic_usage/interfaces/sb3_marl.html">Stable-Baselines3</a></li>
+<li class="toctree-l3"><a class="reference internal" href="basic_usage/interfaces/sb3_vec_env.html">Stable-Baselines3</a></li>
 <li class="toctree-l3"><a class="reference internal" href="basic_usage/interfaces/gradient_based_methods.html">Gradient-Based Methods</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="basic_usage/wrappers/index.html">Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="basic_usage/wrappers/flatten_observation.html">FlattenObservation Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="basic_usage/wrappers/obs_extraction.html">ObsExtraction Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="basic_usage/wrappers/action_noise.html">ActionNoise Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="basic_usage/wrappers/sensor_noise.html">SensorNoise Wrapper</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="basic_usage/rendering.html">Rendering Environments</a></li>
@@ -62,6 +69,17 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/fluidenv.html">FluidGym Environments</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html">FluidEnv</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/wrappers.html">FluidGym Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.wrappers.flatten_obs.FlattenObservation.html">FlattenObservation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.wrappers.obs_extraction.ObsExtraction.html">ObsExtraction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.wrappers.action_noise.ActionNoise.html">ActionNoise</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.wrappers.sensor_noise.SensorNoise.html">SensorNoise</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="api/cylinder.html">Flow Past Cylinder</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.envs.cylinder.CylinderJetEnv2D.html">CylinderJetEnv2D</a></li>
 <li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.envs.cylinder.CylinderRotEnv2D.html">CylinderRotEnv2D</a></li>
@@ -119,6 +137,10 @@
 <div class="genindex-jumpbox">
  <a href="#A"><strong>A</strong></a>
  | <a href="#C"><strong>C</strong></a>
+ | <a href="#D"><strong>D</strong></a>
+ | <a href="#E"><strong>E</strong></a>
+ | <a href="#F"><strong>F</strong></a>
+ | <a href="#G"><strong>G</strong></a>
  | <a href="#I"><strong>I</strong></a>
  | <a href="#L"><strong>L</strong></a>
  | <a href="#M"><strong>M</strong></a>
@@ -128,25 +150,17 @@
  | <a href="#R"><strong>R</strong></a>
  | <a href="#S"><strong>S</strong></a>
  | <a href="#T"><strong>T</strong></a>
+ | <a href="#U"><strong>U</strong></a>
+ | <a href="#V"><strong>V</strong></a>
  
 </div>
 <h2 id="A">A</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/generated/fluidgym.envs.airfoil.AirfoilEnv2D.html#fluidgym.envs.airfoil.AirfoilEnv2D.action_space_shape">action_space_shape (fluidgym.envs.airfoil.AirfoilEnv2D property)</a>
-
-      <ul>
-        <li><a href="api/generated/fluidgym.envs.airfoil.AirfoilEnv3D.html#fluidgym.envs.airfoil.AirfoilEnv3D.action_space_shape">(fluidgym.envs.airfoil.AirfoilEnv3D property)</a>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.action_space">action_space (fluidgym.envs.fluid_env.FluidEnv property)</a>
 </li>
-        <li><a href="api/generated/fluidgym.envs.cylinder.CylinderJetEnv3D.html#fluidgym.envs.cylinder.CylinderJetEnv3D.action_space_shape">(fluidgym.envs.cylinder.CylinderJetEnv3D property)</a>
+      <li><a href="api/generated/fluidgym.wrappers.action_noise.ActionNoise.html#fluidgym.wrappers.action_noise.ActionNoise">ActionNoise (class in fluidgym.wrappers.action_noise)</a>
 </li>
-        <li><a href="api/generated/fluidgym.envs.rbc.RBCEnv2D.html#fluidgym.envs.rbc.RBCEnv2D.action_space_shape">(fluidgym.envs.rbc.RBCEnv2D property)</a>
-</li>
-        <li><a href="api/generated/fluidgym.envs.rbc.RBCEnv3D.html#fluidgym.envs.rbc.RBCEnv3D.action_space_shape">(fluidgym.envs.rbc.RBCEnv3D property)</a>
-</li>
-        <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.action_space_shape">(fluidgym.envs.tcf.TCF3DBottomEnv property)</a>
-</li>
-      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="glossary.html#term-AFC"><strong>AFC</strong></a>
@@ -161,6 +175,8 @@
 <h2 id="C">C</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.cuda_device">cuda_device (fluidgym.envs.fluid_env.FluidEnv property)</a>
+</li>
       <li><a href="api/generated/fluidgym.envs.cylinder.CylinderJetEnv2D.html#fluidgym.envs.cylinder.CylinderJetEnv2D">CylinderJetEnv2D (class in fluidgym.envs.cylinder)</a>
 </li>
   </ul></td>
@@ -168,6 +184,58 @@
       <li><a href="api/generated/fluidgym.envs.cylinder.CylinderJetEnv3D.html#fluidgym.envs.cylinder.CylinderJetEnv3D">CylinderJetEnv3D (class in fluidgym.envs.cylinder)</a>
 </li>
       <li><a href="api/generated/fluidgym.envs.cylinder.CylinderRotEnv2D.html#fluidgym.envs.cylinder.CylinderRotEnv2D">CylinderRotEnv2D (class in fluidgym.envs.cylinder)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="D">D</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.detach">detach() (fluidgym.envs.fluid_env.FluidEnv method)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.differentiable">differentiable (fluidgym.envs.fluid_env.FluidEnv property)</a>
+</li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.dt">dt (fluidgym.envs.fluid_env.FluidEnv property)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="E">E</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.episode_length">episode_length (fluidgym.envs.fluid_env.FluidEnv property)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="F">F</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/fluidgym.wrappers.flatten_obs.FlattenObservation.html#fluidgym.wrappers.flatten_obs.FlattenObservation">FlattenObservation (class in fluidgym.wrappers.flatten_obs)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv">FluidEnv (class in fluidgym.envs.fluid_env)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="G">G</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.get_pressure">get_pressure() (fluidgym.envs.fluid_env.FluidEnv method)</a>
+</li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.get_state">get_state() (fluidgym.envs.fluid_env.FluidEnv method)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.get_uncontrolled_episode_metrics">get_uncontrolled_episode_metrics() (fluidgym.envs.fluid_env.FluidEnv method)</a>
+</li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.get_velocity">get_velocity() (fluidgym.envs.fluid_env.FluidEnv method)</a>
+</li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.get_vorticity">get_vorticity() (fluidgym.envs.fluid_env.FluidEnv method)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -182,33 +250,33 @@
 </li>
         <li><a href="api/generated/fluidgym.envs.cylinder.CylinderRotEnv2D.html#fluidgym.envs.cylinder.CylinderRotEnv2D.id">(fluidgym.envs.cylinder.CylinderRotEnv2D property)</a>
 </li>
+        <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.id">(fluidgym.envs.fluid_env.FluidEnv property)</a>
+</li>
         <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.id">(fluidgym.envs.tcf.TCF3DBottomEnv property)</a>
 </li>
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.initial_domain_id">initial_domain_id (fluidgym.envs.tcf.TCF3DBottomEnv property)</a>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.init">init() (fluidgym.envs.fluid_env.FluidEnv method)</a>
 </li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.initial_domain_id">initial_domain_id (fluidgym.envs.fluid_env.FluidEnv property)</a>
+
+      <ul>
+        <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.initial_domain_id">(fluidgym.envs.tcf.TCF3DBottomEnv property)</a>
+</li>
+      </ul></li>
   </ul></td>
 </tr></table>
 
 <h2 id="L">L</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.load_initial_domain">load_initial_domain() (fluidgym.envs.fluid_env.FluidEnv method)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.load_opposition_control_episode">load_opposition_control_episode() (fluidgym.envs.tcf.TCF3DBottomEnv method)</a>
 </li>
-      <li><a href="api/generated/fluidgym.envs.airfoil.AirfoilEnv3D.html#fluidgym.envs.airfoil.AirfoilEnv3D.local_observation_space_shape">local_observation_space_shape (fluidgym.envs.airfoil.AirfoilEnv3D property)</a>
-
-      <ul>
-        <li><a href="api/generated/fluidgym.envs.cylinder.CylinderJetEnv3D.html#fluidgym.envs.cylinder.CylinderJetEnv3D.local_observation_space_shape">(fluidgym.envs.cylinder.CylinderJetEnv3D property)</a>
-</li>
-        <li><a href="api/generated/fluidgym.envs.rbc.RBCEnv2D.html#fluidgym.envs.rbc.RBCEnv2D.local_observation_space_shape">(fluidgym.envs.rbc.RBCEnv2D property)</a>
-</li>
-        <li><a href="api/generated/fluidgym.envs.rbc.RBCEnv3D.html#fluidgym.envs.rbc.RBCEnv3D.local_observation_space_shape">(fluidgym.envs.rbc.RBCEnv3D property)</a>
-</li>
-        <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.local_observation_space_shape">(fluidgym.envs.tcf.TCF3DBottomEnv property)</a>
-</li>
-      </ul></li>
   </ul></td>
 </tr></table>
 
@@ -217,9 +285,13 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="glossary.html#term-MARL"><strong>MARL</strong></a>
 </li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.metadata">metadata (fluidgym.envs.fluid_env.FluidEnv attribute)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.metadata">metadata (fluidgym.envs.tcf.TCF3DBottomEnv attribute)</a>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.metrics">metrics (fluidgym.envs.fluid_env.FluidEnv property)</a>
+</li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.mode">mode (fluidgym.envs.fluid_env.FluidEnv property)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -227,14 +299,14 @@
 <h2 id="N">N</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/generated/fluidgym.envs.airfoil.AirfoilEnv3D.html#fluidgym.envs.airfoil.AirfoilEnv3D.n_agents">n_agents (fluidgym.envs.airfoil.AirfoilEnv3D property)</a>
+      <li><a href="api/generated/fluidgym.envs.airfoil.AirfoilEnv2D.html#fluidgym.envs.airfoil.AirfoilEnv2D.n_agents">n_agents (fluidgym.envs.airfoil.AirfoilEnv2D property)</a>
 
       <ul>
+        <li><a href="api/generated/fluidgym.envs.airfoil.AirfoilEnv3D.html#fluidgym.envs.airfoil.AirfoilEnv3D.n_agents">(fluidgym.envs.airfoil.AirfoilEnv3D property)</a>
+</li>
         <li><a href="api/generated/fluidgym.envs.cylinder.CylinderJetEnv3D.html#fluidgym.envs.cylinder.CylinderJetEnv3D.n_agents">(fluidgym.envs.cylinder.CylinderJetEnv3D property)</a>
 </li>
-        <li><a href="api/generated/fluidgym.envs.rbc.RBCEnv2D.html#fluidgym.envs.rbc.RBCEnv2D.n_agents">(fluidgym.envs.rbc.RBCEnv2D property)</a>
-</li>
-        <li><a href="api/generated/fluidgym.envs.rbc.RBCEnv3D.html#fluidgym.envs.rbc.RBCEnv3D.n_agents">(fluidgym.envs.rbc.RBCEnv3D property)</a>
+        <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.n_agents">(fluidgym.envs.fluid_env.FluidEnv property)</a>
 </li>
         <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBothEnv.html#fluidgym.envs.tcf.TCF3DBothEnv.n_agents">(fluidgym.envs.tcf.TCF3DBothEnv property)</a>
 </li>
@@ -242,36 +314,40 @@
 </li>
       </ul></li>
   </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.n_sim_steps">n_sim_steps (fluidgym.envs.fluid_env.FluidEnv property)</a>
+</li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.ndims">ndims (fluidgym.envs.fluid_env.FluidEnv property)</a>
+</li>
+  </ul></td>
 </tr></table>
 
 <h2 id="O">O</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/generated/fluidgym.envs.airfoil.AirfoilEnv2D.html#fluidgym.envs.airfoil.AirfoilEnv2D.observation_space_shape">observation_space_shape (fluidgym.envs.airfoil.AirfoilEnv2D property)</a>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.observation_space">observation_space (fluidgym.envs.fluid_env.FluidEnv property)</a>
 
       <ul>
-        <li><a href="api/generated/fluidgym.envs.airfoil.AirfoilEnv3D.html#fluidgym.envs.airfoil.AirfoilEnv3D.observation_space_shape">(fluidgym.envs.airfoil.AirfoilEnv3D property)</a>
+        <li><a href="api/generated/fluidgym.wrappers.flatten_obs.FlattenObservation.html#fluidgym.wrappers.flatten_obs.FlattenObservation.observation_space">(fluidgym.wrappers.flatten_obs.FlattenObservation property)</a>
 </li>
-        <li><a href="api/generated/fluidgym.envs.cylinder.CylinderJetEnv3D.html#fluidgym.envs.cylinder.CylinderJetEnv3D.observation_space_shape">(fluidgym.envs.cylinder.CylinderJetEnv3D property)</a>
-</li>
-        <li><a href="api/generated/fluidgym.envs.rbc.RBCEnv2D.html#fluidgym.envs.rbc.RBCEnv2D.observation_space_shape">(fluidgym.envs.rbc.RBCEnv2D property)</a>
-</li>
-        <li><a href="api/generated/fluidgym.envs.rbc.RBCEnv3D.html#fluidgym.envs.rbc.RBCEnv3D.observation_space_shape">(fluidgym.envs.rbc.RBCEnv3D property)</a>
-</li>
-        <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBothEnv.html#fluidgym.envs.tcf.TCF3DBothEnv.observation_space_shape">(fluidgym.envs.tcf.TCF3DBothEnv property)</a>
-</li>
-        <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.observation_space_shape">(fluidgym.envs.tcf.TCF3DBottomEnv property)</a>
+        <li><a href="api/generated/fluidgym.wrappers.obs_extraction.ObsExtraction.html#fluidgym.wrappers.obs_extraction.ObsExtraction.observation_space">(fluidgym.wrappers.obs_extraction.ObsExtraction property)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/fluidgym.wrappers.obs_extraction.ObsExtraction.html#fluidgym.wrappers.obs_extraction.ObsExtraction">ObsExtraction (class in fluidgym.wrappers.obs_extraction)</a>
+</li>
   </ul></td>
 </tr></table>
 
 <h2 id="P">P</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/generated/fluidgym.envs.rbc.RBCEnv3D.html#fluidgym.envs.rbc.RBCEnv3D.plot">plot() (fluidgym.envs.rbc.RBCEnv3D method)</a>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.plot">plot() (fluidgym.envs.fluid_env.FluidEnv method)</a>
 
       <ul>
+        <li><a href="api/generated/fluidgym.envs.rbc.RBCEnv3D.html#fluidgym.envs.rbc.RBCEnv3D.plot">(fluidgym.envs.rbc.RBCEnv3D method)</a>
+</li>
         <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.plot">(fluidgym.envs.tcf.TCF3DBottomEnv method)</a>
 </li>
       </ul></li>
@@ -283,6 +359,8 @@
         <li><a href="api/generated/fluidgym.envs.rbc.RBCEnv3D.html#fluidgym.envs.rbc.RBCEnv3D.plot_actuation">(fluidgym.envs.rbc.RBCEnv3D method)</a>
 </li>
       </ul></li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.plot_grid">plot_grid() (fluidgym.envs.fluid_env.FluidEnv method)</a>
+</li>
       <li><a href="glossary.html#term-PPO"><strong>PPO</strong></a>
 </li>
   </ul></td>
@@ -297,9 +375,13 @@
 </li>
       <li><a href="api/generated/fluidgym.envs.rbc.RBCEnv3D.html#fluidgym.envs.rbc.RBCEnv3D">RBCEnv3D (class in fluidgym.envs.rbc)</a>
 </li>
-      <li><a href="api/generated/fluidgym.envs.rbc.RBCEnv2D.html#fluidgym.envs.rbc.RBCEnv2D.render_shape">render_shape (fluidgym.envs.rbc.RBCEnv2D property)</a>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.render">render() (fluidgym.envs.fluid_env.FluidEnv method)</a>
+</li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.render_shape">render_shape (fluidgym.envs.fluid_env.FluidEnv property)</a>
 
       <ul>
+        <li><a href="api/generated/fluidgym.envs.rbc.RBCEnv2D.html#fluidgym.envs.rbc.RBCEnv2D.render_shape">(fluidgym.envs.rbc.RBCEnv2D property)</a>
+</li>
         <li><a href="api/generated/fluidgym.envs.rbc.RBCEnv3D.html#fluidgym.envs.rbc.RBCEnv3D.render_shape">(fluidgym.envs.rbc.RBCEnv3D property)</a>
 </li>
         <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.render_shape">(fluidgym.envs.tcf.TCF3DBottomEnv property)</a>
@@ -307,18 +389,14 @@
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/generated/fluidgym.envs.airfoil.AirfoilEnv2D.html#fluidgym.envs.airfoil.AirfoilEnv2D.reset">reset() (fluidgym.envs.airfoil.AirfoilEnv2D method)</a>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.reset">reset() (fluidgym.envs.fluid_env.FluidEnv method)</a>
 
       <ul>
-        <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.reset">(fluidgym.envs.tcf.TCF3DBottomEnv method)</a>
+        <li><a href="api/generated/fluidgym.wrappers.flatten_obs.FlattenObservation.html#fluidgym.wrappers.flatten_obs.FlattenObservation.reset">(fluidgym.wrappers.flatten_obs.FlattenObservation method)</a>
 </li>
-      </ul></li>
-      <li><a href="api/generated/fluidgym.envs.airfoil.AirfoilEnv3D.html#fluidgym.envs.airfoil.AirfoilEnv3D.reset_marl">reset_marl() (fluidgym.envs.airfoil.AirfoilEnv3D method)</a>
-
-      <ul>
-        <li><a href="api/generated/fluidgym.envs.cylinder.CylinderJetEnv3D.html#fluidgym.envs.cylinder.CylinderJetEnv3D.reset_marl">(fluidgym.envs.cylinder.CylinderJetEnv3D method)</a>
+        <li><a href="api/generated/fluidgym.wrappers.obs_extraction.ObsExtraction.html#fluidgym.wrappers.obs_extraction.ObsExtraction.reset">(fluidgym.wrappers.obs_extraction.ObsExtraction method)</a>
 </li>
-        <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.reset_marl">(fluidgym.envs.tcf.TCF3DBottomEnv method)</a>
+        <li><a href="api/generated/fluidgym.wrappers.sensor_noise.SensorNoise.html#fluidgym.wrappers.sensor_noise.SensorNoise.reset">(fluidgym.wrappers.sensor_noise.SensorNoise method)</a>
 </li>
       </ul></li>
       <li><a href="glossary.html#term-RL"><strong>RL</strong></a>
@@ -331,24 +409,40 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="glossary.html#term-SAC"><strong>SAC</strong></a>
 </li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.sample_action">sample_action() (fluidgym.envs.fluid_env.FluidEnv method)</a>
+</li>
       <li><a href="glossary.html#term-SARL"><strong>SARL</strong></a>
+</li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.save_gif">save_gif() (fluidgym.envs.fluid_env.FluidEnv method)</a>
 </li>
       <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.save_opposition_control_episode">save_opposition_control_episode() (fluidgym.envs.tcf.TCF3DBottomEnv method)</a>
 </li>
       <li><a href="glossary.html#term-SB3"><strong>SB3</strong></a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.scale_actions">scale_actions (fluidgym.envs.tcf.TCF3DBottomEnv property)</a>
 </li>
-      <li><a href="api/generated/fluidgym.envs.airfoil.AirfoilEnv3D.html#fluidgym.envs.airfoil.AirfoilEnv3D.step_marl">step_marl() (fluidgym.envs.airfoil.AirfoilEnv3D method)</a>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.seed">seed() (fluidgym.envs.fluid_env.FluidEnv method)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/fluidgym.wrappers.sensor_noise.SensorNoise.html#fluidgym.wrappers.sensor_noise.SensorNoise">SensorNoise (class in fluidgym.wrappers.sensor_noise)</a>
+</li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.set_state">set_state() (fluidgym.envs.fluid_env.FluidEnv method)</a>
+</li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.step">step() (fluidgym.envs.fluid_env.FluidEnv method)</a>
 
       <ul>
-        <li><a href="api/generated/fluidgym.envs.cylinder.CylinderJetEnv3D.html#fluidgym.envs.cylinder.CylinderJetEnv3D.step_marl">(fluidgym.envs.cylinder.CylinderJetEnv3D method)</a>
+        <li><a href="api/generated/fluidgym.wrappers.action_noise.ActionNoise.html#fluidgym.wrappers.action_noise.ActionNoise.step">(fluidgym.wrappers.action_noise.ActionNoise method)</a>
 </li>
-        <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.step_marl">(fluidgym.envs.tcf.TCF3DBottomEnv method)</a>
+        <li><a href="api/generated/fluidgym.wrappers.flatten_obs.FlattenObservation.html#fluidgym.wrappers.flatten_obs.FlattenObservation.step">(fluidgym.wrappers.flatten_obs.FlattenObservation method)</a>
+</li>
+        <li><a href="api/generated/fluidgym.wrappers.obs_extraction.ObsExtraction.html#fluidgym.wrappers.obs_extraction.ObsExtraction.step">(fluidgym.wrappers.obs_extraction.ObsExtraction method)</a>
+</li>
+        <li><a href="api/generated/fluidgym.wrappers.sensor_noise.SensorNoise.html#fluidgym.wrappers.sensor_noise.SensorNoise.step">(fluidgym.wrappers.sensor_noise.SensorNoise method)</a>
 </li>
       </ul></li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.step_length">step_length (fluidgym.envs.fluid_env.FluidEnv property)</a>
+</li>
   </ul></td>
 </tr></table>
 
@@ -361,13 +455,35 @@
         <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv.tau_ref">(fluidgym.envs.tcf.TCF3DBottomEnv property)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="glossary.html#term-TCF"><strong>TCF</strong></a>
 </li>
       <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBothEnv.html#fluidgym.envs.tcf.TCF3DBothEnv">TCF3DBothEnv (class in fluidgym.envs.tcf)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html#fluidgym.envs.tcf.TCF3DBottomEnv">TCF3DBottomEnv (class in fluidgym.envs.tcf)</a>
+</li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.test">test() (fluidgym.envs.fluid_env.FluidEnv method)</a>
+</li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.time_passed">time_passed (fluidgym.envs.fluid_env.FluidEnv property)</a>
+</li>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.train">train() (fluidgym.envs.fluid_env.FluidEnv method)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="U">U</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.use_marl">use_marl (fluidgym.envs.fluid_env.FluidEnv property)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="V">V</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html#fluidgym.envs.fluid_env.FluidEnv.val">val() (fluidgym.envs.fluid_env.FluidEnv method)</a>
 </li>
   </ul></td>
 </tr></table>

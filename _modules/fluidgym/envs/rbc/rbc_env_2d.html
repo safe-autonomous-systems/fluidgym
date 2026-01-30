@@ -5,7 +5,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>fluidgym.envs.rbc.rbc_env_2d &mdash; FluidGym 0.0.2 documentation</title>
+  <title>fluidgym.envs.rbc.rbc_env_2d &mdash; FluidGym 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../../../../_static/css/theme.css?v=e59714d7" />
 
@@ -48,8 +48,15 @@
 <li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/gymnasium.html">Gymnasium</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/torchrl.html">TorchRL</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/pettingzoo.html">Pettingzoo</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/sb3_marl.html">Stable-Baselines3</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/sb3_vec_env.html">Stable-Baselines3</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/interfaces/gradient_based_methods.html">Gradient-Based Methods</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../basic_usage/wrappers/index.html">Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/wrappers/flatten_observation.html">FlattenObservation Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/wrappers/obs_extraction.html">ObsExtraction Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/wrappers/action_noise.html">ActionNoise Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../basic_usage/wrappers/sensor_noise.html">SensorNoise Wrapper</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../basic_usage/rendering.html">Rendering Environments</a></li>
@@ -62,6 +69,17 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../api/fluidenv.html">FluidGym Environments</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.fluid_env.FluidEnv.html">FluidEnv</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../api/wrappers.html">FluidGym Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.wrappers.flatten_obs.FlattenObservation.html">FlattenObservation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.wrappers.obs_extraction.ObsExtraction.html">ObsExtraction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.wrappers.action_noise.ActionNoise.html">ActionNoise</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.wrappers.sensor_noise.SensorNoise.html">SensorNoise</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../api/cylinder.html">Flow Past Cylinder</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.cylinder.CylinderJetEnv2D.html">CylinderJetEnv2D</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../../../api/generated/fluidgym.envs.cylinder.CylinderRotEnv2D.html">CylinderRotEnv2D</a></li>
@@ -118,6 +136,7 @@
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">gymnasium</span><span class="w"> </span><span class="kn">import</span> <span class="n">spaces</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.envs.rbc.rbc_env_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">RBCEnvBase</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">fluidgym.envs.util.obs_extraction</span><span class="w"> </span><span class="kn">import</span> <span class="n">extract_moving_window_2d</span>
@@ -136,6 +155,7 @@
     <span class="s2">&quot;local_reward_weight&quot;</span><span class="p">:</span> <span class="mf">0.2</span><span class="p">,</span>
     <span class="s2">&quot;uniform_grid&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
     <span class="s2">&quot;aspect_ratio&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>  <span class="c1"># equivalent to pi</span>
+    <span class="s2">&quot;use_marl&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
     <span class="s2">&quot;dtype&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
     <span class="s2">&quot;load_initial_domain&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
     <span class="s2">&quot;load_domain_statistics&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
@@ -225,31 +245,60 @@
     <span class="c1"># with half domain size (division by sqrt(2))</span>
     <span class="n">_initial_domain_steps</span> <span class="o">=</span> <span class="mi">283</span>
 
-    <span class="nd">@property</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">action_space_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;The shape of the action space.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_n_heaters</span><span class="p">,</span>
-            <span class="mi">1</span><span class="p">,</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_action_space</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Per-agent action space.&quot;&quot;&quot;</span>
+        <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_marl</span><span class="p">:</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_n_heaters</span><span class="p">,</span>
+                <span class="mi">1</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">(</span>
+            <span class="n">low</span><span class="o">=-</span><span class="mf">1.0</span><span class="p">,</span>
+            <span class="n">high</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+            <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
         <span class="p">)</span>
 
-    <span class="nd">@property</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">observation_space_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;The shape of the observation space.&quot;&quot;&quot;</span>
-        <span class="n">n_sensors_total</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_y</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_per_heater</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_n_heaters</span>
-        <span class="p">)</span>
-        <span class="c1"># channels: u, v, T</span>
-        <span class="k">return</span> <span class="p">(</span><span class="n">n_sensors_total</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_observation_space</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Per-agent observation space.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_use_marl</span><span class="p">:</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_y</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_per_heater</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_y</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_n_heaters</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_per_heater</span><span class="p">,</span>
+            <span class="p">)</span>
 
-    <span class="nd">@property</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">local_observation_space_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;The shape of the local observation space for each agent.&quot;&quot;&quot;</span>
-        <span class="n">n_sensors_total</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_y</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_per_heater</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span>
+        <span class="k">return</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Dict</span><span class="p">(</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;temperature&quot;</span><span class="p">:</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">(</span>
+                    <span class="n">low</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_T_cold</span><span class="p">,</span>
+                    <span class="n">high</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_T_hot</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_heater_limit</span><span class="p">,</span>
+                    <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span>
+                    <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="s2">&quot;velocity&quot;</span><span class="p">:</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">(</span>
+                    <span class="n">low</span><span class="o">=-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
+                    <span class="n">high</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
+                    <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ndims</span><span class="p">,)</span> <span class="o">+</span> <span class="n">shape</span><span class="p">,</span>
+                    <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="s2">&quot;pressure&quot;</span><span class="p">:</span> <span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">(</span>
+                    <span class="n">low</span><span class="o">=-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
+                    <span class="n">high</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
+                    <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span>
+                    <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
+                <span class="p">),</span>
+            <span class="p">}</span>
         <span class="p">)</span>
-        <span class="c1"># channels: u, v, T</span>
-        <span class="k">return</span> <span class="p">(</span><span class="n">n_sensors_total</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">render_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
@@ -259,26 +308,10 @@
 
         <span class="k">return</span> <span class="p">(</span><span class="n">nx</span><span class="p">,</span> <span class="n">height</span><span class="p">,</span> <span class="n">nx</span><span class="p">)</span>
 
-    <span class="nd">@property</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">n_agents</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;The number of agents in the environment.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_n_heaters</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">_get_global_obs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-        <span class="n">T</span><span class="p">,</span> <span class="n">u</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_obs</span><span class="p">()</span>
-
-        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">(</span>
-            <span class="p">(</span>
-                <span class="n">T</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span>
-                <span class="n">u</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span>  <span class="c1"># u_x</span>
-                <span class="n">u</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span>  <span class="c1"># u_y</span>
-            <span class="p">),</span>
-            <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
-        <span class="p">)</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">_get_obs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_global_obs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
         <span class="n">T</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_temperature</span><span class="p">()</span>
         <span class="n">u</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_velocity</span><span class="p">()</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_pressure</span><span class="p">()</span>
 
         <span class="n">T</span> <span class="o">=</span> <span class="n">T</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_sensor_locations</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sensor_locations</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
         <span class="n">T</span> <span class="o">=</span> <span class="n">T</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_y</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
@@ -287,7 +320,14 @@
         <span class="n">u</span> <span class="o">=</span> <span class="n">u</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_sensor_locations</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sensor_locations</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">:]</span>
         <span class="n">u</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_y</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">permute</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="n">T</span><span class="p">,</span> <span class="n">u</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">p</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_sensor_locations</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sensor_locations</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_y</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
+
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;temperature&quot;</span><span class="p">:</span> <span class="n">T</span><span class="p">,</span>
+            <span class="s2">&quot;velocity&quot;</span><span class="p">:</span> <span class="n">u</span><span class="p">,</span>
+            <span class="s2">&quot;pressure&quot;</span><span class="p">:</span> <span class="n">p</span><span class="p">,</span>
+        <span class="p">}</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_sensor_locations</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -377,38 +417,49 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_bottom_plate</span><span class="o">.</span><span class="n">setPassiveScalar</span><span class="p">(</span><span class="n">control</span><span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_get_local_obs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-        <span class="n">T</span><span class="p">,</span> <span class="n">u</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_obs</span><span class="p">()</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_local_obs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+        <span class="n">global_obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_global_obs</span><span class="p">()</span>
 
-        <span class="n">u_x</span> <span class="o">=</span> <span class="n">u</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># [Y, X]</span>
-        <span class="n">u_y</span> <span class="o">=</span> <span class="n">u</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>  <span class="c1"># [Y, X]</span>
+        <span class="n">T</span> <span class="o">=</span> <span class="n">global_obs</span><span class="p">[</span><span class="s2">&quot;temperature&quot;</span><span class="p">]</span>  <span class="c1"># [Y, X]</span>
+        <span class="n">u</span> <span class="o">=</span> <span class="n">global_obs</span><span class="p">[</span><span class="s2">&quot;velocity&quot;</span><span class="p">]</span>  <span class="c1"># [Y, X, 2]</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">global_obs</span><span class="p">[</span><span class="s2">&quot;pressure&quot;</span><span class="p">]</span>  <span class="c1"># [Y, X]</span>
+
+        <span class="n">u_x</span> <span class="o">=</span> <span class="n">u</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>  <span class="c1"># [Y, X]</span>
+        <span class="n">u_y</span> <span class="o">=</span> <span class="n">u</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>  <span class="c1"># [Y, X]</span>
 
         <span class="n">local_obs_T</span> <span class="o">=</span> <span class="n">extract_moving_window_2d</span><span class="p">(</span>
             <span class="n">field</span><span class="o">=</span><span class="n">T</span><span class="p">,</span>
             <span class="n">n_agents</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">n_agents</span><span class="p">,</span>
             <span class="n">agent_width</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_per_heater</span><span class="p">,</span>
             <span class="n">n_agents_per_window</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
-        <span class="p">)</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="n">start_dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="p">)</span>
 
         <span class="n">local_obs_u_x</span> <span class="o">=</span> <span class="n">extract_moving_window_2d</span><span class="p">(</span>
             <span class="n">field</span><span class="o">=</span><span class="n">u_x</span><span class="p">,</span>
             <span class="n">n_agents</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">n_agents</span><span class="p">,</span>
             <span class="n">agent_width</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_per_heater</span><span class="p">,</span>
             <span class="n">n_agents_per_window</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
-        <span class="p">)</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="n">start_dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-
+        <span class="p">)</span>
         <span class="n">local_obs_u_y</span> <span class="o">=</span> <span class="n">extract_moving_window_2d</span><span class="p">(</span>
             <span class="n">field</span><span class="o">=</span><span class="n">u_y</span><span class="p">,</span>
             <span class="n">n_agents</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">n_agents</span><span class="p">,</span>
             <span class="n">agent_width</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_per_heater</span><span class="p">,</span>
             <span class="n">n_agents_per_window</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
-        <span class="p">)</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="n">start_dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">locla_obs_u</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">local_obs_u_x</span><span class="p">,</span> <span class="n">local_obs_u_y</span><span class="p">],</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 
-        <span class="n">local_obs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">(</span>
-            <span class="p">(</span><span class="n">local_obs_T</span><span class="p">,</span> <span class="n">local_obs_u_x</span><span class="p">,</span> <span class="n">local_obs_u_y</span><span class="p">),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span>
-        <span class="p">)</span>  <span class="c1"># [n_agents, 3 * Y * agent_window * n_obs_per_agent]</span>
+        <span class="n">local_obs_p</span> <span class="o">=</span> <span class="n">extract_moving_window_2d</span><span class="p">(</span>
+            <span class="n">field</span><span class="o">=</span><span class="n">p</span><span class="p">,</span>
+            <span class="n">n_agents</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">n_agents</span><span class="p">,</span>
+            <span class="n">agent_width</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_n_sensors_per_heater</span><span class="p">,</span>
+            <span class="n">n_agents_per_window</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_local_obs_window</span><span class="p">,</span>
+        <span class="p">)</span>
 
-        <span class="k">return</span> <span class="n">local_obs</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;temperature&quot;</span><span class="p">:</span> <span class="n">local_obs_T</span><span class="p">,</span>
+            <span class="s2">&quot;velocity&quot;</span><span class="p">:</span> <span class="n">locla_obs_u</span><span class="p">,</span>
+            <span class="s2">&quot;pressure&quot;</span><span class="p">:</span> <span class="n">local_obs_p</span><span class="p">,</span>
+        <span class="p">}</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_local_rewards</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
         <span class="n">T</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_block</span><span class="o">.</span><span class="n">passiveScalar</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>  <span class="c1"># [Y, X]</span>
