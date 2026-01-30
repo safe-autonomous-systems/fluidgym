@@ -1,10 +1,12 @@
 from pathlib import Path
 
 import fluidgym
+from fluidgym.integration.gymnasium import GymFluidEnv
 
-env = fluidgym.make_gym(
+env = fluidgym.make(
     "CylinderJet3D-easy-v0",
 )
+env = GymFluidEnv(env)
 
 obs, info = env.reset(seed=42)
 

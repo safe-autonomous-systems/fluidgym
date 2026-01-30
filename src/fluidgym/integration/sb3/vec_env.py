@@ -1,40 +1,39 @@
 """StableBaselines3 VecEnv interface for MultiAgentFluidEnv environments."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import gymnasium
 import numpy as np
 import torch
-from gymnasium.spaces import Box
-from stable_baselines3.common.vec_env import VecEnv
+from stable_baselines3.common.vec_env import VecEnv as SB3VecEnv
 from stable_baselines3.common.vec_env.base_vec_env import VecEnvIndices
 
-from fluidgym.envs.fluid_env import EnvMode
-from fluidgym.envs.multi_agent_fluid_env import MultiAgentFluidEnv
+from fluidgym.envs import FluidEnv
+from fluidgym.types import FluidEnvLike
 
 
-class MultiAgentVecEnv(VecEnv):
-    """The stable-baselines3 VecEnv interface for MultiAgentFluidEnv environments."""
+class VecFluidEnv(SB3VecEnv):
+    """The stable-baselines3 VecEnv interface for MARL fluid environments."""
 
     metadata = {"render_modes": ["rbg_array"]}
 
-    def __init__(self, env: MultiAgentFluidEnv, auto_reset: bool = True):
+    def __init__(self, env: FluidEnvLike, auto_reset: bool = True):
         self.__env = env
         self.__agents = list(range(env.n_agents))
         self.__auto_reset = auto_reset
 
-        if len(self.__agents) != self.__env.action_space_shape[0]:
+        if not env.use_marl or env.n_agents <= 1:
             raise ValueError(
-                f"Number of agents ({len(self.__agents)}) does not match the action"
-                f"space shape {self.__env.action_space_shape}."
+                "MultiAgentVecEnv can only be used with MARL fluid "
+                "environments with multiple agents."
             )
 
         self.observations = None
         super().__init__(
             num_envs=len(self.__agents),
-            observation_space=self.get_observation_space(),
-            action_space=self.get_action_space(),
+            observation_space=env.observation_space,
+            action_space=env.action_space,
         )
 
     def __to_np(self, data: torch.Tensor) -> np.ndarray:
@@ -43,27 +42,9 @@ class MultiAgentVecEnv(VecEnv):
     def __to_np_dict(self, data: dict[str, torch.Tensor]) -> dict[str, np.ndarray]:
         return {key: value.detach().cpu().numpy() for key, value in data.items()}
 
-    def get_observation_space(self) -> Box:
-        """Get the observation space for a single agent."""
-        return Box(
-            low=self.__env._observation_range[0],
-            high=self.__env._observation_range[1],
-            shape=self.__env.local_observation_space_shape,
-            dtype=np.float32,
-        )
-
-    def get_action_space(self) -> Box:
-        """Get the action space for a single agent."""
-        return Box(
-            low=self.__env._action_range[0],
-            high=self.__env._action_range[1],
-            shape=(self.__env.action_space_shape[1],),
-            dtype=np.float32,
-        )
-
     def reset(
         self, seed: int | None = None, randomize: bool | None = None
-    ) -> np.ndarray:
+    ) -> np.ndarray | dict[str, np.ndarray]:
         """Reset the environment and return initial observations for all agents.
 
         Parameters
@@ -77,12 +58,14 @@ class MultiAgentVecEnv(VecEnv):
 
         Returns
         -------
-        np.ndarray
+        np.ndarray | dict[str, np.ndarray]:
             The initial observations for all agents.
         """
-        local_obs, _ = self.__env.reset_marl(randomize=randomize)
-        local_obs_arr = self.__to_np(local_obs)
-        return local_obs_arr
+        local_obs, _ = self.__env.reset(seed=seed, randomize=randomize)
+        if isinstance(local_obs, dict):
+            return self.__to_np_dict(local_obs)
+        else:
+            return self.__to_np(local_obs)
 
     def step_async(self, actions: np.ndarray) -> None:
         """Tell all the environments to start taking a step with the given actions.
@@ -101,41 +84,51 @@ class MultiAgentVecEnv(VecEnv):
         """
         self._actions = torch.as_tensor(
             actions,
-            dtype=self.__env._dtype,
-            device=self.__env._cuda_device,
-        ).squeeze()
+            device=self.__env.cuda_device,
+        )
+        if self._actions.ndim > 2:
+            self._actions = self._actions.unsqueeze(-1)
 
     def step_wait(
         self,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[dict[str, Any]]]:
+    ) -> tuple[
+        np.ndarray | dict[str, np.ndarray], np.ndarray, np.ndarray, list[dict[str, Any]]
+    ]:
         """Wait for the step taken with step_async().
 
         Returns
         -------
-        tuple[np.ndarray, np.ndarray, np.ndarray, list[dict[str, Any]]]
+        tuple[dict[str, np.ndarray], np.ndarray, np.ndarray, list[dict[str, Any]]]
             A tuple containing the observations, rewards, done flags, and info
             dictionaries for all agents.
         """
-        local_obs, agent_rewards, term, trunc, info = self.__env.step_marl(
-            self._actions
-        )
+        local_obs, agent_rewards, term, trunc, info = self.__env.step(self._actions)
 
-        obs = self.__to_np(local_obs)
+        local_obs_np: np.ndarray | dict[str, np.ndarray]
+        if isinstance(local_obs, dict):
+            local_obs_np = self.__to_np_dict(local_obs)
+        else:
+            local_obs_np = self.__to_np(local_obs)
         rewards = self.__to_np(agent_rewards)
 
         done = term or trunc
         dones = np.full(len(self.__agents), done, dtype=bool)
 
-        info = self.__to_np_dict(info)
-        infos = [info for _ in self.__agents]
+        info_np: dict[str, Any] = self.__to_np_dict(info)
+        infos = [info_np for _ in self.__agents]
 
         # Auto-reset
         if done and self.__auto_reset:
             for i in range(len(self.__agents)):
-                infos[i]["terminated_observation"] = obs[i]
-            obs = self.reset()
+                if isinstance(local_obs_np, dict):
+                    infos[i]["terminated_observation"] = {
+                        key: local_obs_np[key][i] for key in local_obs_np.keys()
+                    }
+                else:
+                    infos[i]["terminated_observation"] = local_obs_np[i]
+            local_obs_np = self.reset()
 
-        return obs, rewards, dones, infos
+        return local_obs_np, rewards, dones, infos
 
     def get_attr(self, attr_name: str, indices: VecEnvIndices = None) -> list[Any]:
         """Get an attribute of the environment.
@@ -197,7 +190,7 @@ class MultiAgentVecEnv(VecEnv):
 
     def render(  # type: ignore[override]
         self,
-        mode: str = "human",
+        mode: str = "rbg_array",
         save: bool = False,
         render_3d: bool = False,
         filename: str | None = None,
@@ -210,8 +203,8 @@ class MultiAgentVecEnv(VecEnv):
         Parameters
         ----------
         mode: str
-            The mode to render with. Currently only 'human' is supported. Defaults to
-            'human'.
+            The mode to render with. Currently only 'rgb_array' is supported. Defaults
+            to 'rgb_array'.
 
         save: bool
             Whether to save the rendered frame as a PNG file. Defaults to False.
@@ -232,16 +225,12 @@ class MultiAgentVecEnv(VecEnv):
         np.ndarray
             The rendered frame as a numpy array.
         """
-        self.__env.render(
+        return self.__env.render(
             save=save,
             render_3d=render_3d,
             filename=filename,
             output_path=output_path,
         )
-        render_data = self.__env._get_render_data(
-            render_3d=render_3d, output_path=output_path
-        )
-        return render_data[list(render_data.keys())[0]]
 
     def close(self) -> None:
         """Close the environment."""
@@ -274,23 +263,12 @@ class MultiAgentVecEnv(VecEnv):
         raise NotImplementedError
 
     @property
-    def id(self):
-        """Unique identifier for the environment."""
-        return self.__env.id
-
-    @property
-    def unwrapped(self) -> MultiAgentFluidEnv:  # type: ignore[override]
+    def unwrapped(self) -> FluidEnv:  # type: ignore[override]
         """Return the unwrapped FluidGym environment."""
-        return self.__env
-
-    @property
-    def mode(self) -> EnvMode:
-        """The current mode of the environment ('train', 'val', or 'test')."""
-        return self.__env.mode
-
-    @mode.setter
-    def mode(self, mode: EnvMode) -> None:
-        self.__env.mode = mode
+        if hasattr(self.__env, "unwrapped"):
+            return self.__env.unwrapped  # type: ignore[return-value]
+        else:
+            return cast(FluidEnv, self.__env)
 
     def train(self) -> None:
         """Set the environment to training mode."""
@@ -327,10 +305,6 @@ class MultiAgentVecEnv(VecEnv):
             The seed to set for the environment's random number generator.
         """
         self.__env.seed(seed)
-
-    def init(self) -> None:
-        """Initialize the environment."""
-        self.__env.init()
 
     @property
     def num_actions(self) -> int:

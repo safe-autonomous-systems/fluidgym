@@ -4,13 +4,13 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from gymnasium import spaces
 
 from fluidgym.envs.cylinder.cylinder_env_base import CylinderEnvBase
-from fluidgym.envs.multi_agent_fluid_env import MultiAgentFluidEnv
+from fluidgym.envs.util.obs_extraction import extract_global_3d_obs
 from fluidgym.envs.util.profiles import get_jet_profile
 from fluidgym.envs.util.visualization import render_3d_iso
 from fluidgym.simulation.pict.PISOtorch_simulation import balance_boundary_fluxes
-from fluidgym.simulation.pict.util.output import _resample_block_data
 
 VORTICITY_RENDER_LEVELS = {
     100: 1.5,
@@ -31,6 +31,7 @@ CYLINDER_JET_3D_DEFAULT_CONFIG = {
     "local_obs_window": 3,
     "local_reward_weight": 0.8,  # Based on doi.org/10.1038/s44172-025-00446-x
     "local_2d_obs": False,
+    "use_marl": False,
     "dtype": torch.float32,
     "load_initial_domain": True,
     "load_domain_statistics": True,
@@ -40,7 +41,7 @@ CYLINDER_JET_3D_DEFAULT_CONFIG = {
 }
 
 
-class CylinderJetEnv3D(CylinderEnvBase, MultiAgentFluidEnv):
+class CylinderJetEnv3D(CylinderEnvBase):
     """3D Environment for flow around a cylinder with jet actuation.
 
     This environment extends the 2D jet cylinder environment to 3D, allowing for
@@ -74,30 +75,33 @@ class CylinderJetEnv3D(CylinderEnvBase, MultiAgentFluidEnv):
     lift_penalty: float
         The penalty factor for lift in the reward calculation.
 
-    local_reward_weight : float | None, optional
+    local_reward_weight: float | None, optional
         Weighting factor for local rewards in multi-agent settings.
         Has to be set for multi-agent RL. Defaults to None.
 
-    local_2d_obs : bool, optional
+    local_2d_obs: bool, optional
         Whether to use 2D local observations (velocity in x and y directions only).
         Defaults to False.
 
-    dtype : torch.dtype, optional
+    use_marl: bool
+        Whether to enable multi-agent reinforcement learning mode.
+
+    dtype: torch.dtype, optional
         The data type for the simulation tensors. Defaults to torch.float32.
 
-    load_initial_domain : bool, optional
+    load_initial_domain: bool, optional
         Whether to load the initial domain from file. Defaults to True.
 
-    load_domain_statistics : bool, optional
+    load_domain_statistic: bool, optional
         Whether to load precomputed domain statistics. Defaults to True.
 
     randomize_initial_state : bool, optional
         Whether to randomize the initial state of the simulation. Defaults to False.
 
-    enable_actions : bool, optional
+    enable_actions: bool, optional
         Whether to enable action application in the environment. Defaults to True.
 
-    differentiable : bool, optional
+    differentiable: bool, optional
         Whether to enable differentiable simulation. Defaults to False.
 
     References
@@ -111,8 +115,11 @@ class CylinderJetEnv3D(CylinderEnvBase, MultiAgentFluidEnv):
     p. 113, June 2025, doi: 10.1038/s44172-025-00446-x.
     """
 
+    _default_render_key: str = "3d_vorticity"
+
     _jet_angle: float = 10.0  # degrees
     _n_sensors_per_agent: int = 2
+    _supports_marl: bool = True
 
     def __init__(
         self,
@@ -125,6 +132,7 @@ class CylinderJetEnv3D(CylinderEnvBase, MultiAgentFluidEnv):
         episode_length: int,
         lift_penalty: float,
         local_obs_window: int,
+        use_marl: bool,
         local_reward_weight: float | None,
         local_2d_obs: bool = False,
         dtype: torch.dtype = torch.float32,
@@ -140,6 +148,12 @@ class CylinderJetEnv3D(CylinderEnvBase, MultiAgentFluidEnv):
                 "n_agents must be a positive integer that evenly divides"
                 "circle_resolution_angular."
             )
+
+        if local_2d_obs and not use_marl:
+            raise ValueError(
+                "Local 2D observations are only supported in multi-agent mode."
+            )
+
         self._local_2d_obs = local_2d_obs
         self._n_jets = n_jets
         self._local_obs_window = local_obs_window
@@ -161,6 +175,7 @@ class CylinderJetEnv3D(CylinderEnvBase, MultiAgentFluidEnv):
             step_length=step_length,
             episode_length=episode_length,
             lift_penalty=lift_penalty,
+            use_marl=use_marl,
             dtype=dtype,
             cuda_device=cuda_device,
             load_initial_domain=load_initial_domain,
@@ -170,39 +185,84 @@ class CylinderJetEnv3D(CylinderEnvBase, MultiAgentFluidEnv):
             differentiable=differentiable,
         )
 
-    @property
-    def action_space_shape(self) -> tuple[int, ...]:
-        """The shape of the action space."""
-        return (
-            self._n_jets,
-            1,
+    def _get_action_space(self) -> spaces.Box:
+        shape: tuple[int, ...]
+
+        if self._use_marl:
+            shape = (1,)
+        else:
+            shape = (
+                self._n_jets,
+                1,
+            )
+
+        return spaces.Box(
+            low=-1.0,
+            high=1.0,
+            shape=shape,
+            dtype=np.float32,
         )
 
-    @property
-    def observation_space_shape(self) -> tuple[int, ...]:
-        """The shape of the observation space."""
-        n_sensors_x_y = 151
-        n_sensors_total = n_sensors_x_y * self._n_jets * self._n_sensors_per_agent
-        return (n_sensors_total * self._ndims,)
+    def _get_observation_space(self) -> spaces.Dict:
+        velocity_shape: tuple[int, ...]
+        pressure_shape: tuple[int, ...]
 
-    @property
-    def local_observation_space_shape(self) -> tuple[int, ...]:
-        """The shape of the local observation space for each agent."""
-        n_sensors_x_y = 151
-        if self._local_2d_obs:
-            return (n_sensors_x_y * 2,)
+        if self._use_marl:
+            if self._local_2d_obs:
+                velocity_shape = (
+                    self._n_sensors_x_y,
+                    self._ndims - 1,
+                )
+                pressure_shape = (self._n_sensors_x_y,)
+            else:
+                velocity_shape = (
+                    self._local_obs_window,
+                    self._n_sensors_per_agent,
+                    self._ndims,
+                    self._n_sensors_x_y,
+                )
+                pressure_shape = (
+                    self._local_obs_window,
+                    self._n_sensors_per_agent,
+                    self._n_sensors_x_y,
+                )
         else:
-            return (
-                self._n_sensors_per_agent
-                * self._local_obs_window
-                * n_sensors_x_y
-                * self._ndims,
+            velocity_shape = (
+                self._n_jets,
+                self._n_sensors_per_agent,
+                self._ndims,
+                self._n_sensors_x_y,
             )
+            pressure_shape = (
+                self._n_jets,
+                self._n_sensors_per_agent,
+                self._n_sensors_x_y,
+            )
+
+        return spaces.Dict(
+            {
+                "velocity": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=velocity_shape,
+                    dtype=np.float32,
+                ),
+                "pressure": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=pressure_shape,
+                    dtype=np.float32,
+                ),
+            }
+        )
 
     @property
     def n_agents(self) -> int:
         """The number of agents in the environment."""
-        return self._n_jets
+        if self.use_marl:
+            return self._n_jets
+        else:
+            return 1
 
     @property
     def _n_sensors_z(self) -> int:
@@ -243,50 +303,40 @@ class CylinderJetEnv3D(CylinderEnvBase, MultiAgentFluidEnv):
 
         return sensor_locations_3d
 
-    def _get_global_obs(self) -> torch.Tensor:
-        """Return the current observation."""
-        u_list = [block.velocity for block in self._domain.getBlocks()]
-
-        u = _resample_block_data(
-            u_list,
-            self._sim.output_resampling_coords,
-            self._sim.output_resampling_shape,
-            self._ndims,
-            fill_max_steps=self._sim.output_resampling_fill_max_steps,
+    def _get_global_obs(self) -> dict[str, torch.Tensor]:
+        return extract_global_3d_obs(
+            env=self,
+            sensor_locations=self._sensor_locations,
+            n_agents=self._n_jets,
+            n_sensors_per_agent=self._n_sensors_per_agent,
+            n_sensors_z=self._n_sensors_z,
+            local_2d_obs=self._local_2d_obs,
         )
 
-        if self._local_2d_obs:
-            u = u[:, :2, :, :, :]
-        u = u.squeeze()
-        u = u.permute(1, 2, 3, 0)
-
-        sensor_locations = self._sensors_locations.flatten(start_dim=1)
-        u = u[
-            sensor_locations[2],
-            sensor_locations[1],
-            sensor_locations[0],
-            :,
-        ]
-        u = u.view(self._n_sensors_z, -1)
-        u = u.view(self._n_jets, self._n_sensors_per_agent, -1)
-
-        return u
-
-    def _get_local_obs(self, global_obs: torch.Tensor) -> torch.Tensor:
+    def _get_local_obs(self) -> dict[str, torch.Tensor]:
+        global_obs = self._get_global_obs()
         offset = self._local_obs_window // 2
 
-        # First, shift the global obs to start with the first agents sensor
-        # window at zero
-        shifted_obs = torch.roll(global_obs, shifts=offset, dims=0)
+        local_obs = {}
+        for k, v in global_obs.items():
+            # First, shift the global obs to start with the first agents sensor
+            # window at zero
+            shifted_obs = torch.roll(v, shifts=offset, dims=0)
 
-        local_obs = []
-        for _ in range(self._n_jets):
-            window = shifted_obs[: self._local_obs_window].reshape(-1)
-            local_obs += [window]
+            local_obs_list = []
+            for _ in range(self._n_jets):
+                window = shifted_obs[: self._local_obs_window]
 
-            shifted_obs = torch.roll(shifted_obs, shifts=-1, dims=0)
+                if self._local_2d_obs:
+                    window = window.squeeze()
 
-        return torch.stack(local_obs, dim=0)
+                local_obs_list += [window]
+
+                shifted_obs = torch.roll(shifted_obs, shifts=-1, dims=0)
+
+            local_obs[k] = torch.stack(local_obs_list, dim=0)
+
+        return local_obs
 
     def __get_boundary_velocities(self) -> tuple[torch.Tensor, torch.Tensor, int]:
         def coords_to_velocities(
@@ -376,7 +426,7 @@ class CylinderJetEnv3D(CylinderEnvBase, MultiAgentFluidEnv):
 
     def _step_impl(
         self, action: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, bool, dict[str, torch.Tensor]]:
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         obs, reward, term, info = super()._step_impl(action)
 
         all_cds = info.pop("drag")
@@ -398,55 +448,15 @@ class CylinderJetEnv3D(CylinderEnvBase, MultiAgentFluidEnv):
 
         return obs, reward, term, info
 
-    def reset_marl(
-        self,
-        seed: int | None = None,
-        randomize: bool | None = None,
-    ) -> tuple[torch.Tensor, dict]:
-        """Reset the environment to the initial state for multiple agents.
-
-        Parameters
-        ----------
-        seed: int | None
-            The seed to use for random number generation. If None, the current seed is
-            used.
-
-        randomize: bool | None
-            Whether to randomize the initial state. If None, the default behavior is
-            used.
-
-        Returns
-        -------
-        tuple[torch.Tensor, dict]
-            A tuple containing the initial observations for all agents and an info
-            dictionary.
-        """
-        _, info = self.reset(seed=seed, randomize=randomize)
-        local_obs = self._get_local_obs(info.pop("full_obs"))
-        return local_obs, info
-
-    def step_marl(
+    def _step_marl_impl(
         self, actions: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, bool, bool, dict[str, torch.Tensor]]:
-        """Take a step in the environment using the given actions for multiple agents.
-
-        Parameters
-        ----------
-        actions: torch.Tensor
-            The actions to take for each agent.
-
-        Returns
-        -------
-        tuple[torch.Tensor, torch.Tensor, bool, bool, dict[str, torch.Tensor]]
-            A tuple containing the observations, rewards, terminated flag, truncated
-            flag, and info dictionary.
-        """
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         if self._local_reward_weight is None:
             raise ValueError("local_reward_weight must be set for multi-agent step.")
 
-        _, global_reward, terminated, truncated, info = self.step(actions)
+        _, global_reward, terminated, info = self._step_impl(actions)
 
-        local_obs = self._get_local_obs(info.pop("full_obs"))
+        local_obs = self._get_local_obs()
 
         all_cds = info.pop("all_cds")
         lift = info.pop("all_cls")
@@ -467,7 +477,7 @@ class CylinderJetEnv3D(CylinderEnvBase, MultiAgentFluidEnv):
         )
         info["global_reward"] = global_reward
 
-        return local_obs, agent_rewards, terminated, truncated, info
+        return local_obs, agent_rewards, terminated, info
 
     def _get_render_data(
         self,

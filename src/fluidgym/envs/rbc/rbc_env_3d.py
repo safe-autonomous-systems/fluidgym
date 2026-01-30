@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from gymnasium import spaces
 
 from fluidgym.envs.rbc.rbc_env_base import RBCEnvBase
 from fluidgym.envs.util.obs_extraction import extract_moving_window_3d
@@ -25,6 +26,7 @@ RBC_3D_DEFAULT_CONFIG = {
     "local_reward_weight": 0.0015,  # Based on beta in doi.org/10.1063/5.0153181
     "uniform_grid": False,
     "aspect_ratio": 1.0,  # equivalent to pi
+    "use_marl": True,
     "dtype": torch.float32,
     "load_initial_domain": True,
     "load_domain_statistics": True,
@@ -76,6 +78,9 @@ class RBCEnv3D(RBCEnvBase):
     aspect_ratio: float
         The aspect ratio (L/H) of the domain in multiples of π.
 
+    use_marl: bool
+        Whether to enable multi-agent reinforcement learning mode.
+
     dtype: torch.dtype
         The data type for the simulation tensors. Defaults to torch.float32.
 
@@ -106,38 +111,65 @@ class RBCEnv3D(RBCEnvBase):
     doi: 10.1007/s10494-024-00619-2.
     """
 
+    _default_render_key: str = "3d_temperature"
     _ndims = 3
 
     # Based on reference [1] with half domain size (division by sqrt(2))
     _initial_domain_steps = 1500
 
-    @property
-    def action_space_shape(self) -> tuple[int, ...]:
-        """The shape of the action space."""
-        return (
-            self._n_heaters * self._n_heaters,
-            1,
+    def _get_action_space(self) -> spaces.Box:
+        """Per-agent action space."""
+        shape: tuple[int, ...]
+
+        if self.use_marl:
+            shape = (1,)
+        else:
+            shape = (self._n_heaters, self._n_heaters, 1)
+
+        return spaces.Box(
+            low=-1.0,
+            high=1.0,
+            shape=shape,
+            dtype=np.float32,
         )
 
-    @property
-    def observation_space_shape(self) -> tuple[int, ...]:
-        """The shape of the observation space."""
-        n_sensors_total = (
-            self._n_sensors_y * (self._n_sensors_per_heater * self._n_heaters) ** 2
-        )
-        # channels: u, v, w, T
-        return (n_sensors_total * 4,)
+    def _get_observation_space(self) -> spaces.Dict:
+        """Per-agent observation space."""
+        if self._use_marl:
+            shape = (
+                self._n_sensors_per_heater * self._local_obs_window,
+                self._n_sensors_y,
+                self._n_sensors_per_heater * self._local_obs_window,
+            )
+        else:
+            shape = (
+                (self._n_sensors_per_heater * self._n_heaters),
+                self._n_sensors_y,
+                (self._n_sensors_per_heater * self._n_heaters),
+            )
 
-    @property
-    def local_observation_space_shape(self) -> tuple[int, ...]:
-        """The shape of the local observation space for each agent."""
-        n_sensors_total = (
-            self._n_sensors_y
-            * self._n_sensors_per_heater**2
-            * self._local_obs_window**2
+        return spaces.Dict(
+            {
+                "temperature": spaces.Box(
+                    low=self._T_cold,
+                    high=self._T_hot + self._heater_limit,
+                    shape=shape,
+                    dtype=np.float32,
+                ),
+                "velocity": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=(self._ndims,) + shape,
+                    dtype=np.float32,
+                ),
+                "pressure": spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=shape,
+                    dtype=np.float32,
+                ),
+            }
         )
-        # channels: u, v, w, T
-        return (n_sensors_total * 4,)
 
     @property
     def render_shape(self) -> tuple[int, int, int]:
@@ -146,14 +178,6 @@ class RBCEnv3D(RBCEnvBase):
         height = round(nx / self._aspect_ratio)
 
         return (nx, height, nx)
-
-    @property
-    def n_agents(self) -> int:
-        """The number of agents in the environment."""
-        if self._ndims == 2:
-            return self._n_heaters
-        else:
-            return self._n_heaters * self._n_heaters
 
     def _get_sensor_locations(self) -> torch.Tensor:
         sensor_locations_2d = self._get_sensor_locations_2d()
@@ -264,21 +288,10 @@ class RBCEnv3D(RBCEnvBase):
 
         return x_min, x_max, z_min, z_max
 
-    def _get_global_obs(self) -> torch.Tensor:
-        T, u = self._get_obs()
-        return torch.cat(
-            (
-                T.flatten(),
-                u[0].flatten(),
-                u[1].flatten(),
-                u[2].flatten(),
-            ),
-            dim=0,
-        )
-
-    def _get_obs(self) -> tuple[torch.Tensor, torch.Tensor]:
+    def _get_global_obs(self) -> dict[str, torch.Tensor]:
         T = self.get_temperature()
         u = self.get_velocity()
+        p = self.get_pressure()
 
         T = T[
             self._sensor_locations[2],
@@ -300,48 +313,72 @@ class RBCEnv3D(RBCEnvBase):
             self._n_sensors_x, self._n_sensors_y, self._n_sensors_x, 3
         ).permute(3, 2, 1, 0)
 
-        return T, u
+        p = p[
+            self._sensor_locations[2],
+            self._sensor_locations[1],
+            self._sensor_locations[0],
+        ]
+        p = p.reshape(self._n_sensors_x, self._n_sensors_y, self._n_sensors_x).permute(
+            2, 1, 0
+        )
 
-    def _get_local_obs(self) -> torch.Tensor:
-        T, u = self._get_obs()
+        return {
+            "temperature": T,
+            "velocity": u,
+            "pressure": p,
+        }
 
-        u_x = u[0]  # [Z, Y, X]
-        u_y = u[1]  # [Z, Y, X]
-        u_z = u[2]  # [Z, Y, X]
+    def _get_local_obs(self) -> dict[str, torch.Tensor]:
+        global_obs = self._get_global_obs()
+        T = global_obs["temperature"]
+        u = global_obs["velocity"]
+        p = global_obs["pressure"]
+
+        u_x = u[0, ...]  # [Z, Y, X]
+        u_y = u[1, ...]  # [Z, Y, X]
+        u_z = u[2, ...]  # [Z, Y, X]
 
         local_obs_T = extract_moving_window_3d(
             field=T,
             n_agents=self._n_heaters,  # n_agents per dim
             agent_width=self._n_sensors_per_heater,
             n_agents_per_window=self._local_obs_window,
-        ).flatten(start_dim=1)
+        )
 
         local_obs_u_x = extract_moving_window_3d(
             field=u_x,
             n_agents=self._n_heaters,  # n_agents per dim
             agent_width=self._n_sensors_per_heater,
             n_agents_per_window=self._local_obs_window,
-        ).flatten(start_dim=1)
+        )
 
         local_obs_u_y = extract_moving_window_3d(
             field=u_y,
             n_agents=self._n_heaters,  # n_agents per dim
             agent_width=self._n_sensors_per_heater,
             n_agents_per_window=self._local_obs_window,
-        ).flatten(start_dim=1)
+        )
 
         local_obs_u_z = extract_moving_window_3d(
             field=u_z,
             n_agents=self._n_heaters,  # n_agents per dim
             agent_width=self._n_sensors_per_heater,
             n_agents_per_window=self._local_obs_window,
-        ).flatten(start_dim=1)
+        )
+        local_obs_u = torch.stack((local_obs_u_x, local_obs_u_y, local_obs_u_z), dim=1)
 
-        local_obs = torch.cat(
-            (local_obs_T, local_obs_u_x, local_obs_u_y, local_obs_u_z), dim=1
-        )  # [n_agents, 4 * Y * agent_window^2 * n_obs_per_agent^2]
+        local_obs_p = extract_moving_window_3d(
+            field=p,
+            n_agents=self._n_heaters,  # n_agents per dim
+            agent_width=self._n_sensors_per_heater,
+            n_agents_per_window=self._local_obs_window,
+        )
 
-        return local_obs
+        return {
+            "temperature": local_obs_T,
+            "velocity": local_obs_u,
+            "pressure": local_obs_p,
+        }
 
     def _get_local_rewards(self) -> torch.Tensor:
         T: torch.Tensor = self._block.passiveScalar[0, 0]  # [Z, Y, X]

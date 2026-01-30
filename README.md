@@ -25,7 +25,7 @@
 </table>
 
 <div align="center">
-    
+
 [![PyPI version](https://badge.fury.io/py/fluidgym.svg)](https://badge.fury.io/py/fluidgym)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/fluidgym)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.9-EE4C2C?logo=pytorch&logoColor=white)
@@ -40,6 +40,7 @@
       <a href="#-installation">Installation</a> |
       <a href="#-getting-started">Getting Started</a> |
       <a href="https://safe-autonomous-systems.github.io/fluidgym">Documentation</a> | 
+      <a href="https://arxiv.org/abs/2601.15015">Paper</a> |
       <a href="#-license-&-citation">License & Citation</a>
     </h3>
 </div>
@@ -61,6 +62,42 @@
 - **Complete training and test datasets** with results for all experimental runs are released for transparent comparison and reproducibility via our [HuggingFace dataset](https://huggingface.co/datasets/safe-autonomous-systems/fluidgym-experiments).
 
 ---
+
+## Introducing FluidGym v0.1.0
+
+We are happy to announce that FluidGym v0.1.0 comes with many updates and 
+improvements, mainly focusing on more convenient usage and integration with RL 
+frameworks:
+
+- **Unified SARL and MARL interface**: Previously, MARL environments implemented public 
+```reset_marl()``` and ```step_marl()``` functions. These have been removed and directly
+integrated with the ```reset()``` and ```step()``` functions. When creating an 
+environemtn via ```fluidgym.make()```, you can now pass a ```use_marl=True``` flag, to
+enable MARL and use the ```reset()``` and ```step()``` as before. The only difference is
+that they now return a batch of observations and rewards. This has also been updated for
+the integrations with PettingZoo and SB3.
+- **Gymnasium spaces**: ```FluidEnv``` now has ```action_space``` and 
+```observation_space``` attributes consistent with ```gymnasium```. Additionally, the 
+previous flattened observations have been replaced by ```Dict``` observation space
+containing indivdual fields, such as as velocity and pressure fields, as indivual keys.
+Furthermore, the indivual observations are now shaped according to the spatial structure
+of the sensors, enabling the use of methods that leverage the spatial structure of the
+domain, e.g. CNNs, equivariant networks, etc.
+- **Environment wrappers**: Following the new observation spaces, we introduce 
+```FluidWrappers```, namely ```FlattenObservation```, ```ObsExtraction```, 
+```ActionNoise```, and ```SensorNoise```. The general wrapper interface enables easy
+integration of new wrappers as needed.
+- **Parallelization**: Using the new ```FluidEnvLike``` protocol, the 
+```ParallelFluidEnv``` can now seamlessly be used with all FluidGym wrappers and 
+integration wrappers. We updated the example to show how you can use FluidGym across
+multiple GPUs.
+
+**Important**: The ```FlattenObservation``` ensure direct compatiblity with our models
+on HuggingFace (trained with FluidGym v0.0.2). If you want to use the models, make sure
+to install the FluidGym v0.0.2 or use the ```FlattenObservation``` wrapper. In case you
+encounter any issues, please report this via an Issue on GitHub. Thank you!
+
+--
 
 ## Installation
 

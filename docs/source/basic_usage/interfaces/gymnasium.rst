@@ -7,30 +7,35 @@ integration with various reinforcement learning libraries that support Gymnasium
 To use a FluidGym environment with Gymnasium, you can create an instance of the desired
 environment using the ``make`` function from FluidGym and the ``GymFluidEnv`` wrapper.
 
-Here is a simple example from ``examples/interfaces/gymnasium_env.py``:
+Here is a simple example from ``examples/interfaces/gymnasium.py``:
 
 .. code-block:: python
 
     import fluidgym
+    from fluidgym.wrappers import FlattenObservation
     from fluidgym.integration.gymnasium import GymFluidEnv
 
     # Create a FluidGym environment
-    env = fluidgym.make("CylinderJet2D-easy-v0")
+    fluid_env = fluidgym.make(
+        "CylinderJet2D-easy-v0",
+    )
 
-    # All FluidGym environments require seeding for reproducibility
-    env.seed(42)
+    # First, we flatten the observation space to receive a 1D array of observations
+    fluid_env = FlattenObservation(fluid_env)
 
-    # Wrap the FluidGym environment with the Gymnasium wrapper
-    gym_env = GymFluidEnv(env)
+    # First, we flatten the observation space to receive a 1D array of observations.
+    # This is not required, you can also use gymnasium.wrappers after wrapping the
+    # the fluidgym environment
+    env = GymFluidEnv(fluid_env)
 
-    obs, info = env.reset()
+    obs, info = env.reset(seed=42)
 
     for i in range(10):
         action = env.action_space.sample()
-        obs, reward, term, trunc, info = gym_env.step(action)
+        obs, reward, term, trunc, info = env.step(action)
         print(f"Step {i}: Reward = {reward:.4f}")
 
-        gym_env.render()
+        env.render()
 
         # Important: All FluidGym environments only set the
         # truncation flag to True since they do not naturally
@@ -38,4 +43,4 @@ Here is a simple example from ``examples/interfaces/gymnasium_env.py``:
         if term or trunc:
             break
 
-    gym_env.save_gif("cylinder.gif")
+    env.save_gif("cylinder.gif")

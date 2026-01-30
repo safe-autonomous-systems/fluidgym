@@ -9,7 +9,7 @@ Interfaces
    gymnasium
    torchrl
    pettingzoo
-   sb3_marl
+   sb3_vec_env
    gradient_based_methods
 
 

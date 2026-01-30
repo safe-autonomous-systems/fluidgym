@@ -1,36 +1,48 @@
 """Gymnasium interface for FluidGym environments."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import torch
-from gymnasium import Env
-from gymnasium.spaces import Box
+from gymnasium import Env, spaces
 
-from fluidgym.envs.fluid_env import EnvMode, FluidEnv
+from fluidgym.envs.fluid_env import FluidEnv
+from fluidgym.types import FluidEnvLike
 
 
 class GymFluidEnv(Env):
     """Base class for FluidGym Gymnasium environments."""
 
-    metadata = {"render_modes": ["human"], "render_fps": 30}
-    action_space: Box
-    observation_space: Box
+    metadata = {"render_modes": ["rbg_array"], "render_fps": 24}
+    action_space: spaces.Box
+    observation_space: spaces.Space
 
-    def __init__(self, env: FluidEnv):
+    def __init__(self, env: FluidEnvLike):
         super().__init__()
 
         self.__env = env
         self.action_space = self.__env.action_space
         self.observation_space = self.__env.observation_space
 
-    def __to_np(self, data: torch.Tensor) -> np.ndarray:
-        return data.detach().cpu().numpy()
+    def __to_np(
+        self, data: torch.Tensor | dict[str, torch.Tensor]
+    ) -> np.ndarray | dict[str, np.ndarray]:
+        def t_to_np(t: torch.Tensor) -> np.ndarray:
+            return t.detach().cpu().numpy()
+
+        if isinstance(data, torch.Tensor):
+            return t_to_np(data)
+        elif isinstance(data, dict):
+            return {k: t_to_np(v) for k, v in data.items()}
+        else:
+            raise TypeError(f"Unsupported data type: {type(data)}")
 
     def step(
         self, action: np.ndarray
-    ) -> tuple[np.ndarray, float, bool, bool, dict[str, np.ndarray]]:
+    ) -> tuple[
+        np.ndarray | dict[str, np.ndarray], float, bool, bool, dict[str, np.ndarray]
+    ]:
         """Run one timestep of the environment's dynamics using the agent actions.
 
         When the end of an episode is reached (``terminated or truncated``), it is
@@ -44,19 +56,15 @@ class GymFluidEnv(Env):
 
         Returns
         -------
-        tuple[np.ndarray, float, bool, bool, dict[str, np.ndarray]]
+        tuple[
+        np.ndarray | dict[str, np.ndarray], float, bool, bool, dict[str, np.ndarray]]
             A tuple containing the observation, reward, terminated flag, truncated flag,
             and info dictionary.
         """
         obs, reward, terminated, truncated, info = self.__env.step(
-            torch.tensor(
-                action, device=self.__env._cuda_device, dtype=self.__env._dtype
-            )
+            torch.tensor(action, device=self.__env.cuda_device)
         )
-        info_np = {
-            k: self.__to_np(v) if isinstance(v, torch.Tensor) else v
-            for k, v in info.items()
-        }
+        info_np = {k: np.array(self.__to_np(v)) for k, v in info.items()}
 
         return (
             self.__to_np(obs),
@@ -72,7 +80,7 @@ class GymFluidEnv(Env):
         seed: int | None = None,
         options: dict[str, Any] | None = None,
         randomize: bool | None = None,
-    ) -> tuple[np.ndarray, dict[str, Any]]:
+    ) -> tuple[np.ndarray | dict[str, np.ndarray], dict[str, np.ndarray]]:
         """Resets the environment to an initial internal state, returning an initial
         observation and info.
 
@@ -88,14 +96,11 @@ class GymFluidEnv(Env):
 
         Returns
         -------
-        tuple[np.ndarray, dict[str, Any]]
+        tuple[np.ndarray | dict[str, np.ndarray], dict[str, np.ndarray]]
             A tuple containing the initial observation and an info dictionary.
         """
         obs, info = self.__env.reset(seed=seed, randomize=randomize)
-        info_np = {
-            k: self.__to_np(v) if isinstance(v, torch.Tensor) else v
-            for k, v in info.items()
-        }
+        info_np = {k: np.array(self.__to_np(v)) for k, v in info.items()}
 
         return self.__to_np(obs), info_np
 
@@ -156,21 +161,10 @@ class GymFluidEnv(Env):
     @property
     def unwrapped(self) -> FluidEnv:  # type: ignore[override]
         """Returns the base non-wrapped environment."""
-        return self.__env
-
-    @property
-    def id(self) -> str:
-        """Unique identifier for the environment."""
-        return self.__env.id
-
-    @property
-    def mode(self) -> EnvMode:
-        """The current mode of the environment ('train', 'val', or 'test')."""
-        return self.__env.mode
-
-    @mode.setter
-    def mode(self, mode: EnvMode) -> None:
-        self.__env.mode = mode
+        if hasattr(self.__env, "unwrapped"):
+            return self.__env.unwrapped  # type: ignore
+        else:
+            return cast(FluidEnv, self.__env)
 
     def train(self) -> None:
         """Set the environment to training mode."""
@@ -183,10 +177,6 @@ class GymFluidEnv(Env):
     def test(self) -> None:
         """Set the environment to test mode."""
         self.__env.test()
-
-    def init(self) -> None:
-        """Initialize the environment."""
-        self.__env.init()
 
     def seed(self, seed: int) -> None:
         """Set the seed for the environment.

@@ -4,7 +4,6 @@ import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -21,6 +20,7 @@ from fluidgym.simulation.extensions import (
 from fluidgym.simulation.pict.util.domain_io import load_domain, save_domain
 from fluidgym.simulation.pict.util.output import _resample_block_data, plot_grids
 from fluidgym.simulation.simulation import Simulation
+from fluidgym.types import EnvMode, FluidEnvLike
 from fluidgym.util.data_utils import (
     load_statistics,
     load_uncontrolled_episode,
@@ -43,14 +43,6 @@ class Stats(NamedTuple):
     p95: float
 
 
-class EnvMode(Enum):
-    """Environment modes for training, validation, and testing."""
-
-    TRAIN = "train"
-    VAL = "val"
-    TEST = "test"
-
-
 @dataclass
 class EnvState:
     """Dataclass to hold the state of a FluidEnv environment."""
@@ -69,7 +61,7 @@ N_INITIAL_DOMAINS = 10
 MODE_SEEDS = [100, 200, 300]
 
 
-class FluidEnv(ABC):
+class FluidEnv(ABC, FluidEnvLike):
     """Abstract base class for FluidGym environments.
 
     It provides common functionality for all FluidGym environments,
@@ -92,8 +84,12 @@ class FluidEnv(ABC):
     is called.
     """
 
-    metadata = {"render_modes": ["human"], "render_fps": 30}
+    metadata = {"render_modes": ["rbg_array"], "render_fps": 24}
+
+    _default_render_key: str
+
     _ndims: int
+    _supports_marl: bool = False
 
     _domain: PISOtorch.Domain
     _prep_fn: dict[str, Any]
@@ -128,8 +124,6 @@ class FluidEnv(ABC):
 
     __frames: dict[str, list] = defaultdict(list)
 
-    _action_range: tuple[float, float]
-    _observation_range: tuple[float, float]
     _mode: EnvMode = EnvMode.TRAIN
 
     _metrics: list[str]
@@ -148,6 +142,7 @@ class FluidEnv(ABC):
         step_length: float,
         episode_length: int,
         ndims: int,
+        use_marl: bool,
         dtype: torch.dtype = torch.float32,
         cuda_device: torch.device | None = None,
         cpu_device: torch.device | None = None,
@@ -176,6 +171,10 @@ class FluidEnv(ABC):
 
         ndims: int
             The number of spatial dimensions (2 or 3).
+
+        use_marl: bool
+            Whether to use multi-agent reinforcement learning (MARL) mode. If False,
+            single-agent reinforcement learning (SARL) mode is used.
 
         dtype: torch.dtype
             The data type for the simulation (torch.float32 or torch.float64). Defaults
@@ -209,6 +208,7 @@ class FluidEnv(ABC):
             Whether to enable differentiable simulation. Defaults to False.
         """
         super().__init__()
+
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA is not available. FluidGym requires a CUDA GPU.")
 
@@ -220,6 +220,11 @@ class FluidEnv(ABC):
         self._adaptive_cfl = adaptive_cfl
         self._step_length = step_length
         self._episode_length = episode_length
+
+        self._use_marl = use_marl
+        if self._use_marl and not self._supports_marl:
+            raise ValueError("This env does not support multi-agent mode.")
+
         self._cuda_device = torch.device("cuda") if cuda_device is None else cuda_device
         self._cpu_device = torch.device("cpu") if cpu_device is None else cpu_device
         self._dtype = dtype
@@ -241,15 +246,42 @@ class FluidEnv(ABC):
                 "purposes."
             )
 
+        self._action_space = self._get_action_space()
+        self._observation_space = self._get_observation_space()
+
+        if self._use_marl:
+            action_shape = (self.n_agents, *self.action_space.shape)
+        else:
+            action_shape = self.action_space.shape
+        self._zero_action = torch.zeros(
+            action_shape, device=self._cuda_device, requires_grad=False
+        )
+
+    @abstractmethod
+    def _get_action_space(self) -> spaces.Box:
+        """Per-agent action space."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def _get_observation_space(self) -> spaces.Dict:
+        """Per-agent observation space."""
+        raise NotImplementedError
+
     @property
     def _logger(self) -> logging.Logger:
         """Logger for the environment."""
         return logging.getLogger(self.__class__.__name__)
 
     @property
-    def device(self) -> torch.device:
-        """The CUDA device used by the environment."""
-        return self._cuda_device
+    def use_marl(self) -> bool:
+        """Whether the environment is in multi-agent reinforcement learning mode."""
+        return self._use_marl
+
+    @property
+    @abstractmethod
+    def n_agents(self) -> int:
+        """The number of agents in the environment."""
+        raise NotImplementedError
 
     @property
     def step_length(self) -> float:
@@ -275,18 +307,6 @@ class FluidEnv(ABC):
     @abstractmethod
     def render_shape(self) -> tuple[int, ...]:
         """The shape of the rendered domain."""
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def action_space_shape(self) -> tuple[int, ...]:
-        """The shape of the action space."""
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def observation_space_shape(self) -> tuple[int, ...]:
-        """The shape of the observation space."""
         raise NotImplementedError
 
     @property
@@ -345,12 +365,20 @@ class FluidEnv(ABC):
         torch.Tensor
             A random action.
         """
-        low, high = self._action_range
-        return (high - low) * torch.rand(
-            self.action_space_shape,
+        if not isinstance(self.action_space, spaces.Box):
+            raise TypeError("Only implemented for Box.")
+
+        if self._seed is None:
+            raise RuntimeError("Environment must be seeded before sampling actions.")
+
+        low = torch.as_tensor(self.action_space.low, device=self._cuda_device)
+        high = torch.as_tensor(self.action_space.high, device=self._cuda_device)
+        r = torch.rand(
+            self._zero_action.shape,
             device=self._cuda_device,
             generator=self._torch_rng_cuda,
-        ) + low
+        )
+        return low + (high - low) * r
 
     @abstractmethod
     def _get_domain(self) -> PISOtorch.Domain:
@@ -420,13 +448,23 @@ class FluidEnv(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _get_global_obs(self) -> torch.Tensor:
-        """Return the current observation.
+    def _get_global_obs(self) -> dict[str, torch.Tensor]:
+        """Return the current global observation.
 
         Returns
         -------
-        torch.Tensor
+        dict[str, torch.Tensor]
             The current observation.
+        """
+        raise NotImplementedError
+
+    def _get_local_obs(self) -> dict[str, torch.Tensor]:
+        """Return the current local agent observations.
+
+        Returns
+        -------
+        dict[str, torch.Tensor]
+            The current local agent observations.
         """
         raise NotImplementedError
 
@@ -708,7 +746,9 @@ class FluidEnv(ABC):
 
     def step(
         self, action: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, bool, bool, dict[str, torch.Tensor]]:
+    ) -> tuple[
+        dict[str, torch.Tensor], torch.Tensor, bool, bool, dict[str, torch.Tensor]
+    ]:
         """Run one timestep of the environment's dynamics using the agent actions.
 
         When the end of an episode is reached (``terminated or truncated``), it is
@@ -722,7 +762,8 @@ class FluidEnv(ABC):
 
         Returns
         -------
-        tuple[torch.Tensor, torch.Tensor, bool, bool, dict[str, torch.Tensor]]
+        tuple[
+        dict[str, torch.Tensor], torch.Tensor, bool, bool, dict[str, torch.Tensor]]
             A tuple containing the observation, reward, terminated flag, truncated flag,
             and info dictionary.
         """
@@ -731,10 +772,21 @@ class FluidEnv(ABC):
                 "Environment must be reset before stepping. Call 'reset()' before"
                 "'step()'."
             )
-        # Shared logic: step counting, rendering, etc.
-        obs, reward, terminated, info = self._step_impl(action)
+
+        if not action.shape == self._zero_action.shape:
+            raise ValueError(
+                f"Action shape {action.shape} does not match expected shape "
+                f"{self._zero_action.shape}."
+            )
+
+        if self._use_marl:
+            obs, reward, terminated, info = self._step_marl_impl(action)
+        else:
+            obs, reward, terminated, info = self._step_impl(action)
+
         self._n_steps += 1
         truncated = self._n_steps >= self._episode_length
+
         if self._auto_render:
             self.render()
 
@@ -745,7 +797,7 @@ class FluidEnv(ABC):
     @abstractmethod
     def _step_impl(
         self, action: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, bool, dict[str, torch.Tensor]]:
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         """Implementation of the step logic specific to the environment.
 
         Parameters
@@ -755,9 +807,27 @@ class FluidEnv(ABC):
 
         Returns
         -------
-        tuple[torch.Tensor, torch.Tensor, bool, dict[str, torch.Tensor]]
+        tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]
             A tuple containing the observation, reward, terminated flag, and info
             dictionary.
+        """
+        raise NotImplementedError
+
+    def _step_marl_impl(
+        self, action: torch.Tensor
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
+        """Implementation of the multi-agent step logic specific to the environment.
+
+        Parameters
+        ----------
+        action: torch.Tensor
+            The individual agent actions.
+
+        Returns
+        -------
+        tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]
+            A tuple containing the local observations, local rewards, a global
+            terminated flag, and a global info dictionary.
         """
         raise NotImplementedError
 
@@ -788,7 +858,7 @@ class FluidEnv(ABC):
         self,
         seed: int | None = None,
         randomize: bool | None = None,
-    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         """Resets the environment to an initial internal state, returning an initial
         observation and info.
 
@@ -804,7 +874,7 @@ class FluidEnv(ABC):
 
         Returns
         -------
-        tuple[torch.Tensor, dict]
+        tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]
             A tuple containing the initial observation and an info dictionary.
         """
         if self._auto_render and len(self.__frames) > 0:
@@ -828,14 +898,12 @@ class FluidEnv(ABC):
         self._n_steps = 0
         self._n_episodes += 1
 
-        self._apply_action(
-            torch.zeros(
-                self.action_space_shape, device=self._cuda_device, requires_grad=False
-            )
-        )
+        self._apply_action(self._zero_action)
 
-        obs = self._get_global_obs()
-        assert obs.grad is None
+        if self._use_marl:
+            obs = self._get_local_obs()
+        else:
+            obs = self._get_global_obs()
 
         info: dict[str, torch.Tensor] = {}
         return obs, info
@@ -846,7 +914,7 @@ class FluidEnv(ABC):
         render_3d: bool = False,
         filename: str | None = None,
         output_path: Path | None = None,
-    ) -> None:
+    ) -> np.ndarray:
         """Render the current state of the environment.
 
         Parameters
@@ -864,6 +932,11 @@ class FluidEnv(ABC):
         output_path: Path | None
             The output path to save the rendered files. If None, saves to the current
             directory. Defaults to None.
+
+        Returns
+        -------
+        np.ndarray
+            The rendered frame as a numpy array.
         """
         from PIL import Image
 
@@ -889,6 +962,12 @@ class FluidEnv(ABC):
                         / f"{slice_name}_{self._n_episodes}_{self._n_steps}.png"
                     )
 
+        if self._default_render_key in render_data:
+            return render_data[self._default_render_key]
+        else:
+            # Return the first slice's data as a numpy array
+            return next(iter(render_data.values()))
+
     def save_gif(self, filename: str, output_path: Path | None = None) -> None:
         """Save the rendered frames as a GIF file.
 
@@ -912,6 +991,11 @@ class FluidEnv(ABC):
         for slice_name, frames in self.__frames.items():
             fps = self.metadata["render_fps"]
             assert isinstance(fps, int)
+
+            # For TCF we may have too many frames, so we downsample
+            # TODO fix
+            if len(frames) > 500:
+                frames = frames[::5]
 
             duration = len(frames) / fps  # duration in ms
             _filename = f"{slice_name}_{filename}"
@@ -1033,8 +1117,6 @@ class FluidEnv(ABC):
                 / str(idx),
             )
 
-        dummy_action = torch.zeros(self.action_space_shape, device=self._cuda_device)
-
         for i in range(N_INITIAL_DOMAINS):
             self._logger.info(f"Generating initial domains {i}")
             for mode_seed, mode in zip(
@@ -1063,7 +1145,7 @@ class FluidEnv(ABC):
                 )
 
                 for _ in range(n_steps):
-                    self.step(dummy_action)
+                    self.step(self._zero_action)
                 self._save_initial_domain(mode=mode, idx=i)
                 save_render(mode=mode, idx=i)
                 self._logger.info(f"Finished simulating {mode} domain.")
@@ -1073,14 +1155,14 @@ class FluidEnv(ABC):
                 if not self._initial_domain_restart:
                     # Validation
                     for _ in range(int(n_steps * 0.1)):
-                        self.step(dummy_action)
+                        self.step(self._zero_action)
                     self._save_initial_domain(mode=EnvMode.VAL, idx=i)
                     save_render(mode=EnvMode.VAL, idx=i)
                     self._logger.info("Finished simulating val domain.")
 
                     # Test
                     for _ in range(int(n_steps * 0.1)):
-                        self.step(dummy_action)
+                        self.step(self._zero_action)
                     self._save_initial_domain(mode=EnvMode.TEST, idx=i)
                     save_render(mode=EnvMode.TEST, idx=i)
                     self._logger.info("Finished simulating test domain.")
@@ -1202,6 +1284,7 @@ class FluidEnv(ABC):
             color=fluidgym_config.palette[: len(grids)],  # type: ignore
             type="pdf",
             linewidth=0.5,
+            fig_scale=2,
         )
         ax.grid(True)
         fig.savefig(f"{self.id}_grid.pdf")
@@ -1209,24 +1292,12 @@ class FluidEnv(ABC):
     @property
     def action_space(self) -> spaces.Box:
         """The action space of the environment."""
-        low, high = self._action_range
-        return spaces.Box(
-            low=low,
-            high=high,
-            shape=self.action_space_shape,
-            dtype=np.float32,
-        )
+        return self._action_space
 
     @property
-    def observation_space(self) -> spaces.Box:
+    def observation_space(self) -> spaces.Dict:
         """The observation space of the environment."""
-        low, high = self._observation_range
-        return spaces.Box(
-            low=low,
-            high=high,
-            shape=self.observation_space_shape,
-            dtype=np.float32,
-        )
+        return self._observation_space
 
     def get_state(self) -> EnvState:
         """Get the current state of the environment.
