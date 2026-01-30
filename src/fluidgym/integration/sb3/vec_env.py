@@ -13,7 +13,7 @@ from fluidgym.envs import FluidEnv
 from fluidgym.types import FluidEnvLike
 
 
-class VecEnv(SB3VecEnv):
+class VecFluidEnv(SB3VecEnv):
     """The stable-baselines3 VecEnv interface for MARL fluid environments."""
 
     metadata = {"render_modes": ["rbg_array"]}
@@ -86,6 +86,8 @@ class VecEnv(SB3VecEnv):
             actions,
             device=self.__env.cuda_device,
         )
+        if self._actions.ndim > 2:
+            self._actions = self._actions.unsqueeze(-1)
 
     def step_wait(
         self,

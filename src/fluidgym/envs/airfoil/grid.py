@@ -1,11 +1,10 @@
 """Utilities for creating the airfoil grid and domain."""
 
-from pathlib import Path
-
 import numpy as np
 import torch
 
 import fluidgym.simulation.pict.data.shapes as shapes
+from fluidgym.envs.airfoil.coords import NACA12_SHARP_COORDS_LIST
 from fluidgym.envs.util.profiles import get_inflow_profile
 from fluidgym.simulation.extensions import (
     PISOtorch,  # type: ignore[import-untyped,import-not-found]
@@ -50,7 +49,6 @@ def get_jet_locations(domain: PISOtorch.Domain) -> list[list[int]]:
 
 
 def read_airfoil(
-    path: Path,
     attack_angle_deg: float,
     cpu_device: torch.device,
     dtype=torch.float32,
@@ -59,9 +57,6 @@ def read_airfoil(
 
     Parameters
     ----------
-    path: Path
-        Path to the airfoil coordinates file.
-
     attack_angle_deg: float
         Attack angle of the airfoil in degrees.
 
@@ -76,16 +71,9 @@ def read_airfoil(
     tuple[str, torch.Tensor]
         Name of the airfoil and the coordinates as a tensor of shape (1, 2, 1, N).
     """
-    coords_list = []
-    with open(path) as file:
-        name = file.readline().strip()
-        for line in file:
-            x_str, y_str = line.split()
-            x = float(x_str)
-            y = float(y_str)
-            coords_list.append((x, y))
-
-    coords = torch.tensor(coords_list, device=cpu_device, dtype=dtype)  # WC
+    coords = torch.tensor(
+        NACA12_SHARP_COORDS_LIST, device=cpu_device, dtype=dtype
+    )  # WC
     coords = torch.movedim(coords, 1, 0)  # CW
     coords = torch.reshape(coords, (1, 2, 1, -1))  # NCHW
 
@@ -107,7 +95,7 @@ def read_airfoil(
         )
         coords = rotated_coords.permute(1, 0).unsqueeze(0).unsqueeze(2)
 
-    return name, coords
+    return "NACA 0012", coords
 
 
 def _distance_to_point(
@@ -261,7 +249,6 @@ def make_airfoil_domain(
     res_z: int,
     H: float,
     L: float,
-    airfoil_path: Path,
     vel_in: float,
     attack_angle_deg: float,
     viscosity: torch.Tensor,
@@ -337,7 +324,6 @@ def make_airfoil_domain(
 
     ### MAKE AIRFOIL GRID ###
     _, airfoil_coords = read_airfoil(
-        path=airfoil_path,
         attack_angle_deg=attack_angle_deg,
         cpu_device=cpu_device,
         dtype=dtype,

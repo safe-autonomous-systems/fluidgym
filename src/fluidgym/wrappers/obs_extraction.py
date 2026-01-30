@@ -14,7 +14,7 @@ class ObsExtraction(FluidWrapper):
 
     Parameters
     ----------
-    env: EnvT
+    env: FluidEnvLike
         The environment to wrap.
 
     keys: list[str] | None

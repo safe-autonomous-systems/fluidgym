@@ -31,7 +31,7 @@ CYLINDER_JET_3D_DEFAULT_CONFIG = {
     "local_obs_window": 3,
     "local_reward_weight": 0.8,  # Based on doi.org/10.1038/s44172-025-00446-x
     "local_2d_obs": False,
-    "use_marl": True,
+    "use_marl": False,
     "dtype": torch.float32,
     "load_initial_domain": True,
     "load_domain_statistics": True,
@@ -205,25 +205,38 @@ class CylinderJetEnv3D(CylinderEnvBase):
 
     def _get_observation_space(self) -> spaces.Dict:
         velocity_shape: tuple[int, ...]
+        pressure_shape: tuple[int, ...]
+
         if self._use_marl:
             if self._local_2d_obs:
                 velocity_shape = (
                     self._n_sensors_x_y,
                     self._ndims - 1,
                 )
+                pressure_shape = (self._n_sensors_x_y,)
             else:
                 velocity_shape = (
                     self._local_obs_window,
                     self._n_sensors_per_agent,
-                    self._n_sensors_x_y,
                     self._ndims,
+                    self._n_sensors_x_y,
+                )
+                pressure_shape = (
+                    self._local_obs_window,
+                    self._n_sensors_per_agent,
+                    self._n_sensors_x_y,
                 )
         else:
             velocity_shape = (
                 self._n_jets,
                 self._n_sensors_per_agent,
-                self._n_sensors_x_y,
                 self._ndims,
+                self._n_sensors_x_y,
+            )
+            pressure_shape = (
+                self._n_jets,
+                self._n_sensors_per_agent,
+                self._n_sensors_x_y,
             )
 
         return spaces.Dict(
@@ -237,7 +250,7 @@ class CylinderJetEnv3D(CylinderEnvBase):
                 "pressure": spaces.Box(
                     low=-np.inf,
                     high=np.inf,
-                    shape=velocity_shape[:-1],
+                    shape=pressure_shape,
                     dtype=np.float32,
                 ),
             }

@@ -5,20 +5,26 @@ FluidGym allows users to create and integrate their own custom fluid dynamics
 environments. This is particularly useful for researchers who want to experiment
 with specific fluid scenarios not covered by the built-in environments.
 
-To create a custom environment, you need to subclass either ``FluidEnv`` or
-``MultiAgentFluidEnv`` from the ``fluidgym.envs`` module, depending on whether
-your environment is single-agent or multi-agent.
+To create a custom environment, you need to subclass ``FluidEnv`` from the 
+``fluidgym.envs`` module.
 
-Here is a basic example of how to create a custom single-agent environment:
+Here is a basic example of how to create a custom environment:
 
 .. code-block:: python
 
     import torch
     from fluidgym.envs.fluid_env import FluidEnv
     from fluidgym.simulation.extensions import PISOtorch
+    from gymnasium import spaces
 
 
     class CustomFluidEnv(FluidEnv):
+        # Here, you can define whether your environment supports multi-agent RL.
+        # If not, set this to False. Otherwise, set to True and implement the 
+        # _step_marl_impl and _get_local_obs methods.
+        _supports_marl: bool = False
+
+
         def __init__(
             self,
             dt: float,
@@ -26,6 +32,7 @@ Here is a basic example of how to create a custom single-agent environment:
             step_length: float,
             episode_length: int,
             ndims: int,
+            use_marl: bool,
             dtype: torch.dtype = torch.float32,
             cuda_device: torch.device | None = None,
             load_initial_domain: bool = True,
@@ -40,6 +47,7 @@ Here is a basic example of how to create a custom single-agent environment:
                 step_length=step_length,
                 episode_length=episode_length,
                 ndims=ndims,
+                use_marl=use_marl,
                 dtype=dtype,
                 cuda_device=cuda_device,
                 load_initial_domain=load_initial_domain,
@@ -49,6 +57,14 @@ Here is a basic example of how to create a custom single-agent environment:
                 differentiable=differentiable
 
             )
+
+        def _get_observation_space(self) -> spaces.Space:
+            # Define and return the observation space for your environment
+            pass
+
+        def _get_action_space(self) -> spaces.Space:
+            # Define and return the action space for your environment
+            pass
 
         def _get_domain(self) -> PISOtorch.Domain:
             # Define and return your custom PISOtorch domain here
@@ -86,5 +102,10 @@ Here is a basic example of how to create a custom single-agent environment:
             # Implement the step logic for your environment
             pass
 
-For multi-agent environments, the process is similar, but you would subclass
-``MultiAgentFluidEnv`` instead and additionally implement ``step_marl`` and ``reset_marl`` methods.
+        def _step_marl_impl(self, action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
+            # Implement the step logic for your environment in case it supports multi-agent RL
+            pass
+
+        def _get_local_obs(self) -> torch.Tensor:
+            # Implement the logic to get local observations for multi-agent RL
+            pass

@@ -993,6 +993,7 @@ class FluidEnv(ABC, FluidEnvLike):
             assert isinstance(fps, int)
 
             # For TCF we may have too many frames, so we downsample
+            # TODO fix
             if len(frames) > 500:
                 frames = frames[::5]
 

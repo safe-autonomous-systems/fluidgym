@@ -2,15 +2,19 @@ import numpy as np
 
 import fluidgym
 from fluidgym.wrappers import FlattenObservation
-from fluidgym.integration.sb3 import VecEnv
+from fluidgym.integration.sb3 import VecFluidEnv
 
 fluid_env = fluidgym.make(
-    "CylinderJet3D-easy-v0",
+    "Airfoil3D-easy-v0",
     use_marl=True,
 )
+
+# We flatten the observation space to receive a 1D array of observations
 fluid_env = FlattenObservation(fluid_env)
 
-env = VecEnv(fluid_env)
+# For the SB3 VecEnv interface, wrap the FluidGym environment. This will give us a
+# vectorized environment with a pseudo-enviroment for each agent
+env = VecFluidEnv(fluid_env)
 
 obs = env.reset(seed=42)
 

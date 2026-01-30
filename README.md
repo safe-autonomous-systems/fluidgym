@@ -8,7 +8,7 @@
 </p>
 
 <div align="center">
-    
+
 [![PyPI version](https://badge.fury.io/py/fluidgym.svg)](https://badge.fury.io/py/fluidgym)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/fluidgym)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.9-EE4C2C?logo=pytorch&logoColor=white)
@@ -23,6 +23,7 @@
       <a href="#-installation">Installation</a> |
       <a href="#-getting-started">Getting Started</a> |
       <a href="https://safe-autonomous-systems.github.io/fluidgym">Documentation</a> | 
+      <a href="https://arxiv.org/abs/2601.15015">Paper</a> |
       <a href="#-license-&-citation">License & Citation</a>
     </h3>
 </div>

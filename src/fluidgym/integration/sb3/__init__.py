@@ -2,10 +2,10 @@
 
 from .eval_callback import EvalCallback
 from .util import test_model
-from .vec_env import VecEnv
+from .vec_env import VecFluidEnv
 
 __all__ = [
     "EvalCallback",
     "test_model",
-    "VecEnv",
+    "VecFluidEnv",
 ]

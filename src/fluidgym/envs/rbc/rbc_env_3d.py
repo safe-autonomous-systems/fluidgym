@@ -159,7 +159,7 @@ class RBCEnv3D(RBCEnvBase):
                 "velocity": spaces.Box(
                     low=-np.inf,
                     high=np.inf,
-                    shape=shape + (self._ndims,),
+                    shape=(self._ndims,) + shape,
                     dtype=np.float32,
                 ),
                 "pressure": spaces.Box(
@@ -311,7 +311,7 @@ class RBCEnv3D(RBCEnvBase):
         ]
         u = u.reshape(
             self._n_sensors_x, self._n_sensors_y, self._n_sensors_x, 3
-        ).permute(2, 1, 0, 3)
+        ).permute(3, 2, 1, 0)
 
         p = p[
             self._sensor_locations[2],
@@ -334,9 +334,9 @@ class RBCEnv3D(RBCEnvBase):
         u = global_obs["velocity"]
         p = global_obs["pressure"]
 
-        u_x = u[..., 0]  # [Z, Y, X]
-        u_y = u[..., 1]  # [Z, Y, X]
-        u_z = u[..., 2]  # [Z, Y, X]
+        u_x = u[0, ...]  # [Z, Y, X]
+        u_y = u[1, ...]  # [Z, Y, X]
+        u_z = u[2, ...]  # [Z, Y, X]
 
         local_obs_T = extract_moving_window_3d(
             field=T,
@@ -365,7 +365,7 @@ class RBCEnv3D(RBCEnvBase):
             agent_width=self._n_sensors_per_heater,
             n_agents_per_window=self._local_obs_window,
         )
-        local_obs_u = torch.stack((local_obs_u_x, local_obs_u_y, local_obs_u_z), dim=-1)
+        local_obs_u = torch.stack((local_obs_u_x, local_obs_u_y, local_obs_u_z), dim=1)
 
         local_obs_p = extract_moving_window_3d(
             field=p,

@@ -21,6 +21,7 @@ RBC_2D_DEFAULT_CONFIG = {
     "local_reward_weight": 0.2,
     "uniform_grid": False,
     "aspect_ratio": 1.0,  # equivalent to pi
+    "use_marl": False,
     "dtype": torch.float32,
     "load_initial_domain": True,
     "load_domain_statistics": True,
@@ -151,7 +152,7 @@ class RBCEnv2D(RBCEnvBase):
                 "velocity": spaces.Box(
                     low=-np.inf,
                     high=np.inf,
-                    shape=shape + (self._ndims,),
+                    shape=(self._ndims,) + shape,
                     dtype=np.float32,
                 ),
                 "pressure": spaces.Box(
@@ -181,7 +182,7 @@ class RBCEnv2D(RBCEnvBase):
 
         u = u.permute(1, 2, 0)
         u = u[self._sensor_locations[1], self._sensor_locations[0], :]
-        u = u.reshape(self._n_sensors_x, self._n_sensors_y, 2).permute(1, 0, 2)
+        u = u.reshape(self._n_sensors_x, self._n_sensors_y, 2).permute(2, 1, 0)
 
         p = p[self._sensor_locations[1], self._sensor_locations[0]]
         p = p.reshape(self._n_sensors_x, self._n_sensors_y).T
@@ -287,8 +288,8 @@ class RBCEnv2D(RBCEnvBase):
         u = global_obs["velocity"]  # [Y, X, 2]
         p = global_obs["pressure"]  # [Y, X]
 
-        u_x = u[..., 0]  # [Y, X]
-        u_y = u[..., 1]  # [Y, X]
+        u_x = u[0, ...]  # [Y, X]
+        u_y = u[1, ...]  # [Y, X]
 
         local_obs_T = extract_moving_window_2d(
             field=T,
@@ -309,7 +310,7 @@ class RBCEnv2D(RBCEnvBase):
             agent_width=self._n_sensors_per_heater,
             n_agents_per_window=self._local_obs_window,
         )
-        locla_obs_u = torch.stack([local_obs_u_x, local_obs_u_y], dim=-1)
+        locla_obs_u = torch.stack([local_obs_u_x, local_obs_u_y], dim=1)
 
         local_obs_p = extract_moving_window_2d(
             field=p,

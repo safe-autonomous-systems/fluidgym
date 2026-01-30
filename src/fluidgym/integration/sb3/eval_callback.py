@@ -15,7 +15,7 @@ from fluidgym.integration.sb3.util import (
     evaluate_model,
     plot_eval_sequence,
 )
-from fluidgym.integration.sb3.vec_env import VecEnv
+from fluidgym.integration.sb3.vec_env import VecFluidEnv
 
 
 class EvalCallback(BaseCallback):
@@ -25,8 +25,8 @@ class EvalCallback(BaseCallback):
 
     def __init__(
         self,
-        env: GymFluidEnv | VecEnv,
-        eval_env: GymFluidEnv | VecEnv,
+        env: GymFluidEnv | VecFluidEnv,
+        eval_env: GymFluidEnv | VecFluidEnv,
         eval_freq: int,
         n_eval_episodes: int,
         use_wandb: bool,
@@ -80,7 +80,7 @@ class EvalCallback(BaseCallback):
             "Only Box action spaces are supported."
         )
 
-        if isinstance(env, VecEnv) and env.unwrapped.use_marl:
+        if isinstance(env, VecFluidEnv) and env.unwrapped.use_marl:
             self.num_actions = env.num_envs
             self.metrics = ["global_reward"] + env.unwrapped.metrics
         else:
@@ -100,7 +100,7 @@ class EvalCallback(BaseCallback):
     @property
     def _num_env_steps(self) -> int:
         """Return the number of environment steps taken so far."""
-        if isinstance(self.env, VecEnv) and self.env.unwrapped.use_marl:
+        if isinstance(self.env, VecFluidEnv) and self.env.unwrapped.use_marl:
             return self.num_timesteps // self.env.num_envs
         else:
             return self.num_timesteps
@@ -232,7 +232,7 @@ class EvalCallback(BaseCallback):
 
     def _evaluate_model(
         self,
-        env: GymFluidEnv | VecEnv,
+        env: GymFluidEnv | VecFluidEnv,
         randomize: bool,
         log: bool = False,
         save: bool = False,

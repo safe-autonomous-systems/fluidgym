@@ -6,4 +6,5 @@ Basic Usage
    :maxdepth: 2
 
    interfaces/index
+   wrappers/index
    rendering

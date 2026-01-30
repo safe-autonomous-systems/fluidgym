@@ -71,7 +71,7 @@ SMALL_TCF_3D_DEFAULT_CONFIG = {
     "episode_length": 1000,
     "local_obs_window": 1,
     "local_reward_weight": 0.0,
-    "use_marl": False,
+    "use_marl": True,
     "C_smag": 0.0,
     "use_van_driest": False,
     "init_with_noise": True,
@@ -385,15 +385,26 @@ class TCF3DBottomEnv(FluidEnv):
 
     def _get_observation_space(self) -> spaces.Dict:
         """Per-agent observation space."""
-        shape: tuple[int, ...]
+        velocity_shape: tuple[int, ...]
+        pressure_shape: tuple[int, ...]
 
         if self._use_marl:
-            shape = (
+            velocity_shape = (
+                self._local_obs_window,
+                self._local_obs_window,
+                2,
+            )
+            pressure_shape = (
                 self._local_obs_window,
                 self._local_obs_window,
             )
         else:
-            shape = (
+            velocity_shape = (
+                2,
+                self._z,
+                self._x,
+            )
+            pressure_shape = (
                 self._z,
                 self._x,
             )
@@ -403,13 +414,13 @@ class TCF3DBottomEnv(FluidEnv):
                 "velocity": spaces.Box(
                     low=-np.inf,
                     high=np.inf,
-                    shape=shape + (2,),
+                    shape=velocity_shape,
                     dtype=np.float32,
                 ),
                 "pressure": spaces.Box(
                     low=-np.inf,
                     high=np.inf,
-                    shape=shape,
+                    shape=pressure_shape,
                     dtype=np.float32,
                 ),
             }
@@ -657,7 +668,7 @@ class TCF3DBottomEnv(FluidEnv):
             :,
             y_idx,
             :,
-        ].permute(1, 2, 0)
+        ]
         p_slice = p[:, y_idx, :]
 
         return {
@@ -1069,15 +1080,27 @@ class TCF3DBothEnv(TCF3DBottomEnv):
 
     def _get_observation_space(self) -> spaces.Dict:
         """Per-agent observation space."""
-        shape: tuple[int, ...]
+        velocity_shape: tuple[int, ...]
+        pressure_shape: tuple[int, ...]
 
         if self._use_marl:
-            shape = (
+            velocity_shape = (
+                self._local_obs_window,
+                self._local_obs_window,
+                2,
+            )
+            pressure_shape = (
                 self._local_obs_window,
                 self._local_obs_window,
             )
         else:
-            shape = (
+            velocity_shape = (
+                2,
+                2,
+                self._z,
+                self._x,
+            )
+            pressure_shape = (
                 2,
                 self._z,
                 self._x,
@@ -1088,13 +1111,13 @@ class TCF3DBothEnv(TCF3DBottomEnv):
                 "velocity": spaces.Box(
                     low=-np.inf,
                     high=np.inf,
-                    shape=shape + (2,),
+                    shape=velocity_shape,
                     dtype=np.float32,
                 ),
                 "pressure": spaces.Box(
                     low=-np.inf,
                     high=np.inf,
-                    shape=shape,
+                    shape=pressure_shape,
                     dtype=np.float32,
                 ),
             }

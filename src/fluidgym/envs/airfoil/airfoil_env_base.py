@@ -65,8 +65,6 @@ class AirfoilEnvBase(FluidEnv):
 
     _action_smoothing_alpha: float = 0.1
 
-    _airfoil_filename: str = "naca0012_sharp.dat"
-
     _n_jets: int = 3
     _res_z: int = 96
     U_mean: float = 0.3
@@ -125,7 +123,6 @@ class AirfoilEnvBase(FluidEnv):
 
         self._ndims = ndims
         _, self._airfoil_coords = read_airfoil(
-            path=self._airfoil_path,
             attack_angle_deg=self._attack_angle_deg,
             cpu_device=torch.device("cpu"),
             dtype=torch.float32,
@@ -165,15 +162,6 @@ class AirfoilEnvBase(FluidEnv):
     def render_shape(self) -> tuple[int, ...]:
         """The shape of the rendered domain."""
         return (600, 150, 150)
-
-    @property
-    def _airfoil_path(self) -> Path:
-        """Path to the airfoil coordinate file."""
-        return (
-            global_config.initial_domains_path
-            / self.initial_domain_id
-            / self._airfoil_filename
-        )
 
     @property
     def _cl_cd_ref(self) -> float:
@@ -231,7 +219,6 @@ class AirfoilEnvBase(FluidEnv):
             res_z=self._res_z,
             H=self.H,
             L=self.L,
-            airfoil_path=self._airfoil_path,
             vel_in=self.U_mean,
             attack_angle_deg=self._attack_angle_deg,
             viscosity=self._viscosity.to(self._cpu_device),

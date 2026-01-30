@@ -34,7 +34,7 @@ AIRFOIL_3D_DEFAULT_CONFIG = {
     "episode_length": 200,
     "attack_angle_deg": 10.0,
     "local_obs_window": 1,
-    "use_marl": True,
+    "use_marl": False,
     "local_reward_weight": 0.5,  # Based on doi.org/10.48550/arXiv.2509.10185
     "local_2d_obs": False,
     "init_from_2d": True,
@@ -222,6 +222,7 @@ class AirfoilEnv3D(AirfoilEnvBase):
     def _get_observation_space(self) -> spaces.Dict:
         n_sensors_x_y = self._sensor_locations.shape[-1]
         velocity_shape: tuple[int, ...]
+        pressure_shape: tuple[int, ...]
 
         if self._use_marl:
             if self._local_2d_obs:
@@ -229,19 +230,30 @@ class AirfoilEnv3D(AirfoilEnvBase):
                     n_sensors_x_y,
                     self._ndims - 1,
                 )
+                pressure_shape = (n_sensors_x_y,)
             else:
                 velocity_shape = (
                     self._local_obs_window,
                     self._n_sensors_per_agent,
-                    n_sensors_x_y,
                     self._ndims,
+                    n_sensors_x_y,
+                )
+                pressure_shape = (
+                    self._local_obs_window,
+                    self._n_sensors_per_agent,
+                    n_sensors_x_y,
                 )
         else:
             velocity_shape = (
                 self._n_agents,
                 self._n_sensors_per_agent,
-                n_sensors_x_y,
                 self._ndims,
+                n_sensors_x_y,
+            )
+            pressure_shape = (
+                self._n_agents,
+                self._n_sensors_per_agent,
+                n_sensors_x_y,
             )
 
         return spaces.Dict(
@@ -255,7 +267,7 @@ class AirfoilEnv3D(AirfoilEnvBase):
                 "pressure": spaces.Box(
                     low=-np.inf,
                     high=np.inf,
-                    shape=velocity_shape[:-1],
+                    shape=pressure_shape,
                     dtype=np.float32,
                 ),
             }
@@ -301,19 +313,16 @@ class AirfoilEnv3D(AirfoilEnvBase):
         )
 
         all_sensors = []
-        indices = []
+
         # Filter out airfoil mask
         for i in range(grid_coords.shape[2]):
             x_idx = grid_coords[0, :, i]
             y_idx = grid_coords[1, :, i]
 
             if self._airfoil_mask[0, y_idx, x_idx].any():
-                indices.append(i)
                 continue
-            all_sensors.append(grid_coords[:, :, i : i + 1])
 
-        print(indices)
-        exit()
+            all_sensors.append(grid_coords[:, :, i : i + 1])
 
         grid_coords = torch.cat(all_sensors, dim=2)
 

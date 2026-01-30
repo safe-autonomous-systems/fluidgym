@@ -22,13 +22,16 @@ def flatten_box_space(space: spaces.Box) -> spaces.Box:
     return spaces.Box(low=low, high=high, dtype=space.dtype)  # type: ignore
 
 
-def flatten_dict_space(space: spaces.Dict) -> spaces.Box:
+def flatten_dict_space(space: spaces.Dict, keys: list[str] | None = None) -> spaces.Box:
     """Flattens a Gymnasium Dict space into a single Box space.
 
     Parameters
     ----------
     space: spaces.Dict
         The Dict space to flatten.
+
+    keys: list[str] | None
+        The keys to include in the flattening. If None, all keys are included.
 
     Returns
     -------
@@ -38,7 +41,13 @@ def flatten_dict_space(space: spaces.Dict) -> spaces.Box:
     if not isinstance(space, spaces.Dict):
         raise TypeError(f"Expected spaces.Dict, got {type(space)}")
 
-    items = list(space.spaces.items())
+    if keys is not None:
+        for k in keys:
+            if k not in space.spaces:
+                raise KeyError(f"Key '{k}' not found in the Dict space.")
+        items = [(k, space.spaces[k]) for k in keys]
+    else:
+        items = list(space.spaces.items())
 
     lows = []
     highs = []

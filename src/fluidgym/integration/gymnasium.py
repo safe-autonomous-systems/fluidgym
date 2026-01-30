@@ -1,14 +1,14 @@
 """Gymnasium interface for FluidGym environments."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import torch
 from gymnasium import Env, spaces
 
 from fluidgym.envs.fluid_env import FluidEnv
-from fluidgym.types import EnvMode
+from fluidgym.types import FluidEnvLike
 
 
 class GymFluidEnv(Env):
@@ -18,7 +18,7 @@ class GymFluidEnv(Env):
     action_space: spaces.Box
     observation_space: spaces.Space
 
-    def __init__(self, env: FluidEnv):
+    def __init__(self, env: FluidEnvLike):
         super().__init__()
 
         self.__env = env
@@ -62,9 +62,7 @@ class GymFluidEnv(Env):
             and info dictionary.
         """
         obs, reward, terminated, truncated, info = self.__env.step(
-            torch.tensor(
-                action, device=self.__env._cuda_device, dtype=self.__env._dtype
-            )
+            torch.tensor(action, device=self.__env.cuda_device)
         )
         info_np = {k: np.array(self.__to_np(v)) for k, v in info.items()}
 
@@ -163,21 +161,10 @@ class GymFluidEnv(Env):
     @property
     def unwrapped(self) -> FluidEnv:  # type: ignore[override]
         """Returns the base non-wrapped environment."""
-        return self.__env
-
-    @property
-    def id(self) -> str:
-        """Unique identifier for the environment."""
-        return self.__env.id
-
-    @property
-    def mode(self) -> EnvMode:
-        """The current mode of the environment ('train', 'val', or 'test')."""
-        return self.__env.mode
-
-    @mode.setter
-    def mode(self, mode: EnvMode) -> None:
-        self.__env.mode = mode
+        if hasattr(self.__env, "unwrapped"):
+            return self.__env.unwrapped  # type: ignore
+        else:
+            return cast(FluidEnv, self.__env)
 
     def train(self) -> None:
         """Set the environment to training mode."""
@@ -190,10 +177,6 @@ class GymFluidEnv(Env):
     def test(self) -> None:
         """Set the environment to test mode."""
         self.__env.test()
-
-    def init(self) -> None:
-        """Initialize the environment."""
-        self.__env.init()
 
     def seed(self, seed: int) -> None:
         """Set the seed for the environment.

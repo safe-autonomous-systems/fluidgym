@@ -13,7 +13,7 @@ class SensorNoise(FluidWrapper):
 
     Parameters
     ----------
-    env: EnvT
+    env: FluidEnvLike
         The environment to wrap.
 
     sigma: float

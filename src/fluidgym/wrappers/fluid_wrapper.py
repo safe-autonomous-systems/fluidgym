@@ -17,7 +17,7 @@ class FluidWrapper(FluidEnvLike, Generic[EnvT]):  # type: ignore[misc]
 
     Parameters
     ----------
-    env: EnvT
+    env: FluidEnvLike
         The environment to wrap.
     """
 
