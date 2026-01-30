@@ -7,6 +7,23 @@
     </a>
 </p>
 
+<table style="border-collapse: collapse; border: none;">
+  <tr>
+    <td style="border: none; padding: 0;">
+      <img src="docs/build/html/_static/img/gifs/cylinder.gif" style="max-width: 100%; height: auto;" />
+    </td>
+    <td style="border: none; padding: 0;">
+      <img src="docs/build/html/_static/img/gifs/rbc.gif" style="max-width: 100%; height: auto;" />
+    </td>
+    <td style="border: none; padding: 0;">
+      <img src="docs/build/html/_static/img/gifs/airfoil.gif" style="max-width: 100%; height: auto;" />
+    </td>
+    <td style="border: none; padding: 0;">
+      <img src="docs/build/html/_static/img/gifs/tcf.gif" style="max-width: 100%; height: auto;" />
+    </td>
+  </tr>
+</table>
+
 <div align="center">
 
 [![PyPI version](https://badge.fury.io/py/fluidgym.svg)](https://badge.fury.io/py/fluidgym)
@@ -27,6 +44,22 @@
       <a href="#-license-&-citation">License & Citation</a>
     </h3>
 </div>
+
+---
+
+## Key Features
+
+- **Standalone, GPU-accelerated fluid dynamics** implemented fully in PyTorch — no external CFD solvers required.
+- **Fully differentiable environments**, enabling both reinforcement learning and gradient-based control methods.
+- **Gymnasium-like API** with seamless integration into common RL frameworks.
+- **Standardized benchmarks** with fixed train/validation/test splits for fair and reproducible evaluation.
+- **Diverse AFC environments** (2D & 3D) with multiple difficulty levels, covering different regimes.
+- **Single-agent and multi-agent support** for centralized and decentralized control.
+- **Reference baselines and experiments** provided for widely used RL algorithms PPO and SAC.
+
+### Models & Data
+- **All trained models** are publicly available on [HuggingFace](https://huggingface.co/collections/safe-autonomous-systems/fluidgym-benchmark-models).
+- **Complete training and test datasets** with results for all experimental runs are released for transparent comparison and reproducibility via our [HuggingFace dataset](https://huggingface.co/datasets/safe-autonomous-systems/fluidgym-experiments).
 
 ---
 
@@ -64,6 +97,8 @@ on HuggingFace (trained with FluidGym v0.0.2). If you want to use the models, ma
 to install the FluidGym v0.0.2 or use the ```FlattenObservation``` wrapper. In case you
 encounter any issues, please report this via an Issue on GitHub. Thank you!
 
+--
+
 ## Installation
 
 ### 📦 Installation from PyPi
@@ -79,7 +114,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cu128
 pip install fluidgym
 ```
 
-### 🐳 Using Docker (coming soon)
+### 🐳 Using Docker
 
 Instead of installing FluidGym you can use one of our Docker containers:
 
@@ -98,7 +133,7 @@ docker run -it --gpus all fluidgym-runtime bash
 docker run -it --gpus all fluidgym-devel bash
 ```
 
-### 🧱 Build from Source (GitHub)
+### 🧱 Build from Source
 
 1. Create a new conda environment and activate it:
 ```bash
@@ -150,4 +185,17 @@ for _ in range(50):
 
 ## License & Citation
 
-This repository is published under the MIT license.
+This repository is published under the MIT license. If you use FliudGym in your work, please cite us:
+
+```bibtex
+@misc{becktepe-fluidgym26,
+      title={Plug-and-Play Benchmarking of Reinforcement Learning Algorithms for Large-Scale Flow Control}, 
+      author={Jannis Becktepe and Aleksandra Franz and Nils Thuerey and Sebastian Peitz},
+      year={2026},
+      eprint={2601.15015},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2601.15015}, 
+      note={GitHub: https://github.com/safe-autonomous-systems/fluidgym}, 
+}
+```
