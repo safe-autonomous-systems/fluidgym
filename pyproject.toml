@@ -1,11 +1,11 @@
 [project]
 name = "fluidgym"
-version = "0.0.2"
+version = "0.1.0"
 description = "Plug-and-Play Benchmarking of Reinforcement Learning Algorithms for Large-Scale Flow Control"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
-    { name = "Jannis Becktepe", email = "jannis@becktepe.de" }
+    { name = "Jannis Becktepe", email = "jannis.becktepe@tu-dortmund.de" }
 ]
 requires-python = ">=3.10,<3.14"
 dependencies = [
