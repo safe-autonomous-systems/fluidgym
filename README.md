@@ -97,7 +97,7 @@ on HuggingFace (trained with FluidGym v0.0.2). If you want to use the models, ma
 to install the FluidGym v0.0.2 or use the ```FlattenObservation``` wrapper. In case you
 encounter any issues, please report this via an Issue on GitHub. Thank you!
 
---
+---
 
 ## Installation
 
