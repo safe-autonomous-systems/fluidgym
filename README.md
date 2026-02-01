@@ -95,7 +95,7 @@ multiple GPUs.
 **Important**: The ```FlattenObservation``` ensure direct compatiblity with our models
 on HuggingFace (trained with FluidGym v0.0.2). If you want to use the models, make sure
 to install the FluidGym v0.0.2 or use the ```FlattenObservation``` wrapper. In case you
-encounter any issues, please report this via an Issue on GitHub. Thank you!
+encounter any issues, please report these via an Issue on GitHub. Thank you!
 
 ---
 
@@ -170,7 +170,7 @@ FluidGym provides a ```gymnasium```-like interface that can be used as follows:
 import fluidgym
 
 env = fluidgym.make(
-    "JetCylinder2D-easy-v0",
+    "CylinderJet2D-easy-v0",
 )
 obs, info = env.reset(seed=42)
 
