@@ -18,8 +18,15 @@ class GymFluidEnv(Env):
     action_space: spaces.Box
     observation_space: spaces.Space
 
-    def __init__(self, env: FluidEnvLike):
+    def __init__(self, env: FluidEnvLike, render_mode: str | None = None):
         super().__init__()
+
+        if render_mode is not None and render_mode != "rgb_array":
+            raise ValueError(
+                f"Unsupported render mode: {render_mode}. "
+                f"Only 'rgb_array' is supported."
+            )
+        self.render_mode = render_mode
 
         self.__env = env
         self.action_space = self.__env.action_space
@@ -110,7 +117,7 @@ class GymFluidEnv(Env):
         render_3d: bool = False,
         filename: str | None = None,
         output_path: Path | None = None,
-    ) -> None:
+    ) -> np.ndarray | None:
         """Render the current state of the environment.
 
         Parameters
@@ -128,13 +135,20 @@ class GymFluidEnv(Env):
         output_path: Path | None
             The output path to save the rendered files. If None, saves to the current
             directory. Defaults to None.
+
+        Returns
+        -------
+        np.ndarray | None
+            The rendered frame as a numpy array if the render mode is "rgb_array",
+            otherwise None.
         """
-        self.__env.render(
+        frame = self.__env.render(
             save=save,
             render_3d=render_3d,
             filename=filename,
             output_path=output_path,
         )
+        return frame if self.render_mode == "rgb_array" else None
 
     def save_gif(
         self, filename: str = "fluidgym.gif", output_path: Path | None = None
