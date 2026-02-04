@@ -7,7 +7,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import wandb
 from stable_baselines3.common.callbacks import BaseCallback
 
 from fluidgym.integration.gymnasium import GymFluidEnv
@@ -73,6 +72,7 @@ class EvalCallback(BaseCallback):
         self.log_freq = eval_freq // 10  # Log every 10% of the eval frequency
         self.n_eval_episodes = n_eval_episodes
         self.use_wandb = use_wandb
+
         self.checkpoint_latest = checkpoint_latest
         self.save_evaluation = save_eval_sequence
 
@@ -116,6 +116,8 @@ class EvalCallback(BaseCallback):
         )
 
         if self.use_wandb:
+            import wandb
+
             wandb.log(data, step=step)
 
     def _on_step(self) -> bool:
