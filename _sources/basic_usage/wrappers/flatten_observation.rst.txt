@@ -1,7 +1,7 @@
 FlattenObservation Wrapper
 ==========================
 
-Standard observations in FluidGym from 0.1.0 are dictionarys containing multiple tensors,
+Standard observations in FluidGym from 0.1 are dictionarys containing multiple tensors,
 e.g., velocity field, pressure field, etc. To enable compatibility with interfaces that
 expect flat observation spaces (e.g., Gymnasium, Stable-Baselines3, etc.), we provide the
 ``FlattenObservation`` wrapper, which flattens the observation dictionary into a single
