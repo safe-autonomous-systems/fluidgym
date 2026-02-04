@@ -72,6 +72,8 @@ class FlattenObservation(FluidWrapper):
             A tuple containing the initial observation and an info dictionary.
         """
         obs, info = self._env.reset(seed=seed, randomize=randomize)
+        for k, v in obs.items():
+            info["original_" + k] = v
         return self.__flatten_obs(obs), info
 
     def step(
@@ -95,4 +97,6 @@ class FlattenObservation(FluidWrapper):
             truncated flag, and info dictionary.
         """
         obs, reward, terminated, truncated, info = self._env.step(action)
+        for k, v in obs.items():
+            info["original_" + k] = v
         return self.__flatten_obs(obs), reward, terminated, truncated, info

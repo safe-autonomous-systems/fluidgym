@@ -21,6 +21,12 @@ class GymFluidEnv(Env):
     def __init__(self, env: FluidEnvLike, render_mode: str | None = None):
         super().__init__()
 
+        if env.use_marl:
+            raise ValueError(
+                "GymFluidEnv does not support multi-agent environments. "
+                "Please use a single-agent environment."
+            )
+
         if render_mode is not None and render_mode != "rgb_array":
             raise ValueError(
                 f"Unsupported render mode: {render_mode}. "
