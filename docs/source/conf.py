@@ -11,8 +11,8 @@ copyright = (
     f"{datetime.date.today().strftime('%Y')}, "
     "Safe Autonomous Systems (SAS), TU Dortmund University"
 )
-release = "0.1.0"
-version = "0.1.0"
+release = "0.1.1"
+version = "0.1.1"
 
 templates_path = ["_templates"]
 html_static_path = ["_static"]

@@ -63,9 +63,9 @@
 
 ---
 
-## Introducing FluidGym v0.1.0
+## Introducing FluidGym v0.1
 
-We are happy to announce that FluidGym v0.1.0 comes with many updates and 
+We are happy to announce that FluidGym v0.1 comes with many updates and 
 improvements, mainly focusing on more convenient usage and integration with RL 
 frameworks:
 
