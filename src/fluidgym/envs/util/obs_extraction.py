@@ -248,6 +248,7 @@ def extract_moving_window_2d(
     return torch.stack(window_list, dim=0)  # [n_agents, Y, window_size_x]
 
 
+
 def extract_moving_window_2d_x_z(
     field: torch.Tensor,
     n_agents_x: int,
@@ -309,33 +310,39 @@ def extract_moving_window_2d_x_z(
         n_agents_z, agent_width, n_agents_x, agent_width
     )  # [n_agents_z, agent_width_z, n_agents_x, agent_width_x]
     field_agents = field_agents.permute(0, 2, 1, 3).contiguous()
+    # field_agents: [n_agents_z, n_agents_x, agent_width_z, agent_width_x]
 
-    # First, we pad s.t. the first agent has a full window
-    field_agents = torch.roll(field_agents, shifts=(pad_z, pad_x), dims=(0, 1))
+    # mean(dim=(2,3)) is independent per agent block, so compute it once
+    # instead of recomputing inside the loop on each window slice
+    agent_means = field_agents.mean(dim=(2, 3))  # [n_agents_z, n_agents_x]
 
-    windows = []
-    # Then, we start to extract windows and roll again
-    for _ in range(n_agents_x):
-        for _ in range(n_agents_z):
-            local_window = field_agents[:n_agents_per_window_z, :n_agents_per_window_x]
+    # Apply the initial centering shift on the reduced 2D grid
+    agent_means = torch.roll(agent_means, shifts=(pad_z, pad_x), dims=(0, 1))
 
-            # Bring back to [Z, X] shape
-            local_window = local_window.mean(dim=(2, 3))
-            # local_window = local_window.permute(0, 2, 1, 3)
-            # local_window = local_window.view(
-            #     n_agents_per_window_z, agent_width, n_agents_per_window_x, agent_width
-            # )
-            # local_window = local_window.permute(0, 2, 1, 3).mean(dim=(2, 3))
+    # Circular padding: roll is circular, so windows wrap around.
+    # Extend the grid so that unfold can reach all circular windows.
+    Wz = n_agents_per_window_z
+    Wx = n_agents_per_window_x
+    if Wz > 1:
+        agent_means = torch.cat(
+            [agent_means, agent_means[: Wz - 1]], dim=0
+        )
+    if Wx > 1:
+        agent_means = torch.cat(
+            [agent_means, agent_means[:, : Wx - 1]], dim=1
+        )
+    # agent_means: [n_agents_z + Wz - 1, n_agents_x + Wx - 1]
 
-            # Flip x and z to match original field orientation
-            # local_window = local_window.flip(dims=(0,))
+    # Extract all circular sliding windows in two unfold calls
+    windows = agent_means.unfold(0, Wz, 1).unfold(1, Wx, 1)
+    # windows: [n_agents_z, n_agents_x, Wz, Wx]
 
-            windows += [local_window]
+    # Match original output order: outer loop over x, inner over z
+    windows = windows.permute(1, 0, 2, 3).contiguous()
+    windows = windows.reshape(n_agents_x * n_agents_z, Wz, Wx)
 
-            field_agents = torch.roll(field_agents, shifts=-1, dims=0)
-        field_agents = torch.roll(field_agents, shifts=-1, dims=1)
+    return windows
 
-    return torch.stack(windows, dim=0)
 
 
 def extract_moving_window_3d(
