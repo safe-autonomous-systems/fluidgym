@@ -118,8 +118,8 @@ pip install fluidgym
 
 Instead of installing FluidGym you can use one of our Docker containers:
 
-- [fluidgym-runtime](https://hub.docker.com/repository/docker/becktepe/fluidgym-runtime) for running FluidGym
-- [fluidgym-devel](https://hub.docker.com/repository/docker/becktepe/fluidgym-devel) for development
+- [fluidgym-runtime](https://hub.docker.com/r/becktepe/fluidgym-runtime) for running FluidGym
+- [fluidgym-devel](https://hub.docker.com/r/becktepe/fluidgym-devel) for development
 
 Both containers come with the following Miniconda environments:
 - ```py310```: Python 3.10
