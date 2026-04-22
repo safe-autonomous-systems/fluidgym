@@ -513,6 +513,9 @@ class FluidEnv(ABC, FluidEnvLike):
             Whether to randomize the initial state. If None, the default behavior is
             used.
         """
+        if randomize is None:
+            randomize = self._randomize_initial_state
+
         if self.__load_domain_on_reset:
             try:
                 idx = (
@@ -542,9 +545,6 @@ class FluidEnv(ABC, FluidEnvLike):
 
         # Some envs may need additional initialization
         self._additional_initialization()
-
-        if randomize is None:
-            randomize = self._randomize_initial_state
 
         if randomize:
             with torch.no_grad():
@@ -1103,8 +1103,15 @@ class FluidEnv(ABC, FluidEnvLike):
         domain.PrepareSolve()
         return domain
 
-    def init(self) -> None:
-        """Generate and save the initial domain if it does not already exist."""
+    def init(self, domain_idxs: list[int] | None = None) -> None:
+        """Generate and save the initial domain if it does not already exist.
+
+        Parameters
+        ----------
+        domain_idxs: list[int]
+            List of domain indices to initialize. If empty, initializes all domains.
+            Defaults to None.
+        """
         self._enable_actions = False
         self.__load_domain_on_reset = False
 
@@ -1117,7 +1124,10 @@ class FluidEnv(ABC, FluidEnvLike):
                 / str(idx),
             )
 
-        for i in range(N_INITIAL_DOMAINS):
+        if domain_idxs is None:
+            domain_idxs = list(range(N_INITIAL_DOMAINS))
+
+        for i in domain_idxs:
             self._logger.info(f"Generating initial domains {i}")
             for mode_seed, mode in zip(
                 MODE_SEEDS,
