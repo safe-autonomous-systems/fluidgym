@@ -56,3 +56,5 @@ autodoc_mock_imports = [
 
 autosummary_generate = True
 autosummary_generate_overwrite = True
+
+autosectionlabel_prefix_document = True
