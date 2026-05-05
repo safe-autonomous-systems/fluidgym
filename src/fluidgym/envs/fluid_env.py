@@ -779,6 +779,9 @@ class FluidEnv(ABC, FluidEnvLike):
                 f"{self._zero_action.shape}."
             )
 
+        if self._n_steps >= self._episode_length:
+            raise RuntimeError("Episode has already terminated. Call 'reset()' first.")
+
         if self._use_marl:
             obs, reward, terminated, info = self._step_marl_impl(action)
         else:
