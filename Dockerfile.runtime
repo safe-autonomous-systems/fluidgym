@@ -42,7 +42,7 @@ RUN conda run -n py313 pip install fluidgym
 
 # Set py312 as default env
 ENV CONDA_DEFAULT_ENV=py312
-ENV PATH=${CONDA_DIR}/envs/py311/bin:${PATH}
+ENV PATH=${CONDA_DIR}/envs/py312/bin:${PATH}
 
 WORKDIR /workspace
 CMD ["/bin/bash"]
