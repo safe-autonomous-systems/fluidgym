@@ -10,16 +10,16 @@
 <table style="border-collapse: collapse; border: none;">
   <tr>
     <td style="border: none; padding: 0;">
-      <img src="docs/build/html/static/img/videos/cylinder.gif" style="max-width: 100%; height: auto;" />
+      <img src="docs/source/_static/videos/cylinder.gif" style="max-width: 100%; height: auto;" />
     </td>
     <td style="border: none; padding: 0;">
-      <img src="docs/build/html/static/img/videos/rbc.gif" style="max-width: 100%; height: auto;" />
+      <img src="docs/source/_static/videos/rbc.gif" style="max-width: 100%; height: auto;" />
     </td>
     <td style="border: none; padding: 0;">
-      <img src="docs/build/html/static/img/videos/airfoil.gif" style="max-width: 100%; height: auto;" />
+      <img src="docs/source/_static/videos/airfoil.gif" style="max-width: 100%; height: auto;" />
     </td>
     <td style="border: none; padding: 0;">
-      <img src="docs/build/html/static/img/videos/tcf.gif" style="max-width: 100%; height: auto;" />
+      <img src="docs/source/_static/videos/tcf.gif" style="max-width: 100%; height: auto;" />
     </td>
   </tr>
 </table>
