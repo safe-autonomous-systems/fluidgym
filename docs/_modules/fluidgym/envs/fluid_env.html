@@ -1046,7 +1046,7 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;CUDA is not available. FluidGym requires CUDA.&quot;</span><span class="p">)</span>
-    
+
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auto_render</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__frames</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">save_gif</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;episode_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_n_episodes</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
