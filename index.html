@@ -1,176 +1,511 @@
-
-
 <!DOCTYPE html>
-<html class="writer-html5" lang="en" data-content_root="./">
+<html lang="en">
 <head>
-  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FluidGym Documentation &mdash; FluidGym 0.1.1 documentation</title>
-      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
-      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
-
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   
-      <script src="_static/jquery.js?v=5d32c60e"></script>
-      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=5929fcd5"></script>
-      <script src="_static/doctools.js?v=9bcbadda"></script>
-      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
-      <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <script src="_static/js/theme.js"></script>
-    <link rel="index" title="Index" href="genindex.html" />
-    <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Installation" href="installation.html" /> 
+  <!-- Primary Meta Tags -->
+  <!-- TODO: Replace with your paper title and author names -->
+  <meta name="title" content="Plug-and-Play Benchmarking of Reinforcement Learning Algorithms for Large-Scale Flow Control">
+  <!-- TODO: Write a compelling 150-160 character description of your research -->
+  <meta name="description" content="FluidGym is the first standalone, fully differentiable PyTorch benchmark suite for reinforcement learning in active flow control, featuring diverse 2D and 3D tasks.">
+  <!-- TODO: Add 5-10 relevant keywords for your research area -->
+  <meta name="keywords" content="machine learning, reinforcement learning, flow, fluid, benchmark, control, differentiable, AI">
+  <!-- TODO: List all authors -->
+  <meta name="author" content="Jannis Becktepe, Aleksandra Franz, Nils Thuerey, Sebastian Peitz">
+  <meta name="robots" content="index, follow">
+  <meta name="language" content="English">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="article">
+  <!-- TODO: Replace with your institution or lab name -->
+  <meta property="og:site_name" content="Safe Autonomous Systems, TU Dortmund University">
+  <!-- TODO: Same as paper title above -->
+  <meta property="og:title" content="Plug-and-Play Benchmarking of Reinforcement Learning Algorithms for Large-Scale Flow Control">
+  <!-- TODO: Same as description above -->
+  <meta property="og:description" content="FluidGym is the first standalone, fully differentiable PyTorch benchmark suite for reinforcement learning in active flow control, featuring diverse 2D and 3D tasks.">
+  <!-- TODO: Replace with your actual website URL -->
+  <meta property="og:url" content="https://fluidgym.github.io">
+  <!-- TODO: Create a 1200x630px preview image and update path -->
+  <meta property="og:image" content="https://fluidgym.github.io/static/images/envs_uncontrolled_cropped.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Plug-and-Play Benchmarking of Reinforcement Learning Algorithms for Large-Scale Flow Control - Research Preview">
+  <meta property="article:published_time" content="2026-06-01T00:00:00.000Z">
+  <meta property="article:author" content="Jannis Becktepe">
+  <meta property="article:section" content="Research">
+  <meta property="article:tag" content="reinforcement learning">
+  <meta property="article:tag" content="flow control">
+
+  <!-- Academic/Research Specific -->
+  <meta name="citation_title" content="Plug-and-Play Benchmarking of Reinforcement Learning Algorithms for Large-Scale Flow Control - Research Preview">
+  <meta name="citation_author" content="Becktepe, Jannis">
+  <meta name="citation_author" content="Franz, Aleksandra">
+  <meta name="citation_author" content="Thuerey, Nils">
+  <meta name="citation_author" content="Peitz, Sebastian">
+  <meta name="citation_publication_date" content="2024">
+  <meta name="citation_conference_title" content="ICML 2026">
+  <meta name="citation_pdf_url" content="https://fluidgym.github.io/static/pdfs/paper.pdf">
+  
+  <!-- Additional SEO -->
+  <meta name="theme-color" content="#2563eb">
+  <meta name="msapplication-TileColor" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  
+  <!-- Preconnect for performance -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://ajax.googleapis.com">
+  <link rel="preconnect" href="https://documentcloud.adobe.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+
+
+  <!-- TODO: Replace with your paper title and authors -->
+  <title>Plug-and-Play Benchmarking of Reinforcement Learning Algorithms for Large-Scale Flow Control | ICML 2026</title>
+  
+  <!-- Favicon and App Icons -->
+  <link rel="icon" type="image/x-icon" href="static/images/favicon.ico">
+  <link rel="apple-touch-icon" href="static/images/favicon.ico">
+  
+  <!-- Critical CSS - Load synchronously -->
+  <link rel="stylesheet" href="static/css/bulma.min.css">
+  <link rel="stylesheet" href="static/css/index.css">
+  
+  <!-- Non-critical CSS - Load asynchronously -->
+  <link rel="preload" href="static/css/bulma-carousel.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="static/css/bulma-slider.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="static/css/fontawesome.all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  
+  <!-- Fallback for browsers that don't support preload -->
+  <noscript>
+    <link rel="stylesheet" href="static/css/bulma-carousel.min.css">
+    <link rel="stylesheet" href="static/css/bulma-slider.min.css">
+    <link rel="stylesheet" href="static/css/fontawesome.all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  </noscript>
+  
+  <!-- Fonts - Optimized loading -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Defer non-critical JavaScript -->
+  <script defer src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="https://documentcloud.adobe.com/view-sdk/main.js"></script>
+  <script defer src="static/js/fontawesome.all.min.js"></script>
+  <script defer src="static/js/bulma-carousel.min.js"></script>
+  <script defer src="static/js/bulma-slider.min.js"></script>
+  <script defer src="static/js/index.js"></script>
+  <style>
+    .teaser-gif-row {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      margin-top: 24px;
+      flex-wrap: nowrap;
+    }
+    .teaser-gif-row img {
+      height: 160px;
+      object-fit: cover;
+      flex-shrink: 1;
+    }
+    @media (max-width: 600px) {
+      .teaser-gif-row {
+        flex-direction: column;
+        align-items: center;
+      }
+      .teaser-gif-row img {
+        height: auto;
+        width: 100%;
+        max-width: 320px;
+      }
+    }
+  </style>
+  
+  <!-- Structured Data for Academic Papers -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ScholarlyArticle",
+    "headline": "PAPER_TITLE",
+    "description": "BRIEF_DESCRIPTION_OF_YOUR_RESEARCH_CONTRIBUTION_AND_FINDINGS",
+    "author": [
+      {
+        "@type": "Person",
+        "name": "FIRST_AUTHOR_NAME",
+        "affiliation": {
+          "@type": "Organization",
+          "name": "INSTITUTION_NAME"
+        }
+      },
+      {
+        "@type": "Person",
+        "name": "SECOND_AUTHOR_NAME",
+        "affiliation": {
+          "@type": "Organization",
+          "name": "INSTITUTION_NAME"
+        }
+      }
+    ],
+    "datePublished": "2024-01-01",
+    "publisher": {
+      "@type": "Organization",
+      "name": "CONFERENCE_OR_JOURNAL_NAME"
+    },
+    "url": "https://YOUR_DOMAIN.com/YOUR_PROJECT_PAGE",
+    "image": "https://YOUR_DOMAIN.com/static/images/social_preview.png",
+    "keywords": ["KEYWORD1", "KEYWORD2", "KEYWORD3", "machine learning", "computer vision"],
+    "abstract": "FULL_ABSTRACT_TEXT_HERE",
+    "citation": "BIBTEX_CITATION_HERE",
+    "isAccessibleForFree": true,
+    "license": "https://creativecommons.org/licenses/by/4.0/",
+    "mainEntity": {
+      "@type": "WebPage",
+      "@id": "https://YOUR_DOMAIN.com/YOUR_PROJECT_PAGE"
+    },
+    "about": [
+      {
+        "@type": "Thing",
+        "name": "RESEARCH_AREA_1"
+      },
+      {
+        "@type": "Thing", 
+        "name": "RESEARCH_AREA_2"
+      }
+    ]
+  }
+  </script>
+  
+  <!-- Website/Organization Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "INSTITUTION_OR_LAB_NAME",
+    "url": "https://YOUR_INSTITUTION_WEBSITE.com",
+    "logo": "https://YOUR_DOMAIN.com/static/images/favicon.ico",
+    "sameAs": [
+      "https://twitter.com/YOUR_TWITTER_HANDLE",
+      "https://github.com/YOUR_GITHUB_USERNAME"
+    ]
+  }
+  </script>
 </head>
+<body>
 
-<body class="wy-body-for-nav"> 
-  <div class="wy-grid-for-nav">
-    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
-      <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
 
-          
-          
-          <a href="#" class="icon icon-home">
-            FluidGym
-              <img src="_static/logo_lm.png" class="logo" alt="Logo"/>
-          </a>
-<div role="search">
-  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
-    <input type="hidden" name="check_keywords" value="yes" />
-    <input type="hidden" name="area" value="default" />
-  </form>
-</div>
-        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <ul>
-<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="basic_usage/index.html">Basic Usage</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="basic_usage/interfaces/index.html">Interfaces</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="basic_usage/interfaces/fluidgym.html">FluidGym</a></li>
-<li class="toctree-l3"><a class="reference internal" href="basic_usage/interfaces/gymnasium.html">Gymnasium</a></li>
-<li class="toctree-l3"><a class="reference internal" href="basic_usage/interfaces/torchrl.html">TorchRL</a></li>
-<li class="toctree-l3"><a class="reference internal" href="basic_usage/interfaces/pettingzoo.html">Pettingzoo</a></li>
-<li class="toctree-l3"><a class="reference internal" href="basic_usage/interfaces/sb3_vec_env.html">Stable-Baselines3</a></li>
-<li class="toctree-l3"><a class="reference internal" href="basic_usage/interfaces/gradient_based_methods.html">Gradient-Based Methods</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="basic_usage/wrappers/index.html">Wrappers</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="basic_usage/wrappers/flatten_observation.html">FlattenObservation Wrapper</a></li>
-<li class="toctree-l3"><a class="reference internal" href="basic_usage/wrappers/obs_extraction.html">ObsExtraction Wrapper</a></li>
-<li class="toctree-l3"><a class="reference internal" href="basic_usage/wrappers/action_noise.html">ActionNoise Wrapper</a></li>
-<li class="toctree-l3"><a class="reference internal" href="basic_usage/wrappers/sensor_noise.html">SensorNoise Wrapper</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="basic_usage/rendering.html">Rendering Environments</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="advanced_usage/index.html">Advanced Usage</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="advanced_usage/parallelization.html">Running FluidGym on multiple GPUs in parallel</a></li>
-<li class="toctree-l2"><a class="reference internal" href="advanced_usage/custom_environments.html">Adding Custom Environments to FluidGym</a></li>
-<li class="toctree-l2"><a class="reference internal" href="advanced_usage/configuration.html">Additional Configuration Options</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="api/fluidenv.html">FluidGym Environments</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.envs.fluid_env.FluidEnv.html">FluidEnv</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="api/wrappers.html">FluidGym Wrappers</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.wrappers.flatten_obs.FlattenObservation.html">FlattenObservation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.wrappers.obs_extraction.ObsExtraction.html">ObsExtraction</a></li>
-<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.wrappers.action_noise.ActionNoise.html">ActionNoise</a></li>
-<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.wrappers.sensor_noise.SensorNoise.html">SensorNoise</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="api/cylinder.html">Flow Past Cylinder</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.envs.cylinder.CylinderJetEnv2D.html">CylinderJetEnv2D</a></li>
-<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.envs.cylinder.CylinderRotEnv2D.html">CylinderRotEnv2D</a></li>
-<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.envs.cylinder.CylinderJetEnv3D.html">CylinderJetEnv3D</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="api/rbc.html">Rayleigh-Bénard Convection (RBC)</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.envs.rbc.RBCEnv2D.html">RBCEnv2D</a></li>
-<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.envs.rbc.RBCEnv3D.html">RBCEnv3D</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="api/airfoil.html">Flow Past Airfoil</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.envs.airfoil.AirfoilEnv2D.html">AirfoilEnv2D</a></li>
-<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.envs.airfoil.AirfoilEnv3D.html">AirfoilEnv3D</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="api/tcf.html">Turbulent Channel Flow (TCF)</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.envs.tcf.TCF3DBottomEnv.html">TCF3DBottomEnv</a></li>
-<li class="toctree-l3"><a class="reference internal" href="api/generated/fluidgym.envs.tcf.TCF3DBothEnv.html">TCF3DBothEnv</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
-<li class="toctree-l1"><a class="reference internal" href="faq.html">Frequently Asked Questions</a></li>
-</ul>
+  <!-- Scroll to Top Button -->
+  <button class="scroll-to-top" onclick="scrollToTop()" title="Scroll to top" aria-label="Scroll to top">
+    <i class="fas fa-chevron-up"></i>
+  </button>
 
+  <!-- More Works Dropdown -->
+  <!-- <div class="more-works-container">
+    <button class="more-works-btn" onclick="toggleMoreWorks()" title="View More Works from Our Lab">
+      <i class="fas fa-flask"></i>
+      More Works
+      <i class="fas fa-chevron-down dropdown-arrow"></i>
+    </button>
+    <div class="more-works-dropdown" id="moreWorksDropdown">
+      <div class="dropdown-header">
+        <h4>More Works from Our Lab</h4>
+        <button class="close-btn" onclick="toggleMoreWorks()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="works-list">
+        <a href="https://arxiv.org/abs/PAPER_ID_1" class="work-item" target="_blank">
+          <div class="work-info">
+            <h5>Paper Title 1</h5>
+            <p>Brief description of the work and its main contribution.</p>
+            <span class="work-venue">Conference/Journal 2024</span>
+          </div>
+          <i class="fas fa-external-link-alt"></i>
+        </a>
+      </div>
+    </div>
+  </div> -->
+
+  <main id="main-content">
+  <section class="hero">
+    <div class="hero-body">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered">
+          <div class="column has-text-centered">
+            <!-- TODO: Replace with your paper title -->
+            <h1 class="title is-1 publication-title">Plug-and-Play Benchmarking of Reinforcement Learning Algorithms for Large-Scale Flow Control</h1>
+            <div class="is-size-5 publication-authors">
+              <!-- TODO: Replace with your paper authors and their personal links -->
+              <span class="author-block">
+                <a href="https://sas.cs.tu-dortmund.de/team" target="_blank">Jannis Becktepe</a><sup>1,2</sup>,
+              </span>
+              <span class="author-block">
+                <a href="https://ge.in.tum.de/about/aleksandra-franz" target="_blank">Aleksandra Franz</a><sup>3,4</sup>,
+              </span>
+              <span class="author-block">
+                <a href="https://ge.in.tum.de/about/n-thuerey" target="_blank">Nils Thuerey</a><sup>3,4</sup>
+              </span>
+              <span class="author-block">
+                <a href="https://sas.cs.tu-dortmund.de/sebastian-peitz" target="_blank">Sebastian Peitz</a><sup>1,2</sup>
+              </span>
+                  </div>
+
+                  <div class="is-size-5 publication-authors">
+                    <!-- TODO: Replace with your institution and conference/journal info -->
+                    <span class="author-block">ICML 2026</span>
+                    <!-- TODO: Remove this line if no equal contribution -->
+                    <span class="eql-cntrb"><small><br><sup>1</sup>TU Dortmund University, Dortmund, Germany</small></span>
+                    <span class="eql-cntrb"><small><br><sup>2</sup>Lamarr Institute for Machine Learning and Artificial Intelligence, Dortmund, Germany</small></span>
+                    <span class="eql-cntrb"><small><br><sup>3</sup>Technical University Munich, Munich, Germany</small></span>
+                    <span class="eql-cntrb"><small><br><sup>4</sup>Munich Center for Machine Learning, Munich, Germany</small></span>
+                  </div>
+
+                  <div class="column has-text-centered">
+                    <div class="publication-links">
+                         <!-- TODO: Update with your arXiv paper ID -->
+                      <span class="link-block">
+                        <a href="https://arxiv.org/pdf/2601.15015.pdf" target="_blank"
+                        class="external-link button is-normal is-rounded is-dark">
+                        <span class="icon">
+                          <i class="fas fa-file-pdf"></i>
+                        </span>
+                        <span>Paper</span>
+                      </a>
+                    </span>
+
+                  <!-- Code -->
+                  <span class="link-block">
+                    <a href="https://github.com/safe-autonomous-systems/fluidgym" target="_blank"
+                    class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="fab fa-github"></i>
+                    </span>
+                    <span>Code</span>
+                  </a>
+                </span>
+
+                <!-- arXiv -->
+                <span class="link-block">
+                  <a href="https://arxiv.org/abs/2601.15015" target="_blank"
+                  class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                    <i class="ai ai-arxiv"></i>
+                  </span>
+                  <span>arXiv</span>
+                </a>
+              </span>
+
+              <!-- Dataset -->
+              <span class="link-block">
+                  <a href="https://huggingface.co/collections/safe-autonomous-systems/fluidgym-benchmark-models" target="_blank"
+                      class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon" style="vertical-align: middle; font-size: 20px;">&#129303;</span>
+                      <span style="vertical-align: middle;">Models</span>
+                  </a>
+              </span>
+
+              <!-- Documentation -->
+              <span class="link-block">
+                  <a href="./docs/index.html"
+                      class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon" style="vertical-align: middle; font-size: 20px;">&#128218;</span>
+                      <span style="vertical-align: middle;">Docs</span>
+                  </a>
+              </span>
+            </div>
+          </div>
         </div>
       </div>
-    </nav>
-
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
-          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="#">FluidGym</a>
-      </nav>
-
-      <div class="wy-nav-content">
-        <div class="rst-content">
-          <div role="navigation" aria-label="Page navigation">
-  <ul class="wy-breadcrumbs">
-      <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
-      <li class="breadcrumb-item active">FluidGym Documentation</li>
-      <li class="wy-breadcrumbs-aside">
-              <a href="https://github.com/safe-autonomous-systems/fluidgym/blob/main/docs/source/index.rst" class="fa fa-github"> Edit on GitHub</a>
-      </li>
-  </ul>
-  <hr/>
-</div>
-          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
-           <div itemprop="articleBody">
-             
-  <section id="fluidgym-documentation">
-<h1>FluidGym Documentation<a class="headerlink" href="#fluidgym-documentation" title="Link to this heading"></a></h1>
-<p>Welcome to the FluidGym documentation! Here you will find all the information you need
-to get started with FluidGym, including installation instructions, basic and advanced
-usage guides, API references, and more.</p>
-<div class="toctree-wrapper compound">
-</div>
+    </div>
+  </div>
 </section>
 
-
-           </div>
-          </div>
-          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="installation.html" class="btn btn-neutral float-right" title="Installation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+<section class="hero teaser">
+    <div class="container is-max-desktop">
+        <div class="hero-body" style="flex-direction: column; align-items: center;">
+            <img src="static/images/logo_lm.png" alt="FluidGym logo" style="max-width: 300px; width: 50%; display: block; margin: 0 auto;"/>
+            <div class="teaser-gif-row">
+                <img src="static/videos/airfoil.gif" alt="Airfoil"/>
+                <img src="static/videos/cylinder.gif" alt="Cylinder"/>
+                <img src="static/videos/rbc.gif" alt="RBC"/>
+                <img src="static/videos/tcf.gif" alt="TCF"/>
+            </div>
+        </div>
     </div>
+</section>
 
-  <hr/>
-
-  <div role="contentinfo">
-    <p>&#169; Copyright 2026, Safe Autonomous Systems (SAS), TU Dortmund University.</p>
-  </div>
-
-  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
-    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
-    provided by <a href="https://readthedocs.org">Read the Docs</a>.
-   
-
-</footer>
+<!-- Paper abstract -->
+<section class="section hero is-light">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Abstract</h2>
+        <div class="content has-text-justified">
+          <!-- TODO: Replace with your paper abstract -->
+          <p>
+            Reinforcement learning (RL) has shown promising results in active flow control (AFC), yet progress in the field remains difficult to assess as existing studies rely on heterogeneous observation and actuation schemes, numerical setups, and evaluation protocols. Current AFC benchmarks attempt to address these issues but heavily rely on external computational fluid dynamics (CFD) solvers, are not fully differentiable, and provide limited 3D and multi-agent support. To overcome these limitations, we introduce FluidGym, the first standalone, fully differentiable benchmark suite for RL in AFC. Built entirely in PyTorch on top of the GPU-accelerated PICT solver, FluidGym runs in a single Python stack, requires no external CFD software, and provides standardized evaluation protocols. We present baseline results with PPO, SAC, DPC, and TD-MPC, and release all environments, datasets, and trained models as public resources. FluidGym enables systematic comparison of control methods, establishes a scalable foundation for future research in learning-based flow control, and is available at <a href="https://github.com/safe-autonomous-systems/fluidgym">github.com/safe-autonomous-systems/fluidgym</a>.
+          </p>
         </div>
       </div>
-    </section>
+    </div>
   </div>
-  <script>
-      jQuery(function () {
-          SphinxRtdTheme.Navigation.enable(true);
-      });
-  </script> 
+</section>
+<!-- End paper abstract -->
 
-</body>
-</html>
+<section class="section hero is-small">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-full">
+        <div class="content">
+          <h2 class="title is-3">Benchmark Overview</h2>
+         <p>
+              <img src="static/images/overview.png" alt="Overview of FluidGym." class="blend-img-background center-image" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" loading="lazy" />
+            </p>
+            <p style="text-align: justify;">
+              The architecture of FluidGym is designed to unify computational fluid dynamics (CFD) and reinforcement learning under a single, ML-centric framework. At its core, the system integrates the GPU-accelerated <strong>PICT solver</strong> directly with a <strong>PyTorch interaction layer</strong>, allowing environment stepping and backpropagation to utilize the same autograd mechanisms as standard neural networks. This standalone design eliminates the need for external CFD software or complex coupling code, as all simulations and control interfaces live within a single Python stack. The framework utilizes a <strong>FluidEnv abstraction</strong> to encapsulate physical computations while exposing standardized observation, action, and reward interfaces compatible with common RL libraries like Gymnasium and PettingZoo. Furthermore, the architecture is built for scalability, supporting <strong>massively parallel execution</strong> across multiple GPUs to handle large-scale experiments and high-fidelity 3D simulations.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section hero is-small is-light">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-full">
+        <div class="content">
+          <h2 class="title is-3">Environment Classes in FluidGym</h2>
+         <p>
+              <img src="static/images/envs_uncontrolled.png" alt="Overview of environment classes in FluidGym." class="blend-img-background center-image" style="max-width: 640px; height: auto; display: block; margin: 0 auto;" loading="lazy" />
+            </p>
+            <p style="text-align: justify;">
+              The FluidGym benchmark suite consists of four primary environment classes, each designed to challenge reinforcement learning agents with distinct physical phenomena and control objectives.
+              <strong>Flow Past a Cylinder</strong> serves as a canonical aerodynamic testbed where agents utilize synthetic jets or rotary oscillations to suppress periodic vortex shedding and minimize drag.
+              <strong>Rayleigh-Bénard Convection (RBC)</strong> simulates buoyancy-driven flows between heated and cooled plates, requiring agents to coordinate an array of bottom heaters to manipulate convective heat transfer and stabilize chaotic thermal plumes.
+              In the <strong>Flow Past an Airfoil</strong> environments, agents manage flow separation on a NACA 0012 profile to enhance aerodynamic efficiency by optimizing the lift-to-drag ratio through surface-mounted actuators.
+              Finally, the <strong>Turbulent Channel Flow (TCF)</strong> class investigates wall-bounded turbulence, tasking agents with reducing skin friction drag via high-dimensional, spatially distributed blowing and suction at the channel walls.
+            </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section hero is-small">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-full">
+        <div class="content">
+          <h2 class="title is-3">Baseline Experiments</h2>
+         <p>
+              <img src="static/images/plots/results_overview.png" alt="Overview of benchmark results." class="blend-img-background center-image" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" loading="lazy" />
+            </p>
+            <p style="text-align: justify;">
+              The baseline evaluation of FluidGym involves an extensive study of modern reinforcement learning algorithms across all thirteen environment variants and three difficulty levels. Using standardized training and evaluation protocols, the research benchmarks <strong>Proximal Policy Optimization (PPO)</strong> and <strong>Soft Actor-Critic (SAC)</strong>, alongside their multi-agent counterparts, <strong>MA-PPO</strong> and <strong>MA-SAC</strong>. Performance profiles across the suite reveal that SAC generally offers superior sample efficiency and higher normalized rewards in continuous control tasks compared to PPO. Furthermore, the experiments demonstrate the power of <strong>differentiability</strong>; by leveraging reward gradients through <strong>Differentiable Predictive Control (DPC)</strong>, the framework achieves high-quality control policies with a significant reduction in training time. These baselines establish a rigorous foundation for future research, confirming that the benchmark can effectively distinguish between algorithmic strengths in complex, turbulent flow scenarios.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section hero is-small is-light">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-full">
+        <div class="content">
+          <h2 class="title is-3">Multi-Agent Interaction & Domain Transfer</h2>
+            <div style="display: flex; gap: 16px; justify-content: center; align-items: flex-start;">
+              <img src="static/images/plots/rbc3d_marl_action.png" alt="RBC 3D MARL action." class="blend-img-background" style="width: 50%; height: auto;" loading="lazy" />
+              <img src="static/images/plots/TCFSmall-easy-transfer.png" alt="TCF domain transfer." class="blend-img-background" style="width: 50%; height: auto;" loading="lazy" />
+            </div>
+            <p style="text-align: justify;">
+            FluidGym facilitates the study of complex coordinated behaviors through its native support for multi-agent reinforcement learning and cross-domain policy transfer. In <strong>Rayleigh-Bénard Convection</strong> environments, individual agents learn to coordinate bottom-wall heating patterns to form stable, global convection rolls, demonstrating that decentralized control can achieve emerging global objectives. Furthermore, the framework enables significant practical efficiencies through <strong>domain transfer</strong>; for instance, policies trained on smaller <strong>Turbulent Channel Flow</strong> domains can be successfully applied to larger scales without retraining. This translation-equivariant approach, where agents manage local actuators based on local observations, proves that strategies learned in computationally cheaper, low-dimensional settings remain robust when scaled to more complex, high-fidelity 3D environments.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section hero is-small">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-full">
+        <div class="content">
+          <h2 class="title is-3">Gradient-Based Learning of Control Policies</h2>
+            <p>
+              <img src="static/images/plots/dpc_combined_landscape.png" alt="CylinderJet2D-easy-v0 and RBC2D-hard-v0 training results and CylinderJet2D-easy-v0 test episode including DPC and TD-MPC." class="blend-img-background center-image" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" loading="lazy" />
+            </p>
+            <p style="text-align: justify;">
+              By integrating a fully differentiable simulation pipeline, FluidGym enables policy learning through reward gradients, offering a powerful alternative to traditional derivative-free reinforcement learning. Training results for <strong>Differentiable Predictive Control (DPC)</strong> demonstrate significant efficiency gains, outperforming standard model-free algorithms by one to two orders of magnitude in environments like the 2D cylinder flow. In specific test episodes, DPC-trained policies successfully attenuate flow oscillations and achieve substantial drag reduction comparable to advanced model-based methods. This capability underscores the framework's utility for research into gradient-based control, proving that direct backpropagation through the fluid dynamics allows for rapid convergence and effective strategy discovery in complex active flow control tasks.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Paper poster -->
+<!-- <section class="hero is-small is-light">
+  <div class="hero-body">
+    <div class="container">
+      <h2 class="title">Poster</h2>
+      <iframe  src="static/pdfs/sample.pdf" width="100%" height="550">
+          </iframe>
+        
+      </div>
+    </div>
+  </section> -->
+<!--End paper poster -->
+
+
+<!--BibTex citation -->
+  <section class="section" id="BibTeX">
+    <div class="container is-max-desktop content">
+      <div class="bibtex-header">
+        <h2 class="title">BibTeX</h2>
+        <button class="copy-bibtex-btn" onclick="copyBibTeX()" title="Copy BibTeX to clipboard">
+          <i class="fas fa-copy"></i>
+          <span class="copy-text">Copy</span>
+        </button>
+      </div>
+      <pre id="bibtex-code"><code>@inproceedings{becktepe-fluidgym26,
+  title={Plug-and-Play Benchmarking of Reinforcement Learning Algorithms for Large-Scale Flow Control},
+  author={Jannis Becktepe and Aleksandra Franz and Nils Thuerey and Sebastian Peitz},
+  booktitle={Forty-third International Conference on Machine Learning},
+  year={2026},
+  url={https://openreview.net/forum?id=ilEooI8fK1}
+}</code></pre>
+    </div>
+</section>
+<!--End BibTex citation -->
+
+
+  <footer class="footer">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-8">
+        <div class="content">
+
+          <p>
+            This page was built using the <a href="https://github.com/eliahuhorwitz/Academic-project-page-template" target="_blank">Academic Project Page Template</a> which was adopted from the <a href="https://nerfies.github.io" target="_blank">Nerfies</a> project page.
+            You are free to borrow the source code of this website, we just ask that you link back to this page in the footer. <br> This website is licensed under a <a rel="license"  href="http://creativecommons.org/licenses/by-sa/4.0/" target="_blank">Creative
+            Commons Attribution-ShareAlike 4.0 International License</a>.
+          </p>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- Statcounter tracking code -->
+  
+<!-- You can add a tracker to track page visits by creating an account at statcounter.com -->
+
+    <!-- End of Statcounter Code -->
+
+  </body>
+  </html>

@@ -1,0 +1,336 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flow Past Cylinder &mdash; FluidGym 0.1.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+
+  
+    <link rel="canonical" href="https://safe-autonomous-systems.github.io/fluidgym/docs/api/cylinder.html" />
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="CylinderJetEnv2D" href="generated/fluidgym.envs.cylinder.CylinderJetEnv2D.html" />
+    <link rel="prev" title="SensorNoise" href="generated/fluidgym.wrappers.sensor_noise.SensorNoise.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            FluidGym
+              <img src="../_static/logo_lm.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../basic_usage/index.html">Basic Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../basic_usage/environments.html">Environments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../basic_usage/interfaces/index.html">Interfaces</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../basic_usage/interfaces/fluidgym.html">FluidGym</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../basic_usage/interfaces/gymnasium.html">Gymnasium</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../basic_usage/interfaces/torchrl.html">TorchRL</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../basic_usage/interfaces/pettingzoo.html">Pettingzoo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../basic_usage/interfaces/sb3_vec_env.html">Stable-Baselines3</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../basic_usage/interfaces/gradient_based_methods.html">Gradient-Based Methods</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../basic_usage/wrappers/index.html">Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../basic_usage/wrappers/flatten_observation.html">FlattenObservation Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../basic_usage/wrappers/obs_extraction.html">ObsExtraction Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../basic_usage/wrappers/action_noise.html">ActionNoise Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../basic_usage/wrappers/sensor_noise.html">SensorNoise Wrapper</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../basic_usage/rendering.html">Rendering Environments</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../advanced_usage/index.html">Advanced Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../advanced_usage/parallelization.html">Running FluidGym on multiple GPUs in parallel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../advanced_usage/custom_environments.html">Adding Custom Environments to FluidGym</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../advanced_usage/configuration.html">Additional Configuration Options</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="reference internal" href="../api.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="fluidenv.html">FluidGym Environments</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/fluidgym.envs.fluid_env.FluidEnv.html">FluidEnv</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="wrappers.html">FluidGym Wrappers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/fluidgym.wrappers.flatten_obs.FlattenObservation.html">FlattenObservation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/fluidgym.wrappers.obs_extraction.ObsExtraction.html">ObsExtraction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/fluidgym.wrappers.action_noise.ActionNoise.html">ActionNoise</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/fluidgym.wrappers.sensor_noise.SensorNoise.html">SensorNoise</a></li>
+</ul>
+</li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Flow Past Cylinder</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/fluidgym.envs.cylinder.CylinderJetEnv2D.html">CylinderJetEnv2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/fluidgym.envs.cylinder.CylinderRotEnv2D.html">CylinderRotEnv2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/fluidgym.envs.cylinder.CylinderJetEnv3D.html">CylinderJetEnv3D</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="rbc.html">Rayleigh-Bénard Convection (RBC)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/fluidgym.envs.rbc.RBCEnv2D.html">RBCEnv2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/fluidgym.envs.rbc.RBCEnv3D.html">RBCEnv3D</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="airfoil.html">Flow Past Airfoil</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/fluidgym.envs.airfoil.AirfoilEnv2D.html">AirfoilEnv2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/fluidgym.envs.airfoil.AirfoilEnv3D.html">AirfoilEnv3D</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="tcf.html">Turbulent Channel Flow (TCF)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/fluidgym.envs.tcf.TCF3DBottomEnv.html">TCF3DBottomEnv</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/fluidgym.envs.tcf.TCF3DBothEnv.html">TCF3DBothEnv</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../faq.html">Frequently Asked Questions</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">FluidGym</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">API Reference</a></li>
+      <li class="breadcrumb-item active">Flow Past Cylinder</li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/safe-autonomous-systems/fluidgym/blob/main/docs/source/api/cylinder.rst" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="flow-past-cylinder">
+<h1>Flow Past Cylinder<a class="headerlink" href="#flow-past-cylinder" title="Link to this heading"></a></h1>
+<p>The <em>von Kármán vortex street</em> is a canonical setup in which flow separation behind a
+cylinder induces periodic vortex shedding and fluctuating forces on the cylinder.
+The objective is to reduce the drag coefficient <span class="math notranslate nohighlight">\(C_D\)</span> while keeping the lift
+<span class="math notranslate nohighlight">\(C_L\)</span> small.</p>
+<p>The system is parametrized via the Reynolds number
+<span class="math notranslate nohighlight">\(\mathrm{Re} = \frac{\overline{U} D}{\nu}\)</span>, where <span class="math notranslate nohighlight">\(\overline{U}\)</span> is the
+mean incoming velocity, <span class="math notranslate nohighlight">\(D\)</span> the cylinder diameter, and <span class="math notranslate nohighlight">\(\nu\)</span> the kinematic
+viscosity.</p>
+<section id="environment-list">
+<h2>Environment List<a class="headerlink" href="#environment-list" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Environment ID</p></th>
+<th class="head"><p>Actuation</p></th>
+<th class="head"><p>Reynolds</p></th>
+<th class="head"><p>Resolution</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CylinderJet2D-easy-v0</span></code></p></td>
+<td><p>Jet</p></td>
+<td><p>100</p></td>
+<td><p>24</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CylinderJet2D-medium-v0</span></code></p></td>
+<td><p>Jet</p></td>
+<td><p>250</p></td>
+<td><p>32</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CylinderJet2D-hard-v0</span></code></p></td>
+<td><p>Jet</p></td>
+<td><p>500</p></td>
+<td><p>32</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CylinderRot2D-easy-v0</span></code></p></td>
+<td><p>Rotation</p></td>
+<td><p>100</p></td>
+<td><p>24</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CylinderRot2D-medium-v0</span></code></p></td>
+<td><p>Rotation</p></td>
+<td><p>250</p></td>
+<td><p>32</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CylinderRot2D-hard-v0</span></code></p></td>
+<td><p>Rotation</p></td>
+<td><p>500</p></td>
+<td><p>32</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CylinderJet3D-easy-v0</span></code></p></td>
+<td><p>Jet</p></td>
+<td><p>100</p></td>
+<td><p>24</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CylinderJet3D-medium-v0</span></code></p></td>
+<td><p>Jet</p></td>
+<td><p>250</p></td>
+<td><p>32</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CylinderJet3D-hard-v0</span></code></p></td>
+<td><p>Jet</p></td>
+<td><p>500</p></td>
+<td><p>48</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="reward">
+<h2>Reward<a class="headerlink" href="#reward" title="Link to this heading"></a></h2>
+<p>The reward at step <span class="math notranslate nohighlight">\(t\)</span> is:</p>
+<div class="math notranslate nohighlight">
+\[r_t = C_{D,\mathrm{ref}} - \langle C_D \rangle_{T_{\mathrm{act}}} - \omega \, |\langle C_L \rangle_{T_{\mathrm{act}}}|\]</div>
+<p>where <span class="math notranslate nohighlight">\(\langle \cdot \rangle_{T_{\mathrm{act}}}\)</span> is the temporal average over the
+actuation interval, <span class="math notranslate nohighlight">\(C_{D,\mathrm{ref}}\)</span> is the reference drag coefficient of the
+uncontrolled flow, and the lift regularization weight <span class="math notranslate nohighlight">\(\omega = 1.0\)</span>.</p>
+<p>The drag and lift coefficients are computed as:</p>
+<div class="math notranslate nohighlight">
+\[C_D = \frac{F_D}{\frac{1}{2} \rho \overline{U}^2 D}, \qquad
+C_L = \frac{F_L}{\frac{1}{2} \rho \overline{U}^2 D}\]</div>
+<p>with forces acting on the cylinder surface <span class="math notranslate nohighlight">\(S\)</span>:</p>
+<div class="math notranslate nohighlight">
+\[F_D = \int_S (\boldsymbol{\sigma} \cdot \mathbf{n}) \cdot \mathbf{e}_x \, \mathrm{d}S, \qquad
+F_L = \int_S (\boldsymbol{\sigma} \cdot \mathbf{n}) \cdot \mathbf{e}_y \, \mathrm{d}S\]</div>
+<p>where <span class="math notranslate nohighlight">\(\boldsymbol{\sigma}\)</span> is the Cauchy stress tensor and <span class="math notranslate nohighlight">\(\mathbf{n}\)</span> the
+outward unit normal at the cylinder surface.</p>
+<section id="marl-reward">
+<h3>MARL Reward<a class="headerlink" href="#marl-reward" title="Link to this heading"></a></h3>
+<p>In MARL mode, the reward for agent <span class="math notranslate nohighlight">\(i\)</span> is a weighted combination of a local and
+global term:</p>
+<div class="math notranslate nohighlight">
+\[r_t^i = \beta \, r_t^{i,\mathrm{local}} + (1 - \beta) \, r_t^{\mathrm{global}}\]</div>
+<p>The local reward is computed over the cylinder segment controlled by agent <span class="math notranslate nohighlight">\(i\)</span>,
+while the global reward covers the full cylinder. The local weight <span class="math notranslate nohighlight">\(\beta = 0.8\)</span>.</p>
+</section>
+</section>
+<section id="action-space">
+<h2>Action Space<a class="headerlink" href="#action-space" title="Link to this heading"></a></h2>
+<p>Two actuation modes are available:</p>
+<ul class="simple">
+<li><p><strong>Jet actuation</strong> (<code class="docutils literal notranslate"><span class="pre">CylinderJet</span></code>): opposing synthetic jets on the top and bottom
+surfaces with a parabolic velocity profile and a total deflection angle of 10°.
+In 3D, the domain is extended spanwise, yielding eight individual jet pairs. The
+maximum jet velocity is <span class="math notranslate nohighlight">\(\overline{U}\)</span>.</p></li>
+<li><p><strong>Rotation actuation</strong> (<code class="docutils literal notranslate"><span class="pre">CylinderRot</span></code>): rigid cylinder rotation with a maximum
+absolute angular velocity of <span class="math notranslate nohighlight">\(\overline{U}\)</span>.</p></li>
+</ul>
+<p>The raw control signal is temporally smoothed via exponential filtering:</p>
+<div class="math notranslate nohighlight">
+\[c_s = c_{s-1} + \alpha \, (a_t - c_{s-1}), \qquad \alpha = 0.1\]</div>
+<p>where <span class="math notranslate nohighlight">\(c_s\)</span> is the applied value at simulation sub-step <span class="math notranslate nohighlight">\(s\)</span> and <span class="math notranslate nohighlight">\(a_t\)</span>
+the action at episode step <span class="math notranslate nohighlight">\(t\)</span>.</p>
+</section>
+<section id="observation-space">
+<h2>Observation Space<a class="headerlink" href="#observation-space" title="Link to this heading"></a></h2>
+<p>Observations consist of the horizontal and vertical velocity components at sensor
+locations surrounding the cylinder (indicated by pink dots in 2D / pink planes in 3D).
+In 3D, the spanwise velocity component is additionally included. To enable policy
+transfer from 2D to 3D, the number of sensor planes and included components can be
+configured to match the 2D observation layout.</p>
+</section>
+<section id="difficulty-levels">
+<h2>Difficulty Levels<a class="headerlink" href="#difficulty-levels" title="Link to this heading"></a></h2>
+<p>Difficulty is controlled by the Reynolds number:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Level</p></th>
+<th class="head"><p>Reynolds number</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Easy</p></td>
+<td><p>Re = 100</p></td>
+</tr>
+<tr class="row-odd"><td><p>Medium</p></td>
+<td><p>Re = 250</p></td>
+</tr>
+<tr class="row-even"><td><p>Hard</p></td>
+<td><p>Re = 500</p></td>
+</tr>
+</tbody>
+</table>
+<p>Higher Reynolds numbers increase turbulence intensity and flow unsteadiness. The medium
+and hard settings introduce three-dimensional flow interactions.</p>
+</section>
+<section id="api-reference">
+<h2>API Reference<a class="headerlink" href="#api-reference" title="Link to this heading"></a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/fluidgym.envs.cylinder.CylinderJetEnv2D.html#fluidgym.envs.cylinder.CylinderJetEnv2D" title="fluidgym.envs.cylinder.CylinderJetEnv2D"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fluidgym.envs.cylinder.CylinderJetEnv2D</span></code></a>(...)</p></td>
+<td><p>Environment for flow around a cylinder with jet actuation.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/fluidgym.envs.cylinder.CylinderRotEnv2D.html#fluidgym.envs.cylinder.CylinderRotEnv2D" title="fluidgym.envs.cylinder.CylinderRotEnv2D"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fluidgym.envs.cylinder.CylinderRotEnv2D</span></code></a>(...)</p></td>
+<td><p>Environment for flow around a cylinder with rotating cylinder actuation.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/fluidgym.envs.cylinder.CylinderJetEnv3D.html#fluidgym.envs.cylinder.CylinderJetEnv3D" title="fluidgym.envs.cylinder.CylinderJetEnv3D"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fluidgym.envs.cylinder.CylinderJetEnv3D</span></code></a>(...)</p></td>
+<td><p>3D Environment for flow around a cylinder with jet actuation.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="generated/fluidgym.wrappers.sensor_noise.SensorNoise.html" class="btn btn-neutral float-left" title="SensorNoise" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="generated/fluidgym.envs.cylinder.CylinderJetEnv2D.html" class="btn btn-neutral float-right" title="CylinderJetEnv2D" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Safe Autonomous Systems (SAS), TU Dortmund University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
