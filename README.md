@@ -10,16 +10,16 @@
 <table style="border-collapse: collapse; border: none;">
   <tr>
     <td style="border: none; padding: 0;">
-      <img src="docs/build/html/_static/img/gifs/cylinder.gif" style="max-width: 100%; height: auto;" />
+      <img src="docs/build/html/static/img/videos/cylinder.gif" style="max-width: 100%; height: auto;" />
     </td>
     <td style="border: none; padding: 0;">
-      <img src="docs/build/html/_static/img/gifs/rbc.gif" style="max-width: 100%; height: auto;" />
+      <img src="docs/build/html/static/img/videos/rbc.gif" style="max-width: 100%; height: auto;" />
     </td>
     <td style="border: none; padding: 0;">
-      <img src="docs/build/html/_static/img/gifs/airfoil.gif" style="max-width: 100%; height: auto;" />
+      <img src="docs/build/html/static/img/videos/airfoil.gif" style="max-width: 100%; height: auto;" />
     </td>
     <td style="border: none; padding: 0;">
-      <img src="docs/build/html/_static/img/gifs/tcf.gif" style="max-width: 100%; height: auto;" />
+      <img src="docs/build/html/static/img/videos/tcf.gif" style="max-width: 100%; height: auto;" />
     </td>
   </tr>
 </table>
@@ -39,7 +39,7 @@
     <h3>
       <a href="#-installation">Installation</a> |
       <a href="#-getting-started">Getting Started</a> |
-      <a href="https://safe-autonomous-systems.github.io/fluidgym">Documentation</a> | 
+      <a href="https://safe-autonomous-systems.github.io/fluidgym/docs/">Documentation</a> | 
       <a href="https://arxiv.org/abs/2601.15015">Paper</a> |
       <a href="#-license-&-citation">License & Citation</a>
     </h3>
