@@ -17,6 +17,7 @@ version = "0.1.1"
 templates_path = ["_templates"]
 html_static_path = ["_static"]
 
+html_baseurl = "https://safe-autonomous-systems.github.io/fluidgym/docs/"
 html_theme = "sphinx_rtd_theme"
 html_logo = "_static/img/logo_lm.png"
 html_context = {

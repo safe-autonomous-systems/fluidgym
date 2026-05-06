@@ -248,7 +248,6 @@ def extract_moving_window_2d(
     return torch.stack(window_list, dim=0)  # [n_agents, Y, window_size_x]
 
 
-
 def extract_moving_window_2d_x_z(
     field: torch.Tensor,
     n_agents_x: int,
@@ -324,13 +323,9 @@ def extract_moving_window_2d_x_z(
     Wz = n_agents_per_window_z
     Wx = n_agents_per_window_x
     if Wz > 1:
-        agent_means = torch.cat(
-            [agent_means, agent_means[: Wz - 1]], dim=0
-        )
+        agent_means = torch.cat([agent_means, agent_means[: Wz - 1]], dim=0)
     if Wx > 1:
-        agent_means = torch.cat(
-            [agent_means, agent_means[:, : Wx - 1]], dim=1
-        )
+        agent_means = torch.cat([agent_means, agent_means[:, : Wx - 1]], dim=1)
     # agent_means: [n_agents_z + Wz - 1, n_agents_x + Wx - 1]
 
     # Extract all circular sliding windows in two unfold calls
@@ -342,7 +337,6 @@ def extract_moving_window_2d_x_z(
     windows = windows.reshape(n_agents_x * n_agents_z, Wz, Wx)
 
     return windows
-
 
 
 def extract_moving_window_3d(

@@ -209,9 +209,6 @@ class FluidEnv(ABC, FluidEnvLike):
         """
         super().__init__()
 
-        if not torch.cuda.is_available():
-            raise RuntimeError("CUDA is not available. FluidGym requires a CUDA GPU.")
-
         if ndims not in [2, 3]:
             raise ValueError("ndims must be 2 or 3.")
         self._ndims = ndims
@@ -880,6 +877,9 @@ class FluidEnv(ABC, FluidEnvLike):
         tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]
             A tuple containing the initial observation and an info dictionary.
         """
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA is not available. FluidGym requires CUDA.")
+
         if self._auto_render and len(self.__frames) > 0:
             self.save_gif(filename=f"episode_{self._n_episodes}")
 

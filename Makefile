@@ -25,7 +25,7 @@ check: check-ruff check-mypy
 
 .PHONY: docs
 docs:
-	cd docs && $(MAKE) html && cd ..
+	cd docs && $(MAKE) docs && cd ..
 
 .PHONY: upload-docs
 upload-docs: docs

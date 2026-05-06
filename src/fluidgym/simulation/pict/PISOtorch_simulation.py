@@ -21,10 +21,6 @@ from fluidgym.simulation.extensions import PISOtorch  # type: ignore[import-unty
 import fluidgym.simulation.pict.PISOtorch_diff as PISOtorch_diff
 import numpy as np
 
-assert torch.cuda.is_available()
-cuda_device = torch.device("cuda")
-cpu_device = torch.device("cpu")
-
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import spsolve
 from fluidgym.simulation.pict.util.output import *
@@ -87,7 +83,7 @@ def get_fixed_boundary_flux(bound, bound_idx):
 
 def get_fixed_boundary_fluxes(list_idx_bound):
     if len(list_idx_bound) == 0:
-        return torch.zeros([1], dtype=torch.float32, device=cuda_device)
+        return torch.zeros([1], dtype=torch.float32, device=torch.device("cuda"))
     
     domain = list_idx_bound[0][1].getParentDomain()
     boundary_flux = torch.zeros([1], dtype=domain.getDtype(), device=domain.getDevice())
@@ -756,7 +752,7 @@ class Simulation:
     def __get_time_step_torch(self):
         self._check_domain()
         return torch.tensor(
-            [self.__time_step], device=cpu_device, dtype=self.__get_dtype()
+            [self.__time_step], device=torch.device("cpu"), dtype=self.__get_dtype()
         )
 
     @property
@@ -1336,7 +1332,7 @@ class Simulation:
         domain = self.domain
         non_ortho_flags = self.__non_ortho_flags
         # overwrite time step and A
-        time_step = torch.tensor([1], device=cpu_device, dtype=domain.A.dtype)
+        time_step = torch.tensor([1], device=torch.device("cpu"), dtype=domain.A.dtype)
         domain.setA(torch.ones_like(domain.A))
 
         for step in range(iterations):
@@ -2031,7 +2027,7 @@ class Simulation:
 
                 time_step_target -= ts
                 ts = torch.tensor(
-                    [ts], dtype=domain.getBlock(0).velocity.dtype, device=cpu_device
+                    [ts], dtype=domain.getBlock(0).velocity.dtype, device=torch.device("cpu")
                 )
 
                 # _LOG.info("Adaptive step v2: maxVel %f, substep %d, timestep %f, remaining time %f", max_vel_np, substep, ts, time_step_target)
@@ -2143,7 +2139,7 @@ class Simulation:
                 time_step = torch.tensor(
                     [time_step],
                     dtype=domain.getBlock(0).velocity.dtype,
-                    device=cpu_device,
+                    device=torch.device("cpu"),
                 )
             else:
                 raise ValueError("Invalid substeps")

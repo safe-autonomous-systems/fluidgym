@@ -48,6 +48,9 @@ class ParallelFluidEnv(FluidEnvLike):
         self.__cuda_ids = cuda_ids
         self.__env_id = env_id
 
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA is not available. FluidGym requires CUDA.")
+
         if env_kwargs.get("differentiable", False):
             raise ValueError(
                 "ParallelFluidEnv does not support differentiable environments."
