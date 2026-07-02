@@ -251,7 +251,10 @@ class FluidEnv(ABC, FluidEnvLike):
         else:
             action_shape = self.action_space.shape
         self._zero_action = torch.zeros(
-            action_shape, device=self._cuda_device, requires_grad=False
+            action_shape,
+            device=self._cuda_device,
+            dtype=self._dtype,
+            requires_grad=False,
         )
 
     @abstractmethod
@@ -496,7 +499,7 @@ class FluidEnv(ABC, FluidEnvLike):
         try:
             for _idx in idxs:
                 for _mode in modes:
-                    self.__load_initial_domain(mode=_mode, idx=_idx)
+                    self._load_initial_domain(mode=_mode, idx=_idx)
             return True
         except FileNotFoundError:
             return False
@@ -518,7 +521,7 @@ class FluidEnv(ABC, FluidEnvLike):
                 idx = (
                     int(self._np_rng.integers(0, N_INITIAL_DOMAINS)) if randomize else 0
                 )
-                self._domain = self.__load_initial_domain(mode=self.mode, idx=idx)
+                self._domain = self._load_initial_domain(mode=self.mode, idx=idx)
                 try:
                     self._uncontrolled_episode = self._load_uncontrolled_episode(
                         idx=idx, mode=self.mode
@@ -1073,14 +1076,14 @@ class FluidEnv(ABC, FluidEnvLike):
         if mode is None:
             mode = self._mode
 
-        self._domain = self.__load_initial_domain(mode=mode, idx=idx)
+        self._domain = self._load_initial_domain(mode=mode, idx=idx)
         prep_fn = self._get_prep_fn(self._domain)
         self._sim = self._get_simulation(self._domain, prep_fn)
 
         # Some envs may need additional initialization
         self._additional_initialization()
 
-    def __load_initial_domain(self, mode: EnvMode, idx: int) -> PISOtorch.Domain:
+    def _load_initial_domain(self, mode: EnvMode, idx: int) -> PISOtorch.Domain:
         """Load the initial domain from disk.
 
         Parameters

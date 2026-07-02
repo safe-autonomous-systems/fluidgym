@@ -49,7 +49,11 @@ install: clean build
 
 .PHONY: install-dev
 install-dev:
-	PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cu128 $(PIP) install -e ".[dev]"
+	FLUIDGYM_BUILD_NOISE_EXT=1 \
+	MAX_JOBS=1 \
+	TORCH_CUDA_ARCH_LIST="8.0;8.6;9.0+PTX" \
+	PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cu128 \
+	$(PIP) install -e ".[dev]"
 
 .PHONY: clean
 clean:
