@@ -675,6 +675,7 @@ class FluidEnv(ABC, FluidEnvLike):
             resampling_out_shape=self._sim.output_resampling_shape,
             ndims=ndims,
             fill_max_steps=self._sim.output_resampling_fill_max_steps,
+            differentiable=self._differentiable,
         )
 
         return u.squeeze()
@@ -701,6 +702,7 @@ class FluidEnv(ABC, FluidEnvLike):
             resampling_out_shape=self._sim.output_resampling_shape,
             ndims=ndims,
             fill_max_steps=self._sim.output_resampling_fill_max_steps,
+            differentiable=self._differentiable,
         )
 
         return u.squeeze()

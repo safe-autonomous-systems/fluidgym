@@ -258,7 +258,59 @@ def sample_multi_coords_to_uniform_grid(
     is_cell_coords=False,
     transform_uniform="AABB_OUTER",
     fill_max_steps=0,
+    differentiable=False,
 ):
+    """Resample multiple local grids onto a shared uniform grid.
+
+    Dispatches to a compiled or a differentiable implementation. Both produce
+    numerically-matching output (see ``tests/simulation/test_torch_resample.py``);
+    the differentiable one keeps gradients flowing w.r.t. ``data_list``.
+
+    Parameters
+    ----------
+    data_list, coords_list, out_shape, is_cell_coords, transform_uniform, \
+    fill_max_steps
+        See :func:`sample_multi_coords_to_uniform_grid_nondiff`.
+    differentiable: bool
+        If True, use the pure-torch autograd-friendly implementation
+        (:func:`sample_multi_coords_to_uniform_grid_diff`); otherwise use the
+        compiled kernel (:func:`sample_multi_coords_to_uniform_grid_nondiff`).
+        Defaults to False.
+
+    Returns
+    -------
+    torch.Tensor
+        Resampled data of shape ``[1, C, *out_spatial]``.
+    """
+    impl = (
+        sample_multi_coords_to_uniform_grid_diff
+        if differentiable
+        else sample_multi_coords_to_uniform_grid_nondiff
+    )
+    return impl(
+        data_list,
+        coords_list,
+        out_shape,
+        is_cell_coords=is_cell_coords,
+        transform_uniform=transform_uniform,
+        fill_max_steps=fill_max_steps,
+    )
+
+
+def sample_multi_coords_to_uniform_grid_nondiff(
+    data_list,
+    coords_list,
+    out_shape,
+    is_cell_coords=False,
+    transform_uniform="AABB_OUTER",
+    fill_max_steps=0,
+):
+    """Resample multiple local grids onto a uniform grid via the compiled kernel.
+
+    Wraps ``PISOtorch.SampleTransformedGridLocalToGlobalMulti``. This is fast but
+    breaks the autograd graph; use ``differentiable=True`` on
+    :func:`sample_multi_coords_to_uniform_grid` when gradients are needed.
+    """
     assert len(data_list) == len(coords_list)
     assert len(data_list) > 0
     dims = len(data_list[0].size()) - 2
@@ -304,6 +356,196 @@ def sample_multi_coords_to_uniform_grid(
     )
 
     return out_data
+
+
+def sample_multi_coords_to_uniform_grid_diff(
+    data_list,
+    coords_list,
+    out_shape,
+    is_cell_coords=False,
+    transform_uniform="AABB_OUTER",
+    fill_max_steps=0,
+):
+    """Differentiable, pure-torch re-implementation of
+    :func:`sample_multi_coords_to_uniform_grid_nondiff`.
+
+    The compiled ``PISOtorch.SampleTransformedGridLocalToGlobalMulti`` kernel
+    performs a bilinear *splat* (scatter) of every source cell centre onto a
+    uniform output grid, accumulating value-weighted contributions and a
+    per-cell weight, and finally normalising by that weight. That operation is
+    linear in the cell *values* (the geometry -- ``coords_list`` and the
+    world->index transform -- is static), so it can be expressed with
+    ``index_add`` and stays differentiable w.r.t. ``data_list``. This lets
+    gradients flow through resampled observations, which the compiled kernel
+    breaks.
+
+    The result matches the compiled kernel (for the ``fillMaxSteps`` values used
+    by FluidGym) to floating-point precision; see
+    ``tests/simulation/test_torch_resample.py``.
+
+    Parameters
+    ----------
+    data_list: Sequence[torch.Tensor]
+        Per-block cell data, each of shape ``[1, C, *spatial]`` (NCDHW / NCHW).
+    coords_list: Sequence[torch.Tensor]
+        Per-block coordinates, matching ``sample_multi_coords_to_uniform_grid``.
+    out_shape: int | list | tuple | torch.Tensor
+        Output grid shape in ``(x, y[, z])`` order.
+    is_cell_coords: bool
+        Whether ``coords_list`` holds cell-centre (True) or vertex (False)
+        coordinates. Defaults to False.
+    transform_uniform: str | torch.Tensor
+        World->index transform, see :func:`get_uniform_transform`.
+    fill_max_steps: int
+        Number of hole-filling iterations. Each iteration assigns every empty
+        cell that borders a filled cell the mean of its filled face-neighbours
+        (4-connected in 2D, 6-connected in 3D), matching the compiled kernel's
+        ``fillMaxSteps``. Filled cells keep a weight of zero. Defaults to 0.
+
+    Returns
+    -------
+    torch.Tensor
+        Resampled data of shape ``[1, C, *out_spatial]`` where ``out_spatial``
+        is ``out_shape`` reversed (``(y, x)`` for 2D, ``(z, y, x)`` for 3D).
+        Cells that receive no contribution are zero (matching the kernel).
+    """
+    assert len(data_list) == len(coords_list)
+    assert len(data_list) > 0
+    dims = len(data_list[0].size()) - 2
+    device = data_list[0].device
+    dtype = data_list[0].dtype
+    out_shape = get_output_shape(out_shape, dims)
+
+    # Cell-centre coordinates per block, and the joint vertex set for the AABB.
+    cell_coords_list = []
+    vertex_coords_list = []
+    for coords in coords_list:
+        if is_cell_coords:
+            cell_coords_list.append(coords)
+        else:
+            vertex_coords_list.append(coords)
+            cell_coords_list.append(coords_to_center_coords(coords))
+
+    if is_cell_coords:
+        vertex_coords = None
+    else:
+        vertex_coords = torch.cat(
+            [_.view(dims, -1) for _ in vertex_coords_list], dim=-1
+        )
+
+    mat = get_uniform_transform(
+        transform_uniform, vertex_coords, out_shape, dims, dtype
+    )
+    # mat maps output index -> world; invert to map world -> continuous index.
+    inv = torch.inverse(mat[0].to(device=device, dtype=torch.float64))
+
+    # Output spatial shape is out_shape reversed: (x, y[, z]) -> ([z,] y, x).
+    out_spatial = [int(out_shape[dims - 1 - d]) for d in range(dims)]
+    n_cells = 1
+    for s in out_spatial:
+        n_cells *= s
+    # Strides for a linear index over (x, y[, z]) axes into out_spatial layout.
+    axis_stride = [0] * dims  # stride per index axis (x=0, y=1, z=2)
+    stride = 1
+    for spatial_dim in range(dims):  # innermost (x) first
+        axis_stride[spatial_dim] = stride
+        stride *= out_spatial[dims - 1 - spatial_dim]
+
+    channels = data_list[0].size(1)
+    acc = torch.zeros((channels, n_cells), device=device, dtype=dtype)
+    wacc = torch.zeros((n_cells,), device=device, dtype=dtype)
+
+    for data, cell_coords in zip(data_list, cell_coords_list, strict=True):
+        pts = cell_coords.reshape(dims, -1).to(torch.float64)  # [dims, N] world x,y[,z]
+        ones = torch.ones((1, pts.size(1)), device=device, dtype=torch.float64)
+        gi = inv @ torch.cat([pts, ones], dim=0)  # [dims+1, N] continuous index
+        gi = gi[:dims]  # per-axis continuous index (x, y[, z])
+
+        base = torch.floor(gi).to(torch.int64)  # [dims, N]
+        frac = gi - base  # [dims, N] in [0, 1)
+
+        vals = data.reshape(channels, -1)  # [C, N]
+
+        # Splat to every corner of the surrounding cell (2**dims corners).
+        for corner in range(2**dims):
+            idx = torch.zeros_like(base[0])
+            weight = torch.ones_like(gi[0])
+            valid = torch.ones_like(gi[0], dtype=torch.bool)
+            for axis in range(dims):
+                offset = (corner >> axis) & 1
+                coord = base[axis] + offset
+                weight = weight * (frac[axis] if offset else (1.0 - frac[axis]))
+                valid = valid & (coord >= 0) & (coord < out_spatial[dims - 1 - axis])
+                idx = idx + coord * axis_stride[axis]
+
+            lin = idx[valid]
+            w = weight[valid].to(dtype)
+            wacc.index_add_(0, lin, w)
+            acc.index_add_(1, lin, vals[:, valid] * w)
+
+    written = wacc > 0
+    out = torch.zeros_like(acc)
+    out[:, written] = acc[:, written] / wacc[written]
+    out = out.reshape([channels, *out_spatial])
+
+    if fill_max_steps > 0:
+        out = _fill_empty_cells(
+            out, written.reshape(out_spatial), fill_max_steps, dims
+        )
+
+    return out.reshape([1, channels, *out_spatial])
+
+
+def _fill_empty_cells(values, filled, max_steps, dims):
+    """Iteratively fill empty cells with the mean of their filled face-neighbours.
+
+    Reproduces the hole-filling of ``SampleTransformedGridLocalToGlobalMulti``:
+    each step, every empty cell adjacent to a filled cell takes the mean of its
+    filled face-neighbours; newly filled cells become sources for later steps.
+
+    Parameters
+    ----------
+    values: torch.Tensor
+        Cell values of shape ``[C, *spatial]`` (zero in empty cells).
+    filled: torch.Tensor
+        Boolean mask of shape ``spatial`` marking already-filled cells.
+    max_steps: int
+        Maximum number of fill iterations.
+    dims: int
+        Spatial dimensionality (2 or 3).
+
+    Returns
+    -------
+    torch.Tensor
+        Values with empty cells filled, same shape as ``values``.
+    """
+    conv = torch.nn.functional.conv2d if dims == 2 else torch.nn.functional.conv3d
+    # Face-neighbour ("cross") kernel: 1 at +/-1 along each axis, 0 in the centre.
+    k = torch.zeros([3] * dims, dtype=values.dtype, device=values.device)
+    centre = tuple([1] * dims)
+    for axis in range(dims):
+        for offset in (0, 2):
+            idx = list(centre)
+            idx[axis] = offset
+            k[tuple(idx)] = 1.0
+    k = k.view(1, 1, *([3] * dims))
+
+    channels = values.size(0)
+    filled = filled.to(values.dtype)
+    pad = 1
+    for _ in range(max_steps):
+        num = conv(
+            (values * filled).view(channels, 1, *values.shape[1:]), k, padding=pad
+        )[:, 0]
+        den = conv(filled.view(1, 1, *filled.shape), k, padding=pad)[0, 0]
+        newly = (den > 0) & (filled == 0)
+        if not bool(newly.any()):
+            break
+        update = torch.where(newly, num / den.clamp_min(1.0), torch.zeros_like(num))
+        values = values + update
+        filled = filled + newly.to(values.dtype)
+
+    return values
 
 
 def sample_transform_from_uniform_grid(

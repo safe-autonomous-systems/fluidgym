@@ -34,6 +34,7 @@ def extract_global_2d_obs(
         env._sim.output_resampling_shape,
         env._ndims,
         fill_max_steps=env._sim.output_resampling_fill_max_steps,
+        differentiable=env._differentiable,
     )
     u = u.squeeze()
     u = u.permute(1, 2, 0)
@@ -45,6 +46,7 @@ def extract_global_2d_obs(
         env._sim.output_resampling_shape,
         env._ndims,
         fill_max_steps=env._sim.output_resampling_fill_max_steps,
+        differentiable=env._differentiable,
     )
     p = p.squeeze()
     p = p[sensor_locations[1], sensor_locations[0]]
@@ -99,6 +101,7 @@ def extract_global_3d_obs(
         env._sim.output_resampling_shape,
         env._ndims,
         fill_max_steps=env._sim.output_resampling_fill_max_steps,
+        differentiable=env._differentiable,
     )
     u = u.squeeze()
     u = u.permute(1, 2, 3, 0)
@@ -109,6 +112,7 @@ def extract_global_3d_obs(
         env._sim.output_resampling_shape,
         env._ndims,
         fill_max_steps=env._sim.output_resampling_fill_max_steps,
+        differentiable=env._differentiable,
     )
     p = p.squeeze()
 

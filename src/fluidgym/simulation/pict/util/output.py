@@ -379,7 +379,12 @@ def reduce_3D(data, size, axis3D=0, mode3D="slice"):
 
 
 def _resample_block_data(
-    data_list, vertex_coord_list, resampling_out_shape, ndims, fill_max_steps=0
+    data_list,
+    vertex_coord_list,
+    resampling_out_shape,
+    ndims,
+    fill_max_steps=0,
+    differentiable=False,
 ):
     if isinstance(resampling_out_shape, (list, tuple)):
         out_shape = torch.tensor(resampling_out_shape, dtype=torch.int32)
@@ -396,6 +401,7 @@ def _resample_block_data(
         out_shape,
         is_cell_coords=False,
         fill_max_steps=fill_max_steps,
+        differentiable=differentiable,
     )
     # if ndims==3:
     #    raise NotImplementedError("TODO: implement 3D reduction.")
