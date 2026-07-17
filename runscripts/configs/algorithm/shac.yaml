@@ -1,0 +1,54 @@
+seed: ${seed}
+name: SHAC
+
+print_every: 1
+ckpt_every: 100
+
+network:
+  normalize_input: True
+  encoder: null
+
+  actor: Actor
+  actor_kwargs:
+    mlp_kwargs:
+      units: [256, 256]
+      norm_type: LayerNorm
+      act_type: ELU
+  tanh_clamp: True
+
+  critic: Critic
+  critic_kwargs:
+    mlp_kwargs:
+      units: [256, 256]
+      norm_type: LayerNorm
+      act_type: ELU
+
+shac:
+  multi_gpu: False
+  num_actors: 1
+
+  reward_shaper:
+    fn: scale
+    scale: 0.1
+
+  max_epochs: ${eval:${total_timesteps} // ${.horizon_len}}
+  max_agent_steps: ${total_timesteps}
+  horizon_len: 10
+  num_critic_batches: 4
+
+  gamma: 0.99
+  critic_method: td-lambda  # td-lambda | one-step
+  lambda: 0.95
+  critic_iterations: 16
+  normalize_ret: False
+
+  optim_type: AdamW
+  actor_optim_kwargs: {lr: 2e-3, betas: [0.7, 0.95]}
+  critic_optim_kwargs: {lr: 2e-3, betas: [0.7, 0.95]}
+  lr_schedule: linear  # linear | constant
+  target_critic_alpha: 0.995
+  max_grad_norm: 0.5
+  truncate_grads: True
+
+  no_target_critic: False
+  actor_loss_avgcritics: True

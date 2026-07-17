@@ -32,14 +32,8 @@ def benchmark(cfg: DictConfig):
 
     if "Airfoil3D" in cfg.env_id and ("medium" in cfg.env_id or "hard" in cfg.env_id):
         steps = steps // 10  # Reduce steps for 3D medium/hard envs due to long runtimes
-        env = fluidgym.make(
-            cfg.env_id,
-            **cfg.env_kwargs,
-            load_initial_domain=False,
-            load_domain_statistics=False,
-        )
-    else:
-        env = fluidgym.make(cfg.env_id, **cfg.env_kwargs)
+       
+    env = fluidgym.make(cfg.env_id, **cfg.env_kwargs)
     logger.info("Initialized environment.")
 
     runtimes = []

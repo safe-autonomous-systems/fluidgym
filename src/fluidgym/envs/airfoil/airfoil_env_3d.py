@@ -252,6 +252,20 @@ class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
             ]
         )
 
+        all_sensors = []
+
+        # Filter out airfoil mask
+        for i in range(grid_coords.shape[2]):
+            x_idx = grid_coords[0, :, i]
+            y_idx = grid_coords[1, :, i]
+
+            if self._airfoil_mask[0, y_idx, x_idx].any():
+                continue
+
+            all_sensors.append(grid_coords[:, :, i : i + 1])
+
+        grid_coords = torch.cat(all_sensors, dim=2)
+
         return grid_coords
 
     def _get_sensor_locations_3d(self) -> torch.Tensor:
@@ -534,6 +548,14 @@ class AirfoilEnv3D(AirfoilEnvBase, MultiAgentFluidEnv):
             domain_3d.getBlocks(), domain_2d.getBlocks(), strict=False
         ):
             vel_2d = block_2d.velocity
+
+            if block_3d.velocity[:, :2, 0, :, :].shape != vel_2d.shape:
+                self._logger.error(
+                    "Shape mismatch when initializing 3D domain from 2D:"
+                    f"vel_3d: {block_3d.velocity[:, :2, 0, :, :].shape}, vel_2d:"
+                    f" {vel_2d.shape}. Using 3D initial domain as fallback."
+                )
+                return domain_3d
 
             # Expand 2D velocity to 3D by adding zero z-component
             vel_3d_new = torch.zeros_like(block_3d.velocity)

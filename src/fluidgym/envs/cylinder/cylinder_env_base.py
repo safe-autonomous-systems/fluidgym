@@ -295,6 +295,7 @@ class CylinderEnvBase(FluidEnv, ABC):
             differentiable=self._differentiable,
         )
 
+        sim.solver_double_fallback = True
         sim.preconditionBiCG = False
         sim.BiCG_precondition_fallback = True
 

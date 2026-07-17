@@ -11,11 +11,14 @@ seed: 42
 
 rl_mode: sarl
 
-# D-MPC setup
-horizon: 20
-n_iterations: 10
-lr: 0.1
+# DPC setup
+total_timesteps: 5e4
+horizon: 40
+lr: 0.001                  
 discount_factor: 0.999
+max_grad_norm: 0.5
+
+n_test_episodes: 10
 
 wandb:
   enable: true
@@ -25,10 +28,9 @@ wandb:
 hydra:
   output_subdir: "."
   run: 
-    dir: output/D-MPC/${env_id}/${seed}
+    dir: output/training_dpc/${rl_mode}/${env_id}/DPC/${seed}
   sweep:
-    dir: output/D-MPC/${env_id}/${seed}
+    dir: output/training_dpc/${rl_mode}/${env_id}/DPC/${seed}
     subdir: ""
   job:
     chdir: true
-

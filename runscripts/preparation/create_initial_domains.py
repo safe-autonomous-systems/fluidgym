@@ -36,7 +36,12 @@ def run_experiment(cfg: DictConfig):
     logger.info("Initialized environment.")
 
     logger.info("Creating initial domains...")
-    env.init()
+    if cfg.get("domain_idxs", False):
+        domain_idxs = cfg.domain_idxs
+    else:
+        domain_idxs = None
+    
+    env.init(domain_idxs=domain_idxs)
     logger.info("Initial domains created.")
 
 

@@ -3,7 +3,7 @@ obj:
   _target_: stable_baselines3.sac.sac.SAC
   policy: MlpPolicy
   learning_rate: 0.0003
-  buffer_size: 1000000
+  buffer_size: 50000
   learning_starts: 100
   batch_size: 256
   tau: 0.005

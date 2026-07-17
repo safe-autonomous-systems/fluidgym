@@ -1,0 +1,44 @@
+defaults:
+  - shac
+  - _self_
+
+name: SAPO
+
+network:
+  tanh_clamp: False
+  actor_kwargs:
+    dist_kwargs: {dist_type: squashed_normal, minlogstd: -5.0, maxlogstd: 2.0}
+    fixed_sigma: False
+  critic: EnsembleCritic
+  critic_kwargs:
+    n_critics: 2
+    mlp_kwargs:
+      units: [256, 256]
+      norm_type: LayerNorm
+      act_type: ELU
+
+shac:
+  reward_shaper:
+    fn: scale
+    scale: 1.0                         # no reward scaling (matches DiffSAC)
+
+  horizon_len: 20                      # match DiffSAC BPTT horizon
+  max_grad_norm: 1.0                   # match DiffSAC (shac base uses 0.5)
+  actor_optim_kwargs: {lr: 2e-3, betas: [0.7, 0.95]}
+
+  no_target_critic: True               # avoid lag between entropy targets and critic
+  target_critic_alpha: null
+
+  with_autoent: True
+  with_logprobs: True
+  target_entropy_scalar: 1.0           # target = -action_dim, matches DiffSAC
+  use_distr_ent: True
+  init_alpha: 0.2                      # match DiffSAC initial alpha
+  alpha_optim_kwargs: {lr: 3e-4, betas: [0.7, 0.95]}  # match DiffSAC lr
+
+  scale_by_target_entropy: True
+  unscale_entropy_alpha: True
+  offset_by_target_entropy: True
+
+  entropy_in_return: True
+  entropy_in_targets: True

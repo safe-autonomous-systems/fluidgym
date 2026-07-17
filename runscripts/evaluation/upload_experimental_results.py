@@ -12,6 +12,7 @@ api.upload_large_folder(
     repo_type="dataset",
     ignore_patterns=[
         "*.gif",
+        "replay_buffer_latest.pth",
         "*.pkl",
         "*.npz",
         "*.png",

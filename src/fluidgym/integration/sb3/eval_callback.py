@@ -2,12 +2,14 @@
 environments.
 """
 
+import pickle
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import wandb
+from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.callbacks import BaseCallback
 
 from fluidgym.integration.gymnasium import GymFluidEnv
@@ -163,6 +165,13 @@ class EvalCallback(BaseCallback):
         pass
 
     def _on_training_start(self) -> None:
+        if Path("training_log.csv").exists():
+            existing_log = pd.read_csv("training_log.csv")
+            existing_log.to_csv("training_log_prev.csv", index=False)
+
+        self.last_eval_timesteps = self._num_env_steps
+        self.last_log_timesteps = self._num_env_steps
+
         self.uncontrolled_sequence_df = (
             self.env.unwrapped.get_uncontrolled_episode_metrics()
         )
@@ -200,13 +209,17 @@ class EvalCallback(BaseCallback):
 
     def _save_model(self) -> None:
         self.model.save("ckpt_latest")
+        if isinstance(self.model, SAC):
+            self.model.save_replay_buffer("ckpt_latest_replay_buffer")
+        elif isinstance(self.model, PPO):
+            with open("ckpt_latest_rollout_buffer.pkl", "wb") as f:
+                pickle.dump(self.model.rollout_buffer, f)
 
     def _on_training_end(self) -> None:
         logged_df = pd.DataFrame(self.logged_data)
 
-        if Path("training_log.csv").exists():
-            existing_log = pd.read_csv("training_log.csv")
-            existing_log.to_csv("training_log_backup.csv", index=False)
+        if Path("training_log_prev.csv").exists():
+            existing_log = pd.read_csv("training_log_prev.csv")
             combined_log = pd.concat([existing_log, logged_df], ignore_index=True)
             combined_log.to_csv("training_log.csv", index=False)
         else:
@@ -230,7 +243,11 @@ class EvalCallback(BaseCallback):
                 eval_rewards.append(reward)
             mean_eval_reward = float(np.mean(eval_rewards))
 
-        pd.DataFrame(self.logged_data).to_csv("training_log.csv", index=False)
+        logged_df = pd.DataFrame(self.logged_data)
+        if Path("training_log_prev.csv").exists():
+            existing_log = pd.read_csv("training_log_prev.csv")
+            logged_df = pd.concat([existing_log, logged_df], ignore_index=True)
+        logged_df.to_csv("training_log.csv", index=False)
 
         if self.checkpoint_latest:
             self._save_model()

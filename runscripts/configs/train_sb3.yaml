@@ -17,7 +17,7 @@ rl_mode: sarl
 total_timesteps: 5e4
 
 # Evaluation
-n_eval_steps: 10
+n_eval_steps: 5
 eval_freq: ${eval:${total_timesteps} // ${n_eval_steps}}
 n_eval_episodes: 1
 

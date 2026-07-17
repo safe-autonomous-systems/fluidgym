@@ -1,0 +1,83 @@
+# @package _global_
+defaults:
+  - _self_
+  - cluster: local
+
+env_id: CylinderJet2D-easy-v0
+env_kwargs: {}
+eval_env_kwargs: {}
+  
+seed: 42
+
+device: cuda
+
+# SARL or MARL
+rl_mode: sarl
+
+# General training
+total_timesteps: 5e4
+run_training: true
+continue_training: false
+
+# Evaluation
+n_eval_steps: 1
+eval_freq: ${eval:${total_timesteps} // ${n_eval_steps}}
+ckpt_freq: ${eval:${total_timesteps} // 100}
+n_eval_episodes: 1
+
+n_test_episodes: 10
+
+# environment
+modality: 'state'
+action_repeat: 1
+train_steps: ${total_timesteps}
+
+# planning
+iterations: 6
+num_samples: 512
+num_elites: 64
+mixture_coef: 0.05
+min_std: 0.05
+temperature: 0.5
+momentum: 0.1
+
+# learning
+discount: 0.99
+batch_size: 512
+max_buffer_size: ${train_steps}
+horizon: 20
+reward_coef: 0.5
+value_coef: 0.1
+consistency_coef: 2
+rho: 0.5
+kappa: 0.1
+lr: 1e-3
+std_schedule: linear(0.5, ${min_std}, ${train_steps})
+horizon_schedule: linear(1, ${horizon}, ${train_steps})
+per_alpha: 0.6
+per_beta: 0.4
+grad_clip_norm: 10
+seed_steps: 100
+update_freq: 2
+tau: 0.01
+
+# architecture
+enc_dim: 256
+mlp_dim: 512
+latent_dim: 50
+
+wandb:
+  enable: true
+  entity: safe-autonomous-systems
+  project: jbecktepe-fluidgym
+
+hydra:
+  output_subdir: "."
+  run: 
+    dir: output/training/${rl_mode}/${env_id}/TD-MPC/${seed}
+  sweep:
+    dir: output/training/${rl_mode}/${env_id}/TD-MPC/${seed}
+    subdir: ""
+  job:
+    chdir: true
+

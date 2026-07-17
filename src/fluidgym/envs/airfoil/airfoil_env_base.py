@@ -148,10 +148,9 @@ class AirfoilEnvBase(FluidEnv):
         self.__last_control = torch.zeros((1,), device=self._cuda_device)
         self._viscosity = self._viscosity.to(self._cuda_device)
         _, self._airfoil_coords = read_airfoil(
-            path=self._airfoil_path,
             attack_angle_deg=self._attack_angle_deg,
-            cpu_device=self._cpu_device,
-            dtype=self._dtype,
+            cpu_device=torch.device("cpu"),
+            dtype=torch.float32,
         )
         self._airfoil_coords = self._airfoil_coords.squeeze()
         self._airfoil_mask = self._get_airfoil_mask()
@@ -216,16 +215,22 @@ class AirfoilEnvBase(FluidEnv):
         return mask
 
     def _get_domain(self) -> PISOtorch.Domain:
+        # For the hard case in 3D we need a finer grid at the outflow
+        if self._ndims == 3 and self._reynolds_number >= 5000:
+            tail_grow_mul = 1.001
+        else:
+            tail_grow_mul = 1.01
+
         domain = make_airfoil_domain(
             n_dims=self._ndims,
             res_z=self._res_z,
             H=self.H,
             L=self.L,
-            airfoil_path=self._airfoil_path,
             vel_in=self.U_mean,
             attack_angle_deg=self._attack_angle_deg,
             viscosity=self._viscosity.to(self._cpu_device),
             resolution_div=1,
+            tail_grow_mul=tail_grow_mul,
             cpu_device=self._cpu_device,
             cuda_device=self._cuda_device,
         )
@@ -270,7 +275,9 @@ class AirfoilEnvBase(FluidEnv):
             substeps="ADAPTIVE",
             dt=self._dt,
             corrector_steps=2,
-            advection_tol=1e-6,
+            advection_tol=1e-7
+            if self._ndims == 3 and self._reynolds_number > 3e3
+            else 1e-6,
             pressure_tol=1e-7 if self._ndims == 2 else 1e-8,
             advect_non_ortho_steps=2,
             pressure_non_ortho_steps=4,
@@ -282,6 +289,7 @@ class AirfoilEnvBase(FluidEnv):
             differentiable=self._differentiable,
         )
 
+        sim.solver_double_fallback = True
         sim.preconditionBiCG = False
         sim.BiCG_precondition_fallback = True
 
@@ -490,7 +498,9 @@ class AirfoilEnvBase(FluidEnv):
         n_boundary_cells_top = grids[2].shape[-1] - 1  # AirfoilTop block
 
         velocity_profile_top = torch.zeros(
-            (1, 2, 1, n_boundary_cells_top), device=self._cuda_device
+            (1, 2, 1, n_boundary_cells_top),
+            dtype=self._dtype,
+            device=self._cuda_device
         )
 
         if self._ndims == 2:

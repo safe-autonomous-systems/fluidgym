@@ -63,7 +63,12 @@ def collect_uncontrolled_episode_metrics(cfg: DictConfig):
 
     zero_action = torch.zeros(env.action_space_shape, device=env._cuda_device)
 
-    for i in range(N_INITIAL_DOMAINS):
+    if cfg.get("domain_idxs", False):
+        domain_idxs = cfg.domain_idxs
+    else:
+        domain_idxs = list(range(N_INITIAL_DOMAINS))
+
+    for i in domain_idxs:
         for mode in [EnvMode.TRAIN, EnvMode.VAL, EnvMode.TEST]:
             try:
                 env._load_uncontrolled_episode(idx=i, mode=mode)

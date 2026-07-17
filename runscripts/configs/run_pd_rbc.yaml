@@ -1,0 +1,33 @@
+# @package _global_
+defaults:
+  - _self_
+  - cluster: local
+
+env_id: RBC2D-easy-v0
+env_kwargs: {}
+eval_env_kwargs: {}
+
+seed: 42
+
+n_test_episodes: 10
+
+kp: 970
+kd: 2000
+
+
+rl_mode: sarl
+
+wandb:
+  enable: true
+  entity: safe-autonomous-systems
+  project: jbecktepe-fluidgym
+
+hydra:
+  output_subdir: "."
+  run:
+    dir: output/PD-RBC/${env_id}/${seed}
+  sweep:
+    dir: output/PD-RBC/${env_id}/${seed}
+    subdir: ""
+  job:
+    chdir: true

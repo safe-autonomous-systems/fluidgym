@@ -37,7 +37,7 @@ mpl.rcParams.update(
 logger = logging.getLogger(__name__)
 
 TRAINING_PATH = Path("./output/training")
-DMPC_PATH = Path("./output/D-MPC")
+RBC_PD_PATH = Path("./output/PD-RBC")
 PLOTS_PATH = Path("./paper/plots")
 PLOTS_PATH.mkdir(parents=True, exist_ok=True)
 TABLES_PATH = Path("./paper/tables")
@@ -63,19 +63,21 @@ for env_name in ENV_ORDER:
         ENV_ID_ORDER.append(f"{env_name}-{difficulty}-v0")
 
 SEEDS = range(5)
-DMPC_SEEDS = range(10)
+PD_RBC_SEEDS = range(3)
 AIRFOIL3D_SEEDS = range(3)
 
 FIGWIDTH = 10.0
 
-ALGORITHMS = ["PPO", "SAC"]
-ALGORITHM_ORDER = ["PPO", "SAC", "MA-PPO", "MA-SAC"]
+ALGORITHMS = ["PPO", "SAC", "TD-MPC", "DPC"]
+ALGORITHM_ORDER = ["PD", "PPO", "SAC", "MA-PPO", "MA-SAC", "DPC", "TD-MPC"]
 ALGORITHM_COLOR_IDXS = {
     "PPO": 1,
     "SAC": 2,
     "MA-PPO": 3,
     "MA-SAC": 4,
-    "D-MPC": 5,
+    "DPC": 7,
+    "TD-MPC": 6,
+    "PD": 0,
 }
 
 ENV_CATEGORIES = {
@@ -298,6 +300,14 @@ def load_single_training_run(
         return pd.DataFrame()
 
     training_run = pd.read_csv(training_path)
+    # TD-MPC uses "train/" prefix instead of "training/", normalize columns
+    training_run = training_run.rename(columns={
+        col: col.replace("train/", "training/", 1)
+        for col in training_run.columns
+        if col.startswith("train/")
+    })
+    if "training/step" in training_run.columns and "step" not in training_run.columns:
+        training_run = training_run.rename(columns={"training/step": "step"})
     training_run = (
         training_run.sort_values("step")  # ensure correct order
         .groupby("step", as_index=False)
@@ -305,10 +315,16 @@ def load_single_training_run(
     )
 
     # Apply smoothing
+    if algorithm == "TD-MPC":
+        smoothing_window = 20
+    elif algorithm == "DPC":
+        smoothing_window = 40
+    else:
+        smoothing_window = 3
     for col in training_run.columns:
         if col.startswith("training/mean_"):
             training_run[col] = (
-                training_run[col].rolling(window=3, min_periods=1).mean()
+                training_run[col].rolling(window=smoothing_window, min_periods=1).mean()
             )
 
     return training_run
@@ -316,6 +332,8 @@ def load_single_training_run(
 
 def load_training_runs(
     env_name: str,
+    additional_algorithms: list[str] | None = None,
+    difficulty_levels: list[str] | None = None,
 ) -> pd.DataFrame:
     all_runs = []
     if "Airfoil3D" in env_name or "CylinderJet3D" in env_name:
@@ -323,17 +341,17 @@ def load_training_runs(
     else:
         seeds = SEEDS
 
-    if "Airfoil3D" in env_name:
-        difficulty_levels = ["easy"]
-    else:
+    if difficulty_levels is None:
         difficulty_levels = DIFFICULTY_LEVELS
 
-    total_steps = np.inf
+    algorithms = ALGORITHMS
+    if additional_algorithms is not None:
+        algorithms += additional_algorithms
 
     for rl_mode in RL_MODES[env_name]:
         for difficulty in difficulty_levels:
             env_id = f"{env_name}-{difficulty}-v0"
-            for algorithm in ALGORITHMS:
+            for algorithm in algorithms:
                 for seed in seeds:
                     run_df = load_single_training_run(
                         env_id=env_id,
@@ -353,34 +371,27 @@ def load_training_runs(
                     run_df["seed"] = seed
                     run_df["algorithm"] = format_algorithm(algorithm, rl_mode)
 
-                    total_steps = min(total_steps, run_df["step"].max())
-
                     all_runs.append(run_df)
 
     if not all_runs:
         return pd.DataFrame()
 
     all_runs_df = pd.concat(all_runs, ignore_index=True)
-    all_runs_df = all_runs_df[all_runs_df["step"] <= total_steps]
 
     return all_runs_df
-
 
 def load_test_sequence(
     env_id: str,
     rl_mode: str,
     algorithm: str,
     seed: int,
-    test_env_id: str | None = None,
+    test_env_id: str | None = None
 ) -> pd.DataFrame:
     if test_env_id is None:
-        if algorithm == "D-MPC":
-            test_path = DMPC_PATH / f"{env_id}/{seed}/test_eval_episode_0.csv"
-        else:
-            test_path = (
-                TRAINING_PATH
-                / f"{rl_mode}/{env_id}/{algorithm}/{seed}/test/test_eval_episode_0.csv"
-            )
+        test_path = (
+            TRAINING_PATH
+            / f"{rl_mode}/{env_id}/{algorithm}/{seed}/test/test_eval_episode_0.csv"
+        )
     else:
         test_path = (
             TRAINING_PATH
@@ -402,8 +413,8 @@ def load_single_test_render(
     test_env_id: str | None = None,
 ) -> dict:
     if test_env_id is None:
-        if algorithm == "D-MPC":
-            test_path = DMPC_PATH / f"{env_id}/{seed}"
+        if algorithm == "PD":
+            test_path = RBC_PD_PATH / f"{env_id}/{seed}"
         else:
             test_path = TRAINING_PATH / f"{rl_mode}/{env_id}/{algorithm}/{seed}/test"
     else:
@@ -435,14 +446,21 @@ def load_single_test_render(
 
 
 def load_all_test_renders(env_name: str, seed: int) -> dict:
-    if "CylinderJet2D" in env_name:
-        algorithms = ALGORITHMS + ["D-MPC"]
+    algorithms = ALGORITHMS
+    if "RBC2D" in env_name:
+        algorithms =  ["PD"] + algorithms
+
+    if "CylinderJet2D" in env_name or "RBC2D" in env_name:
+        algorithms = algorithms + ["DPC", "TD-MPC"]
     else:
-        algorithms = ALGORITHMS
+        algorithms = algorithms
 
     all_renders = defaultdict(dict)
     for rl_mode in RL_MODES[env_name]:
         for algorithm in algorithms:
+            if rl_mode == "marl" and algorithm not in ["PPO", "SAC"]:
+                continue
+
             for difficulty in DIFFICULTY_LEVELS:
                 render_data = load_single_test_render(
                     env_id=f"{env_name}-{difficulty}-v0",
@@ -470,10 +488,18 @@ def load_test_sequences(
     algorithm: str,
     seed: int,
     test_env_id: str | None = None,
+    stress_test: bool = False,
 ) -> pd.DataFrame:
-    if test_env_id is None:
-        if algorithm == "D-MPC":
-            test_path = DMPC_PATH / f"{env_id}/{seed}/test_eval_episode_0.csv"
+    if stress_test:
+        test_path = (
+            TRAINING_PATH
+            / f"{rl_mode}/{env_id}/{algorithm}/{seed}/stress_test/test_eval_episode_0.csv"
+        )  
+    elif test_env_id is None:
+        if algorithm == "PD":
+            if rl_mode != "sarl":
+                return pd.DataFrame()  # PD results only exist for SARL
+            test_path = RBC_PD_PATH / f"{env_id}/{seed}/test_eval_episode_0.csv"
         else:
             test_path = (
                 TRAINING_PATH
@@ -530,22 +556,16 @@ def load_test_results(
     env_name: str,
     test_env_name: str | None = None,
     rl_modes: list[str] | None = None,
+    average_over_episodes: bool = True,
 ) -> pd.DataFrame:
     all_results = []
     rl_modes = rl_modes or RL_MODES[env_name]
 
-    if "Airfoil3D" in env_name:
-        difficulty_levels = ["easy"]
-    else:
-        difficulty_levels = DIFFICULTY_LEVELS
+    difficulty_levels = DIFFICULTY_LEVELS
+    seeds = SEEDS
 
-    if "Airfoil3D" in env_name or "CylinderJet3D" in env_name:
-        seeds = AIRFOIL3D_SEEDS
-    else:
-        seeds = SEEDS
-
-    if "CylinderJet2D" in env_name and test_env_name is None:
-        algorithms = ALGORITHMS + ["D-MPC"]
+    if "RBC2D" in env_name and test_env_name is None:
+        algorithms = ALGORITHMS + ["PD"]
     else:
         algorithms = ALGORITHMS
 
@@ -553,10 +573,14 @@ def load_test_results(
         for difficulty in difficulty_levels:
             env_id = f"{env_name}-{difficulty}-v0"
             for algorithm in algorithms:
-                if algorithm == "D-MPC":
-                    _seeds = DMPC_SEEDS
+                if algorithm == "PD":
+                    _seeds = PD_RBC_SEEDS
                 else:
                     _seeds = seeds
+
+                # Skip invalid rl_mode / algorithm combinations
+                if rl_mode == "marl" and algorithm not in ["PPO", "SAC"]:
+                    continue
 
                 for seed in _seeds:
                     result_df = load_test_sequences(
@@ -582,13 +606,15 @@ def load_test_results(
                     ]
                     result_df = result_df.drop(columns=drop_cols)
 
-                    # For D-MPC, there is no episode column
+                    # For PD, there is no episode column
                     if "episode" not in result_df.columns:
                         result_df["episode"] = 0
 
                     # Average per episode
-                    result_df = result_df.groupby("episode").mean().reset_index()
-                    result_df = result_df.drop(columns=["step"])
+                    if average_over_episodes:
+                        result_df = result_df.groupby("episode").mean().reset_index()
+                        if "step" in result_df.columns:
+                            result_df = result_df.drop(columns=["step"])
 
                     result_df["env_id"] = env_id
                     result_df["category"] = ENV_CATEGORIES[env_name]
@@ -604,44 +630,75 @@ def load_test_results(
     return pd.concat(all_results, ignore_index=True)
 
 
-def load_all_test_results() -> pd.DataFrame:
+def load_all_test_results(
+    average_over_episodes: bool = True,
+    include_transfer: bool = False
+) -> pd.DataFrame:
     all_test_results_list = []
 
     # Cylinder
     all_test_results_list += [
-        load_test_results(env_name="CylinderJet2D", rl_modes=["sarl"])
+        load_test_results(
+            env_name="CylinderJet2D",
+            rl_modes=["sarl"],
+            average_over_episodes=average_over_episodes,
+        )
     ]
     all_test_results_list += [
-        load_test_results(env_name="CylinderRot2D", rl_modes=["sarl"])
+        load_test_results(env_name="CylinderRot2D", rl_modes=["sarl"], average_over_episodes=average_over_episodes,)
     ]
     all_test_results_list += [
-        load_test_results(env_name="CylinderJet3D", rl_modes=["sarl", "marl"])
+        load_test_results(env_name="CylinderJet3D", rl_modes=["sarl", "marl"], average_over_episodes=average_over_episodes,)
     ]
 
     # RBC
     all_test_results_list += [
-        load_test_results(env_name="RBC2D", rl_modes=["sarl", "marl"])
+        load_test_results(env_name="RBC2D", rl_modes=["sarl", "marl"], average_over_episodes=average_over_episodes,)
     ]
-    all_test_results_list += [load_test_results(env_name="RBC3D", rl_modes=["marl"])]
+    all_test_results_list += [load_test_results(env_name="RBC3D", rl_modes=["marl"], average_over_episodes=average_over_episodes,)]
 
     # Airfoil
     all_test_results_list += [
-        load_test_results(env_name="Airfoil2D", rl_modes=["sarl"])
+        load_test_results(env_name="Airfoil2D", rl_modes=["sarl"], average_over_episodes=average_over_episodes,)
     ]
     all_test_results_list += [
-        load_test_results(env_name="Airfoil3D", rl_modes=["sarl", "marl"])
+        load_test_results(env_name="Airfoil3D", rl_modes=["sarl", "marl"], average_over_episodes=average_over_episodes,)
     ]
 
     # TCF
     all_test_results_list += [
-        load_test_results(env_name="TCFSmall3D-both", rl_modes=["marl"])
+        load_test_results(env_name="TCFSmall3D-both", rl_modes=["marl"], average_over_episodes=average_over_episodes,)
     ]
 
     all_test_results_list += [
-        load_test_results(env_name="TCFLarge3D-both", rl_modes=["marl"])
+        load_test_results(env_name="TCFLarge3D-both", rl_modes=["marl"], average_over_episodes=average_over_episodes,)
     ]
 
-    return pd.concat(all_test_results_list, ignore_index=True)
+    test_results = pd.concat(all_test_results_list, ignore_index=True)
+
+    if include_transfer:
+        test_results["test_env_id"] = test_results["env_id"]
+
+        cylinder_transfer = load_test_results(
+                env_name="CylinderJet2D",
+                test_env_name="CylinderJet3D",
+                rl_modes=["sarl"],
+                average_over_episodes=average_over_episodes,
+            )
+        cylinder_transfer["test_env_id"] = cylinder_transfer["env_id"].str.replace("CylinderJet2D", "CylinderJet3D")
+
+        tcf_transfer = load_test_results(
+            env_name="TCFSmall3D-both",
+            test_env_name="TCFLarge3D-both",
+            rl_modes=["marl"],
+            average_over_episodes=average_over_episodes,
+        )
+        tcf_transfer["test_env_id"] = tcf_transfer["env_id"].str.replace("TCFSmall3D-both", "TCFLarge3D-both")
+
+        return pd.concat([test_results, cylinder_transfer, tcf_transfer], ignore_index=True)
+
+    else:
+        return test_results
 
 
 def plot_cylinder_test_episode(env_id: str, seed: int) -> None:
@@ -654,15 +711,19 @@ def plot_cylinder_test_episode(env_id: str, seed: int) -> None:
     sac_df = load_test_sequence(
         env_id=env_id, rl_mode="sarl", algorithm="SAC", seed=seed
     )
-    dmpc_df = load_test_sequence(
-        env_id=env_id, rl_mode="sarl", algorithm="D-MPC", seed=seed
+    td_mcp_df = load_test_sequences(
+        env_id=env_id, rl_mode="sarl", algorithm="TD-MPC", seed=seed
+    )
+    td_mcp_df = td_mcp_df[td_mcp_df["episode"] == 0].reset_index(drop=True)
+    dpc_df = load_test_sequence(
+        env_id=env_id, rl_mode="sarl", algorithm="DPC", seed=seed
     )
 
     ppo_df["step"] = ppo_df.index
     sac_df["step"] = sac_df.index
     uncontrolled_df["step"] = uncontrolled_df.index
 
-    fig, axs = plt.subplots(1, 2, figsize=(FIGWIDTH * 0.45, 1.8), sharex=True)
+    fig, axs = plt.subplots(1, 2, figsize=(FIGWIDTH * 0.45, 2.25), sharex=True)
 
     labels = [r"$a_t$", r"$C_D$"]
     metrics = ["action_0", "drag"]
@@ -702,12 +763,21 @@ def plot_cylinder_test_episode(env_id: str, seed: int) -> None:
             label="SAC",
         )
         sns.lineplot(
-            data=dmpc_df,
+            data=dpc_df,
             x="step",
             y=metric,
             ax=ax,
-            color=bright_colors[4],
-            label="D-MPC",
+            color=bright_colors[ALGORITHM_COLOR_IDXS["DPC"]],
+            label="DPC",
+            zorder=10
+        )
+        sns.lineplot(
+            data=td_mcp_df,
+            x="step",
+            y=metric,
+            ax=ax,
+            color=bright_colors[ALGORITHM_COLOR_IDXS["TD-MPC"]],
+            label="TD-MPC",
         )
         ax.set_title(titles[metrics.index(metric)])
         ax.legend().remove()
@@ -716,22 +786,173 @@ def plot_cylinder_test_episode(env_id: str, seed: int) -> None:
         format_axis(ax, border=True)
 
     handles, y_labels = ax.get_legend_handles_labels()
+
+    handles.insert(1, plt.Line2D([], [], color="white"))  # type: ignore
+    y_labels.insert(1, "")
+
+    # Swap positions of DPC and SAC
+    # dpc_handle = handles.pop(-2)
+    # dpc_label = y_labels.pop(-2)
+    # sac_handle = handles.pop(3)
+    # sac_label = y_labels.pop(3)
+    # handles.insert(3, dpc_handle)
+    # y_labels.insert(3, dpc_label)
+    # handles.insert(4, sac_handle)
+    # y_labels.insert(4, sac_label)
+
+
     fig.legend(
         handles,
         y_labels,
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.13),
-        ncol=4,
+        bbox_to_anchor=(0.5, 0.215),
+        ncol=3,
         fancybox=False,
         shadow=False,
         frameon=False,
     )
     fig.subplots_adjust(
-        top=0.88, bottom=0.33, left=0.13, right=0.98, hspace=0.25, wspace=0.35
+        top=0.88, bottom=0.39, left=0.11, right=0.98, hspace=0.25, wspace=0.35
     )
 
     plt.savefig(
-        PLOTS_PATH / "individual" / "CylinderJet2D_eval_sequence.pdf", format="pdf"
+        PLOTS_PATH / "individual" / f"CylinderJet2D_eval_sequence.pdf",
+        format="pdf",
+    )
+    plt.close()
+
+def plot_airfoil_transfer_episode(env_id: str, seed: int) -> None:
+    transfer_env_id = env_id.replace("Airfoil2D", "Airfoil3D")
+    env = fluidgym.make(transfer_env_id, load_domain_statistics=False)
+
+    uncontrolled_df = env._load_uncontrolled_episode(idx=0, mode=EnvMode.TEST)
+    ppo_df = load_test_sequence(
+        env_id=env_id, rl_mode="sarl", algorithm="PPO", seed=seed, test_env_id=transfer_env_id
+    )
+    # sac_df = load_test_sequence(
+    #     env_id=env_id, rl_mode="sarl", algorithm="SAC", seed=seed, test_env_id=transfer_env_id
+    # )
+
+    ppo_df["step"] = ppo_df.index
+    ppo_df["aero_eff"] = ppo_df["lift"] / ppo_df["drag"]
+    # sac_df["step"] = sac_df.index
+    uncontrolled_df["step"] = uncontrolled_df.index
+    uncontrolled_df["aero_eff"] = uncontrolled_df["lift"] / uncontrolled_df["drag"]
+
+    fig, axs = plt.subplots(1, 4, figsize=(FIGWIDTH, 1.8), sharex=True)
+
+    jet_colors = [bright_colors[2], bright_colors[3], bright_colors[4]]
+    jet_labels = ["Jet 1", "Jet 2", "Jet 3"]
+
+    ax_action = axs[0]
+    jet_handles = []
+    for jet_idx in range(3):
+        color = jet_colors[jet_idx]
+        col = f"action_{jet_idx}"
+        line, = ax_action.plot(
+            ppo_df["step"],
+            ppo_df[col],
+            color=color,
+        )
+        line.set_label(jet_labels[jet_idx])
+        jet_handles.append(line)
+    ax_action.set_title("Control Actions")
+    ax_action.set_xlabel(r"Episode Step $t$")
+    ax_action.set_ylabel(r"$a_t$")
+    ax_action.legend().set_visible(False)
+    format_axis(ax_action, border=True)
+
+    # --- Drag Coefficient ---
+    sns.lineplot(
+        data=uncontrolled_df,
+        x="step",
+        y="drag",
+        ax=axs[1],
+        color=bright_colors[0],
+        label="Baseflow",
+        linestyle="-.",
+    )
+    sns.lineplot(
+        data=ppo_df,
+        x="step",
+        y="drag",
+        ax=axs[1],
+        color=bright_colors[1],
+        label="PPO",
+    )
+    axs[1].set_title("Drag Coefficient")
+    axs[1].legend().remove()
+    axs[1].set_xlabel(r"Episode Step $t$")
+    axs[1].set_ylabel(r"$C_D$")
+    format_axis(axs[1], border=True)
+
+    # --- Lift Coefficient ---
+    sns.lineplot(
+        data=uncontrolled_df,
+        x="step",
+        y="lift",
+        ax=axs[2],
+        color=bright_colors[0],
+        label="Baseflow",
+        linestyle="-.",
+    )
+    sns.lineplot(
+        data=ppo_df,
+        x="step",
+        y="lift",
+        ax=axs[2],
+        color=bright_colors[1],
+        label="PPO",
+    )
+    axs[2].set_title("Lift Coefficient")
+    axs[2].legend().remove()
+    axs[2].set_xlabel(r"Episode Step $t$")
+    axs[2].set_ylabel(r"$C_L$")
+    format_axis(axs[2], border=True)
+
+    # --- Aerodynamic Efficiency ---
+    sns.lineplot(
+        data=uncontrolled_df,
+        x="step",
+        y="aero_eff",
+        ax=axs[3],
+        color=bright_colors[0],
+        label="Baseflow",
+        linestyle="-.",
+    )
+    sns.lineplot(
+        data=ppo_df,
+        x="step",
+        y="aero_eff",
+        ax=axs[3],
+        color=bright_colors[1],
+        label="PPO",
+    )
+    axs[3].set_title("Aerodynamic Efficiency")
+    axs[3].legend().remove()
+    axs[3].set_xlabel(r"Episode Step $t$")
+    axs[3].set_ylabel(r"$C_L / C_D$")
+    format_axis(axs[3], border=True)
+
+    aero_handles, aero_labels = axs[3].get_legend_handles_labels()
+    all_handles = jet_handles + aero_handles
+    all_labels = jet_labels + aero_labels
+    fig.legend(
+        all_handles,
+        all_labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.15),
+        ncol=5,
+        fancybox=False,
+        shadow=False,
+        frameon=False,
+    )
+    fig.subplots_adjust(
+        top=0.87, bottom=0.34, left=0.07, right=0.98, hspace=0.25, wspace=0.35
+    )
+
+    plt.savefig(
+        PLOTS_PATH / "individual" / f"{env_id}_transfer.pdf", format="pdf"
     )
     plt.close()
 
@@ -999,7 +1220,7 @@ def plot_tcf_transfer(difficulty: str) -> None:
             )
         ax.set_title(title)
         ax.legend().remove()
-        ax.set_xlabel(r"Episode Step $t$")
+        ax.set_xlabel(r"Test Episode Step $t$")
         ax.set_ylabel("")
         ax.set_ylim(0, None)
         format_axis(ax, border=True)
@@ -1036,7 +1257,21 @@ def plot_tcf_transfer(difficulty: str) -> None:
     plt.close()
 
 
-def plot_training_results(env_name: str, metric: str = "reward") -> None:
+def load_rbc_pd_mean(env_id: str) -> float:
+    rewards = []
+    for seed in PD_RBC_SEEDS:
+        episode_path = RBC_PD_PATH / f"{env_id}/{seed}/test_eval_episode_0.csv"
+        if not episode_path.exists():
+            logger.warning(f"No PD episode found for {env_id}, seed {seed}")
+            continue
+        df = pd.read_csv(episode_path)
+        rewards.append(df["reward"].mean())
+    if not rewards:
+        return float("nan")
+    return float(np.mean(rewards))
+
+
+def plot_training_results(env_name: str, metric: str = "reward", log: bool = False) -> None:
     training_runs = load_training_runs(env_name=env_name)
 
     algorithms = training_runs["algorithm"].unique()
@@ -1048,17 +1283,25 @@ def plot_training_results(env_name: str, metric: str = "reward") -> None:
 
     fig, axs = plt.subplots(1, 3, figsize=(FIGWIDTH, 2.5))
 
-    if "Airfoil3D" in env_name:
-        difficulty_levels = ["easy", None, None]
-    else:
-        difficulty_levels = DIFFICULTY_LEVELS
-
-    for difficulty, ax in zip(difficulty_levels, axs, strict=False):
+    for difficulty, ax in zip(DIFFICULTY_LEVELS, axs, strict=False):
         if difficulty is None:
             ax.axis("off")
             continue
 
+        if log:
+            ax.set_xscale("log")
+
         difficulty_data = training_runs[training_runs["difficulty"] == difficulty]
+
+        if "RBC2D" in env_name and metric == "reward":
+            pd_mean = load_rbc_pd_mean(f"{env_name}-{difficulty}-v0")
+            ax.axhline(
+                pd_mean,
+                color=bright_colors[ALGORITHM_COLOR_IDXS["PD"]],
+                linestyle="--",
+                linewidth=1.5,
+                label="PD",
+            )
 
         sns.lineplot(
             data=difficulty_data,
@@ -1073,20 +1316,22 @@ def plot_training_results(env_name: str, metric: str = "reward") -> None:
         ax.set_title(f"{env_name}-{difficulty}-v0")
         ax.set_xlabel("Training Step")
         ax.set_ylabel("")
-        ax.set_xticks([0, max_steps])
-        ax.set_xticklabels([0, format_step(max_steps)])
+        if not log:
+            ax.set_xticks([0, max_steps])
+            ax.set_xticklabels([0, format_step(max_steps)])
         ax.legend().remove()
         format_axis(ax, border=True)
 
     axs[0].set_ylabel(METRICS[metric])
 
-    handles, y_labels = axs[0].get_legend_handles_labels()
+    handles, labels = axs[0].get_legend_handles_labels()
+    n_legend_cols = len(algorithms) + (1 if "RBC2D" in env_name and metric == "reward" else 0)
     fig.legend(
         handles,
-        y_labels,
+        labels,
         loc="upper center",
         bbox_to_anchor=(0.5, 0.1),
-        ncol=len(algorithms),
+        ncol=n_legend_cols,
         fancybox=False,
         shadow=False,
         frameon=False,
@@ -1095,30 +1340,571 @@ def plot_training_results(env_name: str, metric: str = "reward") -> None:
         top=0.89, bottom=0.25, left=0.1, right=0.95, hspace=0.25, wspace=0.33
     )
 
+    suffix = "_log" if log else ""
     plt.savefig(
-        PLOTS_PATH / "quant_training" / f"{env_name}_training_{metric}.pdf",
+        PLOTS_PATH / "quant_training" / f"{env_name}_training_{metric}{suffix}.pdf",
         format="pdf",
     )
     plt.close()
 
 
+def plot_training_results_dpc(env_id_left: str, env_id_right: str) -> None:
+    from matplotlib.lines import Line2D
+
+    fig, axs = plt.subplots(1, 2, figsize=(FIGWIDTH * 0.45, 2.35))
+
+    parts = env_id_right.rsplit("-", 2)
+    right_runs = load_training_runs(env_name=parts[0])
+    right_algorithms = sorted(
+        right_runs[right_runs["difficulty"] == parts[1]]["algorithm"].unique(),
+        key=lambda x: ALGORITHM_ORDER.index(x),
+    )
+    right_palette = [bright_colors[ALGORITHM_COLOR_IDXS[alg]] for alg in right_algorithms]
+
+    env_ids = [env_id_left, env_id_right]
+
+    for ax, env_id in zip(axs, env_ids):
+        parts = env_id.rsplit("-", 2)
+        env_name = parts[0]
+        difficulty = parts[1]
+
+        training_runs = load_training_runs(env_name=env_name)
+        difficulty_data = training_runs[training_runs["difficulty"] == difficulty]
+
+        algorithms = sorted(
+            difficulty_data["algorithm"].unique(),
+            key=lambda x: ALGORITHM_ORDER.index(x),
+        )
+        palette = [bright_colors[ALGORITHM_COLOR_IDXS[alg]] for alg in algorithms]
+
+        ax.set_xscale("log")
+
+        sns.lineplot(
+            data=difficulty_data,
+            x="step",
+            y="training/mean_reward",
+            hue="algorithm",
+            hue_order=algorithms,
+            palette=palette,
+            errorbar=("ci", 95),
+            ax=ax,
+        )
+
+        if env_id == "CylinderJet2D-easy-v0":
+            dpc_color = bright_colors[ALGORITHM_COLOR_IDXS["DPC"]]
+            non_dpc = [a for a in algorithms if a != "DPC"]
+            non_dpc_palette = [bright_colors[ALGORITHM_COLOR_IDXS[a]] for a in non_dpc]
+
+            # Clear the full plot and re-draw with DPC split at 10k
+            ax.cla()
+            ax.set_xscale("log")
+
+            # All non-DPC algorithms: full range
+            sns.lineplot(
+                data=difficulty_data[difficulty_data["algorithm"].isin(non_dpc)],
+                x="step",
+                y="training/mean_reward",
+                hue="algorithm",
+                hue_order=non_dpc,
+                palette=non_dpc_palette,
+                errorbar=("ci", 95),
+                ax=ax,
+            )
+            # DPC solid < 10k
+            sns.lineplot(
+                data=difficulty_data[
+                    (difficulty_data["algorithm"] == "DPC") & (difficulty_data["step"] <= 10000)
+                ],
+                x="step",
+                y="training/mean_reward",
+                errorbar=("ci", 95),
+                ax=ax,
+                color=dpc_color,
+            )
+            # DPC dashed >= 10k
+            sns.lineplot(
+                data=difficulty_data[
+                    (difficulty_data["algorithm"] == "DPC") & (difficulty_data["step"] >= 10000)
+                ],
+                x="step",
+                y="training/mean_reward",
+                errorbar=("ci", 95),
+                ax=ax,
+                color=dpc_color,
+                alpha=0.3,
+            )
+
+        ax.set_title(env_id)
+        ax.set_xlabel("Training Step")
+        ax.set_ylabel("")
+        ax.legend().remove()
+        format_axis(ax, border=True)
+
+    axs[0].set_ylabel(METRICS["reward"])
+
+    handles = [
+        Line2D([0], [0], color=color, label=alg)
+        for alg, color in zip(right_algorithms, right_palette)
+    ]
+    fig.legend(
+        handles,
+        right_algorithms,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.215),
+        ncol=len(right_algorithms) // 2,
+        fancybox=False,
+        shadow=False,
+        frameon=False,
+    )
+    fig.subplots_adjust(
+        top=0.9,
+        bottom=0.39,
+        left=0.12,
+        right=0.98,
+        hspace=0.3,
+        wspace=0.2,
+    )
+
+    plt.savefig(
+        PLOTS_PATH / "quant_training" / f"dpc_{env_id_left}_{env_id_right}_training_reward.pdf",
+        format="pdf",
+    )
+    plt.close()
+
+def plot_training_results_dpc_combined(env_id_left: str, env_id_right: str, seed: int) -> None:
+    fig, axs = plt.subplots(2, 2, figsize=(FIGWIDTH * 0.45, 4.25))
+
+    # ------------------------------------------------------------------------------
+    # Training Runs
+    # ------------------------------------------------------------------------------
+    parts = env_id_right.rsplit("-", 2)
+    top_env_ids = [env_id_left, env_id_right]
+
+    for ax, env_id in zip(axs[0], top_env_ids):
+        parts = env_id.rsplit("-", 2)
+        env_name = parts[0]
+        difficulty = parts[1]
+
+        training_runs = load_training_runs(env_name=env_name, difficulty_levels=[difficulty])
+        difficulty_data = training_runs[training_runs["difficulty"] == difficulty]
+
+        algorithms = sorted(
+            difficulty_data["algorithm"].unique(),
+            key=lambda x: ALGORITHM_ORDER.index(x),
+        )
+        palette = [bright_colors[ALGORITHM_COLOR_IDXS[alg]] for alg in algorithms]
+
+        ax.set_xscale("log")
+
+        sns.lineplot(
+            data=difficulty_data,
+            x="step",
+            y="training/mean_reward",
+            hue="algorithm",
+            hue_order=algorithms,
+            palette=palette,
+            errorbar=("ci", 95),
+            ax=ax,
+        )
+
+        if env_id == "CylinderJet2D-easy-v0":
+            dpc_color = bright_colors[ALGORITHM_COLOR_IDXS["DPC"]]
+            non_dpc = [a for a in algorithms if a != "DPC"]
+            non_dpc_palette = [bright_colors[ALGORITHM_COLOR_IDXS[a]] for a in non_dpc]
+
+            # Clear the full plot and re-draw with DPC split at 10k
+            ax.cla()
+            ax.set_xscale("log")
+
+            # All non-DPC algorithms: full range
+            sns.lineplot(
+                data=difficulty_data[difficulty_data["algorithm"].isin(non_dpc)],
+                x="step",
+                y="training/mean_reward",
+                hue="algorithm",
+                hue_order=non_dpc,
+                palette=non_dpc_palette,
+                errorbar=("ci", 95),
+                ax=ax,
+            )
+            # DPC solid < 10k
+            sns.lineplot(
+                data=difficulty_data[
+                    (difficulty_data["algorithm"] == "DPC") & (difficulty_data["step"] <= 10000)
+                ],
+                x="step",
+                y="training/mean_reward",
+                errorbar=("ci", 95),
+                ax=ax,
+                color=dpc_color,
+            )
+            # DPC dashed >= 10k
+            sns.lineplot(
+                data=difficulty_data[
+                    (difficulty_data["algorithm"] == "DPC") & (difficulty_data["step"] >= 10000)
+                ],
+                x="step",
+                y="training/mean_reward",
+                errorbar=("ci", 95),
+                ax=ax,
+                color=dpc_color,
+                alpha=0.3,
+            )
+
+        ax.set_title(env_id)
+        ax.set_xlabel("Training Step")
+        ax.set_ylabel("")
+        ax.legend().remove()
+        format_axis(ax, border=True)
+
+    axs[0, 0].set_ylabel(METRICS["reward"])
+
+
+    # ------------------------------------------------------------------------------
+    # Cylinder Test Episode
+    # ------------------------------------------------------------------------------
+    env = fluidgym.make(env_id_left)
+
+    uncontrolled_df = env._load_uncontrolled_episode(idx=0, mode=EnvMode.TEST)
+    ppo_df = load_test_sequence(
+        env_id=env_id_left, rl_mode="sarl", algorithm="PPO", seed=seed
+    )
+    sac_df = load_test_sequence(
+        env_id=env_id_left, rl_mode="sarl", algorithm="SAC", seed=seed
+    )
+    td_mcp_df = load_test_sequences(
+        env_id=env_id_left, rl_mode="sarl", algorithm="TD-MPC", seed=seed
+    )
+    td_mcp_df = td_mcp_df[td_mcp_df["episode"] == 0].reset_index(drop=True)
+    dpc_df = load_test_sequence(
+        env_id=env_id_left, rl_mode="sarl", algorithm="DPC", seed=seed
+    )
+
+    ppo_df["step"] = ppo_df.index
+    sac_df["step"] = sac_df.index
+    uncontrolled_df["step"] = uncontrolled_df.index
+
+    labels = [r"$a_t$", r"$C_D$"]
+    metrics = ["action_0", "drag"]
+    titles = ["Control Action", "Drag Coefficient"]
+
+    # Compute the drag reduction for SAC
+    mean_base_drag = uncontrolled_df["drag"].mean()
+    sac_drag = sac_df["drag"].to_numpy()[-1]
+    dpc_drag = dpc_df["drag"].to_numpy()[-1]
+    sac_drag_reduction = (mean_base_drag - sac_drag) / mean_base_drag * 100
+    dpc_drag_reduction = (mean_base_drag - dpc_drag) / mean_base_drag * 100
+
+    print(f"Drag Reduction (SAC): {sac_drag_reduction:.2f}%")
+    print(f"Drag Reduction (DPC): {dpc_drag_reduction:.2f}%")
+
+    for ax, metric in zip(axs[1], metrics, strict=False):
+        if metric != "action_0" and metric != "reward":
+            sns.lineplot(
+                data=uncontrolled_df,
+                x="step",
+                y=metric,
+                ax=ax,
+                color=bright_colors[0],
+                label="Baseflow",
+                linestyle="-.",
+            )
+        sns.lineplot(
+            data=ppo_df,
+            x="step",
+            y=metric,
+            ax=ax,
+            color=bright_colors[1],
+            label="PPO",
+        )
+        sns.lineplot(
+            data=sac_df,
+            x="step",
+            y=metric,
+            ax=ax,
+            color=bright_colors[2],
+            label="SAC",
+        )
+        sns.lineplot(
+            data=dpc_df,
+            x="step",
+            y=metric,
+            ax=ax,
+            color=bright_colors[ALGORITHM_COLOR_IDXS["DPC"]],
+            label="DPC",
+            zorder=10
+        )
+        sns.lineplot(
+            data=td_mcp_df,
+            x="step",
+            y=metric,
+            ax=ax,
+            color=bright_colors[ALGORITHM_COLOR_IDXS["TD-MPC"]],
+            label="TD-MPC",
+        )
+        ax.set_title(titles[metrics.index(metric)])
+        ax.legend().remove()
+        ax.set_xlabel(r"Episode Step $t$")
+        ax.set_ylabel(labels[metrics.index(metric)])
+        format_axis(ax, border=True)
+
+    train_handles, train_labels = axs[0, 1].get_legend_handles_labels()
+    test_handles, test_labels = axs[1, 1].get_legend_handles_labels()
+
+    # Add Baseflow
+    train_handles.insert(0, test_handles[0])
+    train_labels.insert(0, test_labels[0])  
+
+    # Add blank below Baseflow
+    train_handles.insert(1, plt.Line2D([], [], color="white"))  # type: ignore
+    train_labels.insert(1, "")
+
+    fig.legend(
+        train_handles,
+        train_labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.115),
+        ncol=len(train_handles) // 2,
+        fancybox=False,
+        shadow=False,
+        frameon=False,
+    )
+    fig.subplots_adjust(
+        top=0.93,
+        bottom=0.22,
+        left=0.12,
+        right=0.98,
+        hspace=0.72,
+        wspace=0.35,
+    )
+
+    plt.savefig(
+        PLOTS_PATH / "individual" / f"dpc_combined.pdf",
+        format="pdf",
+    )
+    plt.close()
+
+def plot_training_results_dpc_combined_landscape(env_id_left: str, env_id_right: str, seed: int) -> None:
+    fig, axs = plt.subplots(1, 4, figsize=(FIGWIDTH, 2.25))
+
+    # ------------------------------------------------------------------------------
+    # Training Runs
+    # ------------------------------------------------------------------------------
+    parts = env_id_right.rsplit("-", 2)
+    top_env_ids = [env_id_left, env_id_right]
+
+    for ax, env_id in zip(axs[:2], top_env_ids):
+        parts = env_id.rsplit("-", 2)
+        env_name = parts[0]
+        difficulty = parts[1]
+
+        training_runs = load_training_runs(env_name=env_name, difficulty_levels=[difficulty])
+        difficulty_data = training_runs[training_runs["difficulty"] == difficulty]
+
+        algorithms = sorted(
+            difficulty_data["algorithm"].unique(),
+            key=lambda x: ALGORITHM_ORDER.index(x),
+        )
+        palette = [bright_colors[ALGORITHM_COLOR_IDXS[alg]] for alg in algorithms]
+
+        ax.set_xscale("log")
+
+        sns.lineplot(
+            data=difficulty_data,
+            x="step",
+            y="training/mean_reward",
+            hue="algorithm",
+            hue_order=algorithms,
+            palette=palette,
+            errorbar=("ci", 95),
+            ax=ax,
+        )
+
+        if env_id == "CylinderJet2D-easy-v0":
+            dpc_color = bright_colors[ALGORITHM_COLOR_IDXS["DPC"]]
+            non_dpc = [a for a in algorithms if a != "DPC"]
+            non_dpc_palette = [bright_colors[ALGORITHM_COLOR_IDXS[a]] for a in non_dpc]
+
+            # Clear the full plot and re-draw with DPC split at 10k
+            ax.cla()
+            ax.set_xscale("log")
+
+            # All non-DPC algorithms: full range
+            sns.lineplot(
+                data=difficulty_data[difficulty_data["algorithm"].isin(non_dpc)],
+                x="step",
+                y="training/mean_reward",
+                hue="algorithm",
+                hue_order=non_dpc,
+                palette=non_dpc_palette,
+                errorbar=("ci", 95),
+                ax=ax,
+            )
+            # DPC solid < 10k
+            sns.lineplot(
+                data=difficulty_data[
+                    (difficulty_data["algorithm"] == "DPC") & (difficulty_data["step"] <= 10000)
+                ],
+                x="step",
+                y="training/mean_reward",
+                errorbar=("ci", 95),
+                ax=ax,
+                color=dpc_color,
+            )
+            # DPC dashed >= 10k
+            sns.lineplot(
+                data=difficulty_data[
+                    (difficulty_data["algorithm"] == "DPC") & (difficulty_data["step"] >= 10000)
+                ],
+                x="step",
+                y="training/mean_reward",
+                errorbar=("ci", 95),
+                ax=ax,
+                color=dpc_color,
+                alpha=0.3,
+            )
+
+        ax.set_title(env_id)
+        ax.set_xlabel("Training Step")
+        ax.set_ylabel("")
+        ax.legend().remove()
+        format_axis(ax, border=True)
+
+    axs[0].set_ylabel("Mean Training Reward")
+    axs[1].set_ylabel("Mean Training Reward")
+
+    # ------------------------------------------------------------------------------
+    # Cylinder Test Episode
+    # ------------------------------------------------------------------------------
+    env = fluidgym.make(env_id_left)
+
+    uncontrolled_df = env._load_uncontrolled_episode(idx=0, mode=EnvMode.TEST)
+    ppo_df = load_test_sequence(
+        env_id=env_id_left, rl_mode="sarl", algorithm="PPO", seed=seed
+    )
+    sac_df = load_test_sequence(
+        env_id=env_id_left, rl_mode="sarl", algorithm="SAC", seed=seed
+    )
+    td_mcp_df = load_test_sequences(
+        env_id=env_id_left, rl_mode="sarl", algorithm="TD-MPC", seed=seed
+    )
+    td_mcp_df = td_mcp_df[td_mcp_df["episode"] == 0].reset_index(drop=True)
+    dpc_df = load_test_sequence(
+        env_id=env_id_left, rl_mode="sarl", algorithm="DPC", seed=seed
+    )
+
+    ppo_df["step"] = ppo_df.index
+    sac_df["step"] = sac_df.index
+    uncontrolled_df["step"] = uncontrolled_df.index
+
+    labels = [r"$a_t$", r"$C_D$"]
+    metrics = ["action_0", "drag"]
+    titles = ["Control Action", "Drag Coefficient"]
+
+    # Compute the drag reduction for SAC
+    mean_base_drag = uncontrolled_df["drag"].mean()
+    sac_drag = sac_df["drag"].to_numpy()[-1]
+    dpc_drag = dpc_df["drag"].to_numpy()[-1]
+    sac_drag_reduction = (mean_base_drag - sac_drag) / mean_base_drag * 100
+    dpc_drag_reduction = (mean_base_drag - dpc_drag) / mean_base_drag * 100
+
+    print(f"Drag Reduction (SAC): {sac_drag_reduction:.2f}%")
+    print(f"Drag Reduction (DPC): {dpc_drag_reduction:.2f}%")
+
+    for ax, metric in zip(axs[2:], metrics, strict=False):
+        if metric != "action_0" and metric != "reward":
+            sns.lineplot(
+                data=uncontrolled_df,
+                x="step",
+                y=metric,
+                ax=ax,
+                color=bright_colors[0],
+                label="Baseflow",
+                linestyle="-.",
+            )
+        sns.lineplot(
+            data=ppo_df,
+            x="step",
+            y=metric,
+            ax=ax,
+            color=bright_colors[1],
+            label="PPO",
+        )
+        sns.lineplot(
+            data=sac_df,
+            x="step",
+            y=metric,
+            ax=ax,
+            color=bright_colors[2],
+            label="SAC",
+        )
+        sns.lineplot(
+            data=dpc_df,
+            x="step",
+            y=metric,
+            ax=ax,
+            color=bright_colors[ALGORITHM_COLOR_IDXS["DPC"]],
+            label="DPC",
+            zorder=10
+        )
+        sns.lineplot(
+            data=td_mcp_df,
+            x="step",
+            y=metric,
+            ax=ax,
+            color=bright_colors[ALGORITHM_COLOR_IDXS["TD-MPC"]],
+            label="TD-MPC",
+        )
+        ax.set_title(titles[metrics.index(metric)])
+        ax.legend().remove()
+        ax.set_xlabel(r"Test Episode Step $t$")
+        ax.set_ylabel(labels[metrics.index(metric)])
+        format_axis(ax, border=True)
+
+    train_handles, train_labels = axs[1].get_legend_handles_labels()
+    test_handles, test_labels = axs[-1].get_legend_handles_labels()
+
+    # Add Baseflow
+    train_handles.insert(0, test_handles[0])
+    train_labels.insert(0, test_labels[0])  
+
+    fig.legend(
+        train_handles,
+        train_labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.115),
+        ncol=len(train_handles),
+        fancybox=False,
+        shadow=False,
+        frameon=False,
+    )
+    fig.subplots_adjust(
+        top=0.89,
+        bottom=0.3,
+        left=0.07,
+        right=0.99,
+        wspace=0.37,
+    )
+
+    plt.savefig(
+        PLOTS_PATH / "quant_training" / f"dpc_combined_landscape_{env_id_left}_{env_id_right}.png", format="png", dpi=500 #, transparent=True
+    )
+    plt.close()
+
 def plot_test_results(env_name: str, metric: str = "reward") -> None:
     test_results = load_test_results(env_name=env_name)
 
     algorithms = list(test_results["algorithm"].unique())
-    if "CylinderJet2D" in env_name:
-        algorithms += ["D-MPC"]
-
-    algorithms = sorted(algorithms, key=lambda x: algorithms.index(x))
-
+    algorithms = sorted(algorithms, key=lambda x: ALGORITHM_ORDER.index(x))
     palette = [bright_colors[ALGORITHM_COLOR_IDXS[alg]] for alg in algorithms]
 
-    fig, axs = plt.subplots(1, 3, figsize=(FIGWIDTH, 2.5))
-
-    if "Airfoil3D" in env_name:
-        difficulty_levels = ["easy", None, None]
+    if len(algorithms) > 4:
+        height = 3
     else:
-        difficulty_levels = DIFFICULTY_LEVELS
+        height = 2.5
+    fig, axs = plt.subplots(1, 3, figsize=(FIGWIDTH, height))
+
+    difficulty_levels = DIFFICULTY_LEVELS
 
     for difficulty, ax in zip(difficulty_levels, axs, strict=False):
         if difficulty is None:
@@ -1131,6 +1917,7 @@ def plot_test_results(env_name: str, metric: str = "reward") -> None:
             data=difficulty_data,
             x="algorithm",
             y=metric,
+            order=algorithms,
             hue_order=algorithms,
             palette=palette,
             ax=ax,
@@ -1138,15 +1925,110 @@ def plot_test_results(env_name: str, metric: str = "reward") -> None:
         ax.set_title(f"{env_name}-{difficulty}-v0")
         ax.set_xlabel("Algorithm")
         ax.set_ylabel("")
+        if len(algorithms) > 4:
+            ax.tick_params(axis='x', labelrotation=45)
 
     axs[0].set_ylabel(METRICS[metric])
 
     fig.subplots_adjust(
-        top=0.89, bottom=0.17, left=0.1, right=0.98, hspace=0.25, wspace=0.3
+        top=0.89,
+        bottom=0.28 if len(algorithms) > 4 else 0.17,
+        left=0.1,
+        right=0.98,
+        hspace=0.25,
+        wspace=0.3
     )
 
     plt.savefig(
         PLOTS_PATH / "quant_test" / f"{env_name}_test_{metric}.pdf", format="pdf"
+    )
+    plt.close()
+
+
+def _load_stress_test_data(env_id: str, algorithm: str) -> pd.DataFrame:
+    parts = env_id.rsplit("-", 2)
+    env_name = parts[0]
+    rl_modes = RL_MODES.get(env_name, ["sarl"])
+    seeds = range(5)
+
+    normal_sequences = []
+    stress_sequences = []
+
+    for rl_mode in rl_modes:
+        for seed in seeds:
+            normal_df = load_test_sequences(
+                env_id=env_id,
+                rl_mode=rl_mode,
+                algorithm=algorithm,
+                seed=seed,
+                stress_test=False,
+            )
+            if not normal_df.empty:
+                drop_cols = [col for col in normal_df.columns if col.startswith("action")]
+                normal_df = normal_df.drop(columns=drop_cols)
+                if "episode" not in normal_df.columns:
+                    normal_df["episode"] = 0
+                normal_df = normal_df.groupby("episode").mean().reset_index()
+                if "step" in normal_df.columns:
+                    normal_df = normal_df.drop(columns=["step"])
+                normal_df["condition"] = "Default"
+                normal_sequences.append(normal_df)
+
+            stress_df = load_test_sequences(
+                env_id=env_id,
+                rl_mode=rl_mode,
+                algorithm=algorithm,
+                seed=seed,
+                stress_test=True,
+            )
+            if not stress_df.empty:
+                drop_cols = [col for col in stress_df.columns if col.startswith("action")]
+                stress_df = stress_df.drop(columns=drop_cols)
+                if "episode" not in stress_df.columns:
+                    stress_df["episode"] = 0
+                stress_df = stress_df.groupby("episode").mean().reset_index()
+                if "step" in stress_df.columns:
+                    stress_df = stress_df.drop(columns=["step"])
+                stress_df["condition"] = "CFL=0.1"
+                stress_sequences.append(stress_df)
+
+    if not normal_sequences and not stress_sequences:
+        return pd.DataFrame()
+
+    return pd.concat(normal_sequences + stress_sequences, ignore_index=True)
+
+
+def plot_stability_analyis_results(env_name: str, algorithm: str, metric: str) -> None:
+    condition_colors = [bright_colors[0], bright_colors[3]]
+
+    fig, axs = plt.subplots(1, 2, figsize=(FIGWIDTH * 0.5, 2.5), sharey=True)
+
+    for ax, difficulty in zip(axs, ["easy", "hard"]):
+        env_id = f"{env_name}-{difficulty}-v0"
+        all_data = _load_stress_test_data(env_id, algorithm)
+        if all_data.empty:
+            logger.warning(f"No data found for {env_id}, algorithm {algorithm}")
+            continue
+
+        sns.boxplot(
+            data=all_data,
+            x="condition",
+            y=metric,
+            palette=condition_colors,
+            ax=ax,
+            order=["Default", "CFL=0.1"],
+        )
+        ax.set_title(env_id)
+        ax.set_xlabel("")
+        ax.set_ylabel(METRICS.get(metric, metric))
+        format_axis(ax, border=True)
+
+    fig.suptitle("Policy Stability Analysis")
+    fig.subplots_adjust(top=0.82, bottom=0.15, left=0.13, right=0.98, wspace=0.3)
+
+    safe_alg = algorithm.replace("/", "_").replace(" ", "_")
+    plt.savefig(
+        PLOTS_PATH / "individual" / f"{env_name}_{safe_alg}_stability_analysis.pdf", format="pdf"
     )
     plt.close()
 
@@ -1223,7 +2105,7 @@ def plot_transfer_results_cylinder_dimensionality() -> None:
     )
 
     fig.subplots_adjust(
-        top=0.87, bottom=0.33, left=0.1, right=0.99, hspace=0.25, wspace=0.2
+        top=0.87, bottom=0.33, left=0.12, right=0.99, hspace=0.25, wspace=0.2
     )
 
     plt.savefig(
@@ -1439,6 +2321,9 @@ def plot_results_combined() -> None:
         ]
     ]
 
+    # Filter out Airfoil3D-hard-v0
+    test_results = test_results[test_results["env_id"] != "Airfoil3D-hard-v0"]
+
     # Compute mean reward per (episode, algorithm, env_id, seed)
     test_results = (
         test_results.groupby(["algorithm", "env_id", "seed", "category", "difficulty"])
@@ -1483,8 +2368,9 @@ def plot_results_combined() -> None:
 
     algorithms = test_results["algorithm"].unique()
 
-    # Remove D-MPC from overview plots
-    algorithms = [alg for alg in algorithms if alg != "D-MPC"]
+    # Remove PD from overview plots
+    remove_algos = ["PD", "DPC", "TD-MPC"]
+    algorithms = [alg for alg in algorithms if alg not in remove_algos]
     algorithms = sorted(algorithms, key=lambda x: ALGORITHM_ORDER.index(x))
 
     palette = [bright_colors[ALGORITHM_COLOR_IDXS[alg]] for alg in algorithms]
@@ -1566,7 +2452,7 @@ def plot_results_combined() -> None:
         color = palette[i]
 
         ax.plot(theta_closed, vals_closed, label=algo, color=color)
-        ax.fill(theta_closed, vals_closed, alpha=0.2, color=color)
+        ax.fill(theta_closed, vals_closed, alpha=0.1, color=color)
 
     ax.set_xticks(theta_diff)
     ax.set_xticklabels(difficulties)
@@ -1630,8 +2516,12 @@ def get_cmap_and_range(env_name: str) -> tuple[Colormap, float, float]:
 def plot_qualitative_results(env_name: str, seed: int) -> None:
     images = load_all_test_renders(env_name=env_name, seed=seed)
     algo_order = ["Baseflow", "PPO", "SAC", "MA-PPO", "MA-SAC"]
-    if env_name == "CylinderJet2D":
-        algo_order += ["D-MPC"]
+    if env_name == "RBC2D":
+        algo_order.insert(1, "PD")
+    if env_name == "CylinderJet2D" or env_name == "RBC2D":
+        algo_order += ["DPC", "TD-MPC"]
+    elif env_name == "CylinderRot2D":
+        algo_order += ["TD-MPC"]
     algo_order = [algo for algo in algo_order if algo in images["easy"]]
 
     n_rows = len(images["easy"])
@@ -1640,17 +2530,17 @@ def plot_qualitative_results(env_name: str, seed: int) -> None:
     if n_rows == 0:
         return
 
-    _, axes = plt.subplots(
-        n_rows, n_cols, figsize=(FIGWIDTH, 1.8 * n_rows), squeeze=False
+    ref_shape = next(
+        (img.shape for d in images.values() for img in d.values() if img is not None),
+        None,
     )
 
-    if "Airfoil3D" in env_name:
-        difficulty_levels = ["easy", None, None]
-    else:
-        difficulty_levels = DIFFICULTY_LEVELS
+    _, axes = plt.subplots(
+        n_rows, n_cols, figsize=(FIGWIDTH, 1.6 * n_rows), squeeze=False
+    )
 
     for row, algo in enumerate(algo_order):
-        for col, diff in enumerate(difficulty_levels):
+        for col, diff in enumerate(DIFFICULTY_LEVELS):
             ax = axes[row, col]
 
             if diff is None:
@@ -1660,6 +2550,8 @@ def plot_qualitative_results(env_name: str, seed: int) -> None:
             img = images.get(diff, {}).get(algo, None)
             if img is not None:
                 ax.imshow(img)
+            elif ref_shape is not None:
+                ax.set_aspect(ref_shape[0] / ref_shape[1])
             ax.set_xticks([])
             ax.set_yticks([])
             for spine in ax.spines.values():
@@ -1787,50 +2679,230 @@ def create_result_table(env_type: str) -> None:
     )
 
 
+def merge_all_training_runs() -> None:
+    env_names = [
+        "CylinderJet2D",
+        "CylinderRot2D",
+        "CylinderJet3D",
+        "RBC2D",
+        "RBC3D",
+        "Airfoil2D",
+        "Airfoil3D",
+        "TCFSmall3D-both",
+        "TCFLarge3D-both",
+    ]
+
+    runs_list = []
+    for env_name in env_names:
+        run = load_training_runs(env_name=env_name)
+        runs_list += [run]
+
+    all_runs = pd.concat(runs_list, ignore_index=True)
+    ordered_cols = [
+        'env_id', 'difficulty', 'step', 'seed', 'algorithm', 
+        'training/mean_global_reward', 'training/mean_reward',
+        'training/mean_drag', 'training/mean_lift',
+        'training/mean_nusselt', 'training/mean_wall_stress',
+        'training/mean_wall_stress_bottom', 'training/mean_wall_stress_top',
+        'evaluation/mean_reward','evaluation/mean_drag', 'evaluation/mean_lift',
+        'evaluation/mean_nusselt', 'evaluation/mean_wall_stress',
+        'evaluation/mean_wall_stress_bottom', 'evaluation/mean_wall_stress_top'
+    ]
+    all_runs = all_runs[ordered_cols]
+    all_runs.to_csv("training.csv", index=False)
+
+
+def merge_all_test_sequences() -> None:
+    all_episodes = load_all_test_results(average_over_episodes=False, include_transfer=True)
+    ordered_cols = [
+        'env_id', 'test_env_id', 'category', 'difficulty', 'algorithm', 'seed', 
+        'episode', 'step', 'reward',  'local_reward', 'Improvement (%)', 'drag', 'lift',  
+        'nusselt',  'aero_eff', 'wall_stress', 'wall_stress_bottom', 'wall_stress_top', 
+    ]
+    all_episodes = all_episodes[ordered_cols]
+    all_episodes.to_csv("test.csv", index=False)
+
+
+def plot_ppo_ablation(env_id: str) -> None:
+    algorithms = ["[64, 64]", "[256, 256]"]
+    palette = [bright_colors[ALGORITHM_COLOR_IDXS["PPO"]], bright_colors[ALGORITHM_COLOR_IDXS["DPC"]]]
+
+    # Load training data
+    all_runs = []
+    for algorithm, label in [("PPO", "[64, 64]"), ("PPO-large", "[256, 256]")]:
+        for seed in SEEDS:
+            run_df = load_single_training_run(
+                env_id=env_id,
+                rl_mode="sarl",
+                algorithm=algorithm,
+                seed=seed,
+            )
+            if run_df.empty:
+                logger.warning(f"No training run found for {env_id}, {label}, seed {seed}")
+                continue
+            run_df["seed"] = seed
+            run_df["algorithm"] = label
+            all_runs.append(run_df)
+
+    # Load test data
+    all_results = []
+    for algorithm, label in [("PPO", "[64, 64]"), ("PPO-large", "[256, 256]")]:
+        for seed in SEEDS:
+            result_df = load_test_sequences(
+                env_id=env_id,
+                rl_mode="sarl",
+                algorithm=algorithm,
+                seed=seed,
+            )
+            if result_df.empty:
+                logger.warning(f"No test results found for {env_id}, {label}, seed {seed}")
+                continue
+
+            drop_cols = [col for col in result_df.columns if col.startswith("action")]
+            result_df = result_df.drop(columns=drop_cols)
+
+            if "episode" not in result_df.columns:
+                result_df["episode"] = 0
+
+            result_df = result_df.groupby("episode").mean().reset_index()
+            result_df = result_df.drop(columns=["step"])
+
+            result_df["seed"] = seed
+            result_df["algorithm"] = label
+
+            all_results.append(result_df)
+
+    if not all_runs and not all_results:
+        logger.warning(f"No PPO ablation results found for {env_id}")
+        return
+
+    fig, (ax_train, ax_test) = plt.subplots(1, 2, figsize=(FIGWIDTH * 0.5, 2.5), sharey=True)
+
+    # Training subplot
+    if all_runs:
+        training_runs = pd.concat(all_runs, ignore_index=True)
+        max_steps = int(training_runs["step"].max())
+
+        sns.lineplot(
+            data=training_runs,
+            x="step",
+            y="training/mean_reward",
+            hue="algorithm",
+            hue_order=algorithms,
+            palette=palette,
+            errorbar=("ci", 95),
+            ax=ax_train,
+        )
+        ax_train.set_title("Training")
+        ax_train.set_xlabel("Training Step")
+        ax_train.set_ylabel(METRICS["reward"])
+        ax_train.set_xticks([0, max_steps])
+        ax_train.set_xticklabels([0, format_step(max_steps)])
+        ax_train.legend().remove()
+        format_axis(ax_train, border=True)
+    else:
+        logger.warning(f"No PPO ablation training results found for {env_id}")
+
+    # Test subplot
+    if all_results:
+        test_results = pd.concat(all_results, ignore_index=True)
+
+        sns.boxplot(
+            data=test_results,
+            x="algorithm",
+            y="reward",
+            order=algorithms,
+            hue_order=algorithms,
+            palette=palette,
+            ax=ax_test,
+        )
+        ax_test.set_title("Test")
+        ax_test.set_xlabel("Network Size")
+        ax_test.set_ylabel(METRICS["reward"])
+        format_axis(ax_test, border=True)
+    else:
+        logger.warning(f"No PPO ablation test results found for {env_id}")
+
+    handles, labels = ax_train.get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.11),
+        ncol=len(algorithms),
+        fancybox=False,
+        shadow=False,
+        frameon=False,
+    )
+
+    fig.suptitle(f"{env_id} — PPO Network Size Ablation")
+
+    fig.subplots_adjust(top=0.82, bottom=0.26, left=0.13, right=0.98, wspace=0.1)
+
+    plt.savefig(
+        PLOTS_PATH / "quant_test" / f"{env_id}_ppo_ablation.pdf",
+        format="pdf",
+    )
+    plt.close()
+
+
 if __name__ == "__main__":
     # Quantiative test result tables
-    create_result_table(env_type="Cylinder")
-    create_result_table(env_type="RBC")
+    # create_result_table(env_type="Cylinder")
+    # create_result_table(env_type="RBC")
     create_result_table(env_type="Airfoil")
-    create_result_table(env_type="TCF")
+    # create_result_table(env_type="TCF")
 
     # Summary plots
-    plot_results_combined()
+    # plot_results_combined()
 
     # Quantitative training results
-    plot_training_results(env_name="CylinderJet2D")
-    plot_training_results(env_name="CylinderRot2D")
-    plot_training_results(env_name="CylinderJet3D")
-    plot_training_results(env_name="RBC2D")
-    plot_training_results(env_name="RBC3D")
-    plot_training_results(env_name="Airfoil2D")
-    plot_training_results(env_name="Airfoil3D")
-    plot_training_results(env_name="TCFSmall3D-both")
-    plot_training_results(env_name="TCFLarge3D-both")
+    # plot_training_results(env_name="CylinderJet2D")
+    # plot_training_results(env_name="CylinderRot2D")
+    # plot_training_results(env_name="CylinderJet3D")
+    # plot_training_results(env_name="RBC2D")
+    # plot_training_results(env_name="RBC3D")
+    # plot_training_results(env_name="Airfoil2D")
+    # plot_training_results(env_name="Airfoil3D")
+    # plot_training_results(env_name="TCFSmall3D-both")
+    # plot_training_results(env_name="TCFLarge3D-both")
 
-    # Quantitative test results
-    plot_test_results(env_name="CylinderJet2D")
-    plot_test_results(env_name="CylinderRot2D")
-    plot_test_results(env_name="CylinderJet3D")
-    plot_test_results(env_name="RBC2D")
-    plot_test_results(env_name="RBC3D")
-    plot_test_results(env_name="Airfoil2D")
-    plot_test_results(env_name="Airfoil3D")
-    plot_test_results(env_name="TCFSmall3D-both")
-    plot_test_results(env_name="TCFLarge3D-both")
+    # # Quantitative test results
+    # plot_test_results(env_name="CylinderJet2D")
+    # plot_test_results(env_name="CylinderRot2D")
+    # plot_test_results(env_name="CylinderJet3D")
+    # plot_test_results(env_name="RBC2D")
+    # plot_test_results(env_name="RBC3D")
+    # plot_test_results(env_name="Airfoil2D")
+    # plot_test_results(env_name="Airfoil3D")
+    # plot_test_results(env_name="TCFSmall3D-both")
+    # plot_test_results(env_name="TCFLarge3D-both")
 
     # Individual plots
-    plot_cylinder_test_episode(env_id="CylinderJet2D-easy-v0", seed=0)
-    plot_rbc_test_episode(env_id="RBC3D-easy-v0", algorithm="PPO", seed=0)
-    plot_tcf_transfer(difficulty="easy")
-    plot_transfer_results_cylinder_dimensionality()
+    # plot_rbc_test_episode(env_id="RBC3D-easy-v0", algorithm="PPO", seed=0)
+    # plot_tcf_transfer(difficulty="easy")
+    # plot_transfer_results_cylinder_dimensionality()
 
-    plot_qualitative_results(env_name="CylinderJet2D", seed=0)
-    plot_qualitative_results(env_name="CylinderRot2D", seed=0)
-    plot_qualitative_results(env_name="CylinderJet3D", seed=0)
-    plot_qualitative_results(env_name="RBC2D", seed=0)
-    plot_qualitative_results(env_name="RBC3D", seed=0)
-    plot_qualitative_results(env_name="Airfoil2D", seed=0)
-    plot_qualitative_results(env_name="Airfoil3D", seed=0)
-    plot_qualitative_results(env_name="TCFSmall3D-both", seed=0)
-    plot_qualitative_results(env_name="TCFLarge3D-both", seed=0)
+    # plot_qualitative_results(env_name="CylinderJet2D", seed=0)
+    # plot_qualitative_results(env_name="CylinderRot2D", seed=0)
+    # plot_qualitative_results(env_name="CylinderJet3D", seed=0)
+    # plot_qualitative_results(env_name="RBC2D", seed=0)
+    # plot_qualitative_results(env_name="RBC3D", seed=0)
+    # plot_qualitative_results(env_name="Airfoil2D", seed=0)
+    # plot_qualitative_results(env_name="Airfoil3D", seed=0)
+    # plot_qualitative_results(env_name="TCFSmall3D-both", seed=0)
+    # plot_qualitative_results(env_name="TCFLarge3D-both", seed=0)
+
+    # DPC training curves
+    # plot_training_results_dpc_combined(env_id_left="CylinderJet2D-easy-v0", env_id_right="RBC2D-hard-v0", seed=0)
+
+    # PPO ablations
+    # plot_ppo_ablation(env_id="CylinderJet2D-easy-v0")
+    # plot_ppo_ablation(env_id="RBC2D-hard-v0")
+   
+    # Stability Analysis (aka. stress test)
+    # plot_stability_analyis_results(
+    #     env_name="RBC2D",
+    #     algorithm="SAC",
+    #     metric="nusselt"
+    # )

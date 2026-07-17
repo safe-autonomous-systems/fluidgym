@@ -1,11 +1,10 @@
 """Utilities for creating the airfoil grid and domain."""
 
-from pathlib import Path
-
 import numpy as np
 import torch
 
 import fluidgym.simulation.pict.data.shapes as shapes
+from fluidgym.envs.airfoil.coords import NACA12_SHARP_COORDS_LIST
 from fluidgym.envs.util.profiles import get_inflow_profile
 from fluidgym.simulation.extensions import (
     PISOtorch,  # type: ignore[import-untyped,import-not-found]
@@ -50,7 +49,6 @@ def get_jet_locations(domain: PISOtorch.Domain) -> list[list[int]]:
 
 
 def read_airfoil(
-    path: Path,
     attack_angle_deg: float,
     cpu_device: torch.device,
     dtype=torch.float32,
@@ -59,9 +57,6 @@ def read_airfoil(
 
     Parameters
     ----------
-    path: Path
-        Path to the airfoil coordinates file.
-
     attack_angle_deg: float
         Attack angle of the airfoil in degrees.
 
@@ -76,16 +71,9 @@ def read_airfoil(
     tuple[str, torch.Tensor]
         Name of the airfoil and the coordinates as a tensor of shape (1, 2, 1, N).
     """
-    coords_list = []
-    with open(path) as file:
-        name = file.readline().strip()
-        for line in file:
-            x_str, y_str = line.split()
-            x = float(x_str)
-            y = float(y_str)
-            coords_list.append((x, y))
-
-    coords = torch.tensor(coords_list, device=cpu_device, dtype=dtype)  # WC
+    coords = torch.tensor(
+        NACA12_SHARP_COORDS_LIST, device=cpu_device, dtype=dtype
+    )  # WC
     coords = torch.movedim(coords, 1, 0)  # CW
     coords = torch.reshape(coords, (1, 2, 1, -1))  # NCHW
 
@@ -107,7 +95,7 @@ def read_airfoil(
         )
         coords = rotated_coords.permute(1, 0).unsqueeze(0).unsqueeze(2)
 
-    return name, coords
+    return "NACA 0012", coords
 
 
 def _distance_to_point(
@@ -191,7 +179,7 @@ def _ray_rectangle_intersection(
             torch.linspace(
                 0,
                 -width_left,
-                angles_upper.shape[-1] - n_fill_x_top + 1,
+                int(angles_upper.shape[-1] - n_fill_x_top + 1),
                 device=origin.device,
             )[1:-1],
             torch.tensor([-width_left] * (n_fill_x_top + 1), device=origin.device),
@@ -206,7 +194,7 @@ def _ray_rectangle_intersection(
             torch.linspace(
                 -width_left,
                 0,
-                angles_lower.shape[-1] - closest_idx_bot + 1,
+                int(angles_lower.shape[-1] - closest_idx_bot + 1),
                 device=origin.device,
             )[1:-1],
         ],
@@ -220,7 +208,7 @@ def _ray_rectangle_intersection(
             torch.linspace(
                 half_height,
                 0,
-                angles_upper.shape[-1] - x_fill_y_top + 2,
+                int(angles_upper.shape[-1] - x_fill_y_top + 2),
                 device=origin.device,
             )[1:-1],
         ],
@@ -261,11 +249,11 @@ def make_airfoil_domain(
     res_z: int,
     H: float,
     L: float,
-    airfoil_path: Path,
     vel_in: float,
     attack_angle_deg: float,
     viscosity: torch.Tensor,
     resolution_div: int,
+    tail_grow_mul: float,
     cpu_device: torch.device,
     cuda_device: torch.device,
     dtype: torch.dtype = torch.float32,
@@ -301,6 +289,9 @@ def make_airfoil_domain(
     resolution_div: int
         Resolution divisor for the airfoil grid.
 
+    tail_grow_mul: float
+        Growth multiplier for the tail grid spacing.
+
     cpu_device: torch.device
         CPU device.
 
@@ -321,7 +312,6 @@ def make_airfoil_domain(
     offset_left = 1.5
     front_x_width = 0.5
     grid_half_height = H / 2
-    tail_grow_mul = 1.01
 
     normal_res = 96 // resolution_div
     normal_base = 0.97
@@ -334,7 +324,6 @@ def make_airfoil_domain(
 
     ### MAKE AIRFOIL GRID ###
     _, airfoil_coords = read_airfoil(
-        path=airfoil_path,
         attack_angle_deg=attack_angle_deg,
         cpu_device=cpu_device,
         dtype=dtype,

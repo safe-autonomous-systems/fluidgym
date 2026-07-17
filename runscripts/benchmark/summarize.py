@@ -83,25 +83,31 @@ def print_gpu_hours():
     results_df.loc[results_df["env_name"].str.contains("Airfoil3D"), "#algorithms"] = 4
     results_df.loc[results_df["env_name"].str.contains("TCF"), "#algorithms"] = 2
 
+    # We did not run all algorithms on medium/hard Airfoil3D
+    results_df.loc[
+        results_df["env_name"].str.contains("Airfoil3D")
+        & results_df["difficulty"].str.contains("medium"),
+        "#algorithms",
+    ] = 3
+    results_df.loc[
+        results_df["env_name"].str.contains("Airfoil3D")
+        & results_df["difficulty"].str.contains("hard"),
+        "#algorithms",
+    ] = 1
+
     # Adapt total steps for specific envs
     results_df.loc[results_df["env_name"].str.contains("Airfoil"), "#steps"] = 20_000
     results_df.loc[results_df["env_name"].str.contains("TCF"), "#steps"] = 100_000
-
-    # Adapt num seeds for specific envs
-    results_df.loc[results_df["env_name"].str.contains("Airfoil3D"), "#seeds"] = 3
-    results_df.loc[results_df["env_name"].str.contains("CylinderJet3D"), "#seeds"] = 3
-
+    results_df.loc[
+        results_df["env_name"].str.contains("Airfoil3D")
+        & results_df["difficulty"].str.contains("hard"),
+        "#steps",
+    ] = 10_000
+    
     # Remove env variations we don't run experiments for
     results_df["actual_steps"] = results_df["#steps"].copy()
     results_df.loc[results_df["env_name"].str.contains("bottom"), "actual_steps"] = 0
     results_df.loc[results_df["env_name"].str.contains("wide"), "actual_steps"] = 0
-
-    # We do not run medium/hard Airfoil3D experiments
-    results_df.loc[
-        results_df["env_name"].str.contains("Airfoil3D")
-        & ~results_df["difficulty"].str.contains("easy"),
-        "actual_steps",
-    ] = 0
 
     results_df["gpu_hours"] = (
         results_df["sec_per_step"]

@@ -209,8 +209,6 @@ class FluidEnv(ABC):
             Whether to enable differentiable simulation. Defaults to False.
         """
         super().__init__()
-        if not torch.cuda.is_available():
-            raise RuntimeError("CUDA is not available. FluidGym requires a CUDA GPU.")
 
         if ndims not in [2, 3]:
             raise ValueError("ndims must be 2 or 3.")
@@ -475,6 +473,9 @@ class FluidEnv(ABC):
             Whether to randomize the initial state. If None, the default behavior is
             used.
         """
+        if randomize is None:
+            randomize = self._randomize_initial_state
+
         if self.__load_domain_on_reset:
             try:
                 idx = (
@@ -504,9 +505,6 @@ class FluidEnv(ABC):
 
         # Some envs may need additional initialization
         self._additional_initialization()
-
-        if randomize is None:
-            randomize = self._randomize_initial_state
 
         if randomize:
             with torch.no_grad():
@@ -807,6 +805,9 @@ class FluidEnv(ABC):
         tuple[torch.Tensor, dict]
             A tuple containing the initial observation and an info dictionary.
         """
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA is not available. FluidGym requires CUDA.")
+
         if self._auto_render and len(self.__frames) > 0:
             self.save_gif(filename=f"episode_{self._n_episodes}")
 
@@ -830,7 +831,10 @@ class FluidEnv(ABC):
 
         self._apply_action(
             torch.zeros(
-                self.action_space_shape, device=self._cuda_device, requires_grad=False
+                self.action_space_shape,
+                dtype=self._dtype,
+                device=self._cuda_device,
+                requires_grad=False
             )
         )
 
@@ -1019,8 +1023,15 @@ class FluidEnv(ABC):
         domain.PrepareSolve()
         return domain
 
-    def init(self) -> None:
-        """Generate and save the initial domain if it does not already exist."""
+    def init(self, domain_idxs: list[int] | None = None) -> None:
+        """Generate and save the initial domain if it does not already exist.
+
+        Parameters
+        ----------
+        domain_idxs: list[int]
+            List of domain indices to initialize. If empty, initializes all domains.
+            Defaults to None.
+        """
         self._enable_actions = False
         self.__load_domain_on_reset = False
 
@@ -1035,7 +1046,10 @@ class FluidEnv(ABC):
 
         dummy_action = torch.zeros(self.action_space_shape, device=self._cuda_device)
 
-        for i in range(N_INITIAL_DOMAINS):
+        if domain_idxs is None:
+            domain_idxs = list(range(N_INITIAL_DOMAINS))
+
+        for i in domain_idxs:
             self._logger.info(f"Generating initial domains {i}")
             for mode_seed, mode in zip(
                 MODE_SEEDS,
@@ -1202,7 +1216,6 @@ class FluidEnv(ABC):
             color=fluidgym_config.palette[: len(grids)],  # type: ignore
             type="pdf",
             linewidth=0.5,
-            fig_scale=2,
         )
         ax.grid(True)
         fig.savefig(f"{self.id}_grid.pdf")

@@ -6,7 +6,7 @@ from pathlib import Path
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from stable_baselines3.common.base_class import BaseAlgorithm
-
+import torch
 import fluidgym
 from fluidgym.envs.multi_agent_fluid_env import MultiAgentFluidEnv
 from fluidgym.integration.gymnasium import GymFluidEnv
@@ -38,6 +38,14 @@ def run_experiment(cfg: DictConfig):
     logger.info("Initializing test environment...")
     fluid_test_env = fluidgym.make(cfg.test_env_id, **cfg.test_env_kwargs)
 
+    # ---------- Optional stress test setup ----------
+    if cfg.get("stress_test", False):
+        fluid_test_env = fluidgym.make(
+            cfg.test_env_id,
+            **cfg.test_env_kwargs,
+            adaptive_cfl=0.1
+        )
+        
     if cfg.test_rl_mode == "marl":
         assert isinstance(fluid_test_env, MultiAgentFluidEnv)
         test_env = MultiAgentVecEnv(fluid_test_env, auto_reset=False)
@@ -60,6 +68,8 @@ def run_experiment(cfg: DictConfig):
 
     if cfg.env_id != cfg.test_env_id:
         output_path = Path(f"./transfer/{cfg.test_env_id}/")
+    elif cfg.get("stress_test", False):
+        output_path = Path("./stress_test/")
     else:
         output_path = Path("./test/")
     output_path.mkdir(parents=True, exist_ok=True)

@@ -6,11 +6,12 @@ import hydra
 import wandb
 from omegaconf import DictConfig, OmegaConf
 from stable_baselines3.common.base_class import BaseAlgorithm
+from stable_baselines3 import PPO, SAC
 
 import fluidgym
 from fluidgym.envs.multi_agent_fluid_env import MultiAgentFluidEnv
 from fluidgym.integration.gymnasium import GymFluidEnv
-from fluidgym.integration.sb3 import EvalCallback, MultiAgentVecEnv
+from fluidgym.integration.sb3 import EvalCallback, MultiAgentVecEnv, load_buffer
 
 logger = logging.getLogger("fluidgym.training")
 
@@ -71,6 +72,8 @@ def run_experiment(cfg: DictConfig):
     if cfg.continue_training:
         logger.info("Continuing training from latest checkpoint...")
         model = model.load("ckpt_latest", env=env, device=cfg.rl_device)
+        if isinstance(model, SAC):
+            load_buffer(model, "ckpt_latest")
     logger.info("Done.")
 
     if cfg.wandb.enable:

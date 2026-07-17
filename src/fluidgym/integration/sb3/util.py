@@ -1,6 +1,7 @@
 """Utility functions for StableBaselines3 integration."""
 
 import logging
+import pickle
 from collections import defaultdict
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.base_class import BaseAlgorithm
 
 from fluidgym.integration.gymnasium import GymFluidEnv
@@ -220,6 +222,7 @@ def evaluate_model(
     render_3d: bool = False,
     deterministic: bool = True,
     output_path: Path | None = None,
+    setup_fn=None,
 ) -> tuple[pd.DataFrame, dict[str, float]]:
     """Evaluate a trained model in the environment and collect metrics.
 
@@ -268,6 +271,9 @@ def evaluate_model(
     metric_sequence: dict[str, list[np.ndarray]] = defaultdict(list)
 
     obs = env.reset(randomize=randomize)
+    if setup_fn is not None:
+        setup_fn(env)
+
     if isinstance(obs, tuple):
         obs = obs[0]
     assert isinstance(obs, np.ndarray)
@@ -356,6 +362,7 @@ def test_model(
     render_3d: bool,
     deterministic: bool = True,
     output_path: Path | None = None,
+    setup_fn=None,
 ) -> None:
     """Test a trained model in the test environment and collect metrics.
 
@@ -396,6 +403,7 @@ def test_model(
         render_3d=render_3d,
         output_path=output_path,
         deterministic=deterministic,
+        setup_fn=setup_fn,
     )
     sequence_df["episode"] = 0
     sequence_df["step"] = np.arange(len(sequence_df))
@@ -425,3 +433,22 @@ def test_model(
 
     all_test_sequences_df = pd.concat(test_sequence_dfs, ignore_index=True)
     all_test_sequences_df.to_csv(output_path / "test_eval_sequences.csv", index=False)
+
+
+def load_buffer(model: PPO | SAC, path: str = "ckpt_latest") -> None:
+    """Load the replay buffer or rollout buffer from a checkpoint if it exists.
+
+    Parameters
+    ----------
+    model: PPO | SAC
+        The model to load the buffer into.
+
+    path: str
+        Path to the model checkpoint (without extension).
+    """
+    if isinstance(model, SAC):
+        model.load_replay_buffer(path + "_replay_buffer")
+    elif isinstance(model, PPO):
+        rollout_buffer_path = Path(path + "_rollout_buffer.pkl")
+        with open(rollout_buffer_path, "rb") as f:
+            model.rollout_buffer = pickle.load(f)
