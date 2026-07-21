@@ -79,8 +79,8 @@ the integrations with PettingZoo and SB3.
 - **Gymnasium spaces**: ```FluidEnv``` now has ```action_space``` and 
 ```observation_space``` attributes consistent with ```gymnasium```. Additionally, the 
 previous flattened observations have been replaced by ```Dict``` observation space
-containing indivdual fields, such as as velocity and pressure fields, as indivual keys.
-Furthermore, the indivual observations are now shaped according to the spatial structure
+containing individual fields, such as velocity and pressure fields, as individual keys.
+Furthermore, the individual observations are now shaped according to the spatial structure
 of the sensors, enabling the use of methods that leverage the spatial structure of the
 domain, e.g. CNNs, equivariant networks, etc.
 - **Environment wrappers**: Following the new observation spaces, we introduce 
@@ -92,9 +92,9 @@ integration of new wrappers as needed.
 integration wrappers. We updated the example to show how you can use FluidGym across
 multiple GPUs.
 
-**Important**: The ```FlattenObservation``` ensure direct compatiblity with our models
+**Important**: The ```FlattenObservation```ensures direct compatibility with our models
 on HuggingFace (trained with FluidGym v0.0.2). If you want to use the models, make sure
-to install the FluidGym v0.0.2 or use the ```FlattenObservation``` wrapper. In case you
+to install FluidGym v0.0.2 or use the ```FlattenObservation``` wrapper. In case you
 encounter any issues, please report these via an Issue on GitHub. Thank you!
 
 ---
@@ -116,7 +116,7 @@ pip install fluidgym
 
 ### 🐳 Using Docker
 
-Instead of installing FluidGym you can use one of our Docker containers:
+Instead of installing FluidGym, you can use one of our Docker containers:
 
 - [fluidgym-runtime](https://hub.docker.com/r/becktepe/fluidgym-runtime) for running FluidGym
 - [fluidgym-devel](https://hub.docker.com/r/becktepe/fluidgym-devel) for development
@@ -146,12 +146,12 @@ conda activate fluidgym
 conda install pip "gcc_linux-64>=6.0,<=11.5" "gxx_linux-64>=6.0,<=11.5"
 ```
 
-3. Install the latest Pytorch for CUDA 12.8 via pip:
+3. Install the latest PyTorch for CUDA 12.8 via pip:
 ```bash
 pip install torch --index-url https://download.pytorch.org/whl/cu128
 ```
 
-4. Install the matching cuda toolkit via conda:
+4. Install the matching CUDA toolkit via conda:
 ```bash
 conda install cuda-toolkit=12.8 -c nvidia/label/cuda-12.8.1
 ```
@@ -163,7 +163,7 @@ make install
 
 ## Getting Started
 
-For an easy start refer to our [documentation](https://safe-autonomous-systems.github.io/fluidgym/) and the [`examples`](examples) directory.
+For an easy start, refer to our [documentation](https://safe-autonomous-systems.github.io/fluidgym/) and the [`examples`](examples) directory.
 FluidGym provides a ```gymnasium```-like interface that can be used as follows:
 
 ```python
@@ -188,14 +188,11 @@ for _ in range(50):
 This repository is published under the MIT license. If you use FliudGym in your work, please cite us:
 
 ```bibtex
-@misc{becktepe-fluidgym26,
-      title={Plug-and-Play Benchmarking of Reinforcement Learning Algorithms for Large-Scale Flow Control}, 
-      author={Jannis Becktepe and Aleksandra Franz and Nils Thuerey and Sebastian Peitz},
-      year={2026},
-      eprint={2601.15015},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2601.15015}, 
-      note={GitHub: https://github.com/safe-autonomous-systems/fluidgym}, 
+@inproceedings{becktepe-fluidgym26,
+    title={Plug-and-Play Benchmarking of Reinforcement Learning Algorithms for Large-Scale Flow Control},
+    author={Jannis Becktepe and Aleksandra Franz and Nils Thuerey and Sebastian Peitz},
+    booktitle={Forty-third International Conference on Machine Learning},
+    year={2026},
+    url={https://openreview.net/forum?id=ilEooI8fK1}
 }
 ```
