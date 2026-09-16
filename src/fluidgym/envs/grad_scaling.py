@@ -19,6 +19,7 @@ class ScaleGrad(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, tensor, scale):  # type: ignore[override]
+        """Return a copy of ``tensor`` and store ``scale`` for backward."""
         ctx.scale = scale
         # A copy rather than a view: the solver writes into the tensors it is
         # handed, and an in-place write on a view of this output is an error
@@ -26,6 +27,7 @@ class ScaleGrad(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad):  # type: ignore[override]
+        """Scale the incoming gradient by ``scale``."""
         return grad * ctx.scale, None
 
 

@@ -1,8 +1,9 @@
 """A wrapper that records and saves rendered gifs."""
 
-import torch
-from typing import Any
 from pathlib import Path
+from typing import Any
+
+import torch
 
 from fluidgym.types import FluidEnvLike
 from fluidgym.wrappers.fluid_wrapper import FluidWrapper
@@ -97,7 +98,7 @@ class VideoRecorder(FluidWrapper):
         if self.__ep_steps > 0:
             self._env.save_gif(
                 filename=self.__filename + f"_ep{self.__ep_idx}",
-                output_path=self.__output_path
+                output_path=self.__output_path,
             )
 
         obs_tuple = self._env.reset(
@@ -105,7 +106,7 @@ class VideoRecorder(FluidWrapper):
         )
         self.__ep_steps = 0
         self.__ep_idx += 1
-        
+
         self.__render()
 
         return obs_tuple

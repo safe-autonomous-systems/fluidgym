@@ -161,7 +161,7 @@ class AirfoilEnv3D(AirfoilEnvBase):
 
     _default_render_key: str = "3d_vorticity"
     _render_resolution: int = 1
-    
+
     _n_sensors_per_agent: int = 1
     _supports_marl: bool = True
 

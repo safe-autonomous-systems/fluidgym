@@ -479,6 +479,6 @@ def checkpointed_step(
     n_state = sum(mask)
     # Leave the live domain holding the grad-connected end state, so the next
     # step and the observation stay differentiable
-    restore_fn(list(result[:n_state]), mask) # type: ignore
+    restore_fn(list(result[:n_state]), mask)  # type: ignore
 
-    return _unflatten(spec_out[0], iter(result[n_state:])) # type: ignore
+    return _unflatten(spec_out[0], iter(result[n_state:]))  # type: ignore

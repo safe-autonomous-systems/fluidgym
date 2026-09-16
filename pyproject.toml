@@ -99,6 +99,10 @@ ignore = [
   "B010",    # Do not use `setattr`
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# Auto-generated stub for the C++ extension; docstrings come from the bindings.
+"src/fluidgym/simulation/extensions/*.pyi" = ["D", "E501"]
+
 [tool.ruff.lint.pydocstyle]
 convention = "numpy" 
 

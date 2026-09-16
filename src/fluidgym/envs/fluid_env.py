@@ -1559,7 +1559,7 @@ class FluidEnv(ABC, FluidEnvLike):
         # policy in its own dtype
         action = action.to(dtype=self._dtype)
 
-        step_fn =self._step_marl_impl if self._use_marl else self._step_impl
+        step_fn = self._step_marl_impl if self._use_marl else self._step_impl
         if self._bptt_checkpoint and self._differentiable:
             if self._bptt_segment_size:
                 obs, reward, terminated, info = self._segmented_step(action)
@@ -1615,7 +1615,7 @@ class FluidEnv(ABC, FluidEnvLike):
     ) -> dict[str, torch.Tensor]:
         """Advance the simulation by ``n_sim_steps`` PISO steps.
 
-                Parameters
+        Parameters
         ----------
         action: torch.Tensor
             The action to take.

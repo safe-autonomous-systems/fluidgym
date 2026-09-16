@@ -11,5 +11,5 @@ __all__ = [
     "ActionNoise",
     "PowerPenalty",
     "SensorNoise",
-    "VideoRecorder"
+    "VideoRecorder",
 ]
