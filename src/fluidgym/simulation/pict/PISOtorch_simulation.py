@@ -19,7 +19,12 @@ import torch
 
 from fluidgym.simulation.extensions import PISOtorch  # type: ignore[import-untyped]
 import fluidgym.simulation.pict.PISOtorch_diff as PISOtorch_diff
+from fluidgym.simulation import solver_stats
+from fluidgym.simulation.amg import amg_pcg_solve
+from fluidgym.simulation.solver_tolerance import SolverTolerance, resolve_tolerance
 import numpy as np
+
+cpu_device = torch.device("cpu")
 
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import spsolve
@@ -68,17 +73,42 @@ def getVelocityResultMaxVel(domain: PISOtorch.Domain):
     return vel_max
 
 
-def get_fixed_boundary_flux(bound, bound_idx):
-    assert isinstance(bound, PISOtorch.FixedBoundary)
+def _get_fixed_boundary_fluxes_torch(bound, bound_idx):
+    """Per-cell boundary-normal fluxes of a FixedBoundary, as torch ops.
+
+    Mirrors ``FixedBoundary::GetFluxes`` (``det * dot(Minv[axis], vel)``, see
+    ``VelocityToContravariantComponentBoundaryFixed``), but stays in the autograd
+    graph, which the C++ call does not.
+    """
     dims = bound.getSpatialDims()
     bound_axis = bound_idx // 2
-    if bound.velocityType == PISOtorch.BoundaryConditionType.DIRICHLET:
-        fluxes = bound.GetFluxes()
+    vel = bound.velocity
+    if vel.dim() == 2:  # static NC, broadcast over the boundary
+        sizes = bound.getSizes()  # x,y,z,w
+        spatial = [sizes[dims - 1 - d] for d in range(dims)]  # z,y,x
+        vel = vel.reshape([1, dims] + [1] * dims).expand(*([1, dims] + spatial))
+    if not bound.hasTransform():
+        return vel[:, bound_axis : bound_axis + 1]
+    transform = bound.transform  # NDHWC
+    inv_row_start = dims * dims + bound_axis * dims
+    t_inv_row = transform[..., inv_row_start : inv_row_start + dims]  # NDHWC
+    det = transform[..., -1]  # NDHW
+    vel = torch.movedim(vel, 1, -1)  # NCDHW -> NDHWC
+    return (det * torch.sum(t_inv_row * vel, dim=-1)).unsqueeze(1)
 
-        return torch.sum(fluxes)
 
-    else:
+def get_fixed_boundary_flux(bound, bound_idx):
+    assert isinstance(bound, PISOtorch.FixedBoundary)
+    if bound.velocityType != PISOtorch.BoundaryConditionType.DIRICHLET:
         raise ValueError("Only DIRICHLET boundaries are supportet")
+
+    # `GetFluxes` runs in C++ and returns a tensor with no grad_fn, so a flux
+    # balance built on it can never carry a derivative. The torch path is only
+    # taken when a graph is actually wanted, which keeps every non-differentiable
+    # forward on exactly the arithmetic it had before
+    if torch.is_grad_enabled() and bound.velocity.requires_grad:
+        return torch.sum(_get_fixed_boundary_fluxes_torch(bound, bound_idx))
+    return torch.sum(bound.GetFluxes())
 
 
 def get_fixed_boundary_fluxes(list_idx_bound):
@@ -185,10 +215,26 @@ def get_advective_velocity(velms, velm_idx, bound, bound_idx):
     return advective_vel
 
 
-def balance_boundary_fluxes(domain, free_bounds, tol=None):
+def balance_boundary_fluxes(domain, free_bounds, tol=None, differentiable: bool = False):
+    """Rescale the free boundaries so the net boundary flux is zero.
+
+    Parameters
+    ----------
+    differentiable : bool
+        Keep the flux computation in the autograd graph, so that ``flux_scale``
+        carries its dependence on the boundary velocities.
+
+        Without it the adjoint keeps the net-flux component of the free-boundary
+        gradient that the rescale projects out in the forward. Measured on the
+        MHD duct against central finite differences over 10 PISO steps: the
+        derivative of the wall Nusselt number w.r.t. the outflow boundary velocity
+        came out +1.08 against a true -0.108 (wrong sign, 11x), and the outflow
+        heat flux was off by 321%; differentiating the balance brings both to the
+        accuracy of interior perturbations (14% and 3%).
+    """
     scale_all = True
 
-    with torch.no_grad():
+    with torch.no_grad() if not differentiable else nullcontext():
         boundaries = []
         for block in domain.getBlocks():
             boundaries.extend(block.getFixedBoundaries())  # list((boundIdx, bound),)
@@ -225,11 +271,36 @@ def balance_boundary_fluxes(domain, free_bounds, tol=None):
 
 
 # see also: https://www.tfd.chalmers.se/~hani/kurser/OS_CFD_2022/LeandroLucchese/Report_Lucchese.pdf
-def update_advective_boundaries(domain, bounds, velms, dt, tol=None):
+def update_advective_boundaries(
+    domain, bounds, velms, dt, tol=None, differentiable: bool = False
+):
     # bounds: list of boundaries that can be updated
     # velms: velocity tensors to advect the boundary with. one for each boundary or a global value
     # _LOG.info("adective bound update: %d boundaries", len(bounds))
-    with torch.no_grad(), SAMPLE("advect bounds"):
+    #
+    # `differentiable` keeps this update in the autograd graph. The update itself
+    # is `vel_bound - t*(vel_bound - vel_slice)` -- elementwise torch ops with no
+    # kernel call -- so recording it changes no forward arithmetic whatsoever;
+    # torch.no_grad() controls only whether a graph is built, and trajectories are
+    # bit-identical either way.
+    #
+    # It matters because the outflow velocity is *not* an independent input: in a
+    # duct where every boundary carries a velocity condition, it is what keeps the
+    # pressure problem solvable, and it responds to the inflow. Detaching it makes
+    # the adjoint linearise about a perturbation that does not conserve mass, which
+    # the singular pressure operator's nullspace then absorbs. Measured on the MHD
+    # duct: the integral of the adjoint over a in [0, 0.5] came to -1.17e-03
+    # against a true dJ of +8.70e-03 -- wrong sign, 7x too small -- and the ratio
+    # did not improve from a 4-step to a 24-step horizon.
+    #
+    # Default False so every other environment keeps its current behaviour; the
+    # caller opts in. Note the boundary update is recursive across steps, so a
+    # caller that enables this must detach the domain at chunk boundaries or the
+    # graph will chain into the previous chunk. The flux balance at the end follows
+    # the same flag; see `balance_boundary_fluxes` for what detaching it costs.
+    with torch.no_grad() if not differentiable else nullcontext(), SAMPLE(
+        "advect bounds"
+    ):
         assert isinstance(bounds, list) and len(bounds) > 0
         assert (
             isinstance(velms, torch.Tensor)
@@ -390,7 +461,7 @@ def update_advective_boundaries(domain, bounds, velms, dt, tol=None):
             else:
                 raise TypeError
 
-    balance_boundary_fluxes(domain, bounds, tol=tol)
+    balance_boundary_fluxes(domain, bounds, tol=tol, differentiable=differentiable)
 
 
 def update_advective_boundaries_static(domain, bounds, velms, dt):
@@ -504,8 +575,11 @@ class Simulation:
         BiCG_precondition_fallback: bool = True,
         advection_tol: float = None,
         pressure_tol: float = None,
+        pressure_tol_intermediate: float = None,
+        pressure_warm_start: bool = False,
         convergence_tol: float = None,
         solver_double_fallback: bool = False,
+        linear_solver_backend: str = None,
         advect_non_ortho_steps: int = 1,
         pressure_non_ortho_steps: int = 1,
         normalize_pressure_result: bool = True,
@@ -556,11 +630,25 @@ class Simulation:
         self.pressure_use_BiCG = pressure_use_BiCG
         self.pressure_non_ortho_steps = pressure_non_ortho_steps
         self.pressure_tol = pressure_tol
+        self.pressure_tol_intermediate = pressure_tol_intermediate
+        self.pressure_warm_start = pressure_warm_start
+        # Per-corrector cache of the last converged pressure, used as the initial
+        # guess for the same corrector index at the next sub-step. Keyed on the
+        # corrector index rather than being a single field on purpose: corrector 0
+        # solves against div(u*) from the momentum predictor and is O(p), while
+        # later correctors solve against an already-projected velocity and are
+        # orders of magnitude smaller. One shared guess would hand each corrector
+        # the other's magnitude, which is worse than starting from zero.
+        self.__pressure_guess: dict[int, torch.Tensor] = {}
         self.normalize_pressure_result = normalize_pressure_result
         self.pressure_return_best_result = pressure_return_best_result
         self.pressure_time_step_normalized = pressure_time_step_normalized
 
         self.solver_double_fallback = solver_double_fallback
+        # "piso" (default) or "sla"; None defers to FLUIDGYM_LINSOLVE_BACKEND.
+        # Global: every linear solve funnels through PISOtorch_diff.
+        if linear_solver_backend is not None:
+            PISOtorch_diff.set_linsolve_backend(linear_solver_backend)
         self.linear_solve_max_iterations = 5000
         self.preconditionBiCG = preconditionBiCG
         self.BiCG_precondition_fallback = BiCG_precondition_fallback
@@ -586,6 +674,9 @@ class Simulation:
 
         self.exclude_advection_solve_gradients = exclude_advection_solve_gradients
         self.exclude_pressure_solve_gradients = exclude_pressure_solve_gradients
+        # Cuts the pressure path out of the velocity-correction backward. Set from
+        # the outside (like `linear_solve_max_iterations`), per simulation instance
+        self.exclude_pressure_gradient_adjoint = False
         # self.exclude_all_linsolve_gradients = False
 
         self.print_adaptive_step_info = False
@@ -608,6 +699,7 @@ class Simulation:
                     "domain must be initilized. Call domain.PrepareSolve() before assignment."
                 )
         self.__domain = domain
+        self.__check_differentiable()
 
     def _check_domain(self):
         if self.__domain is None:
@@ -728,6 +820,17 @@ class Simulation:
         self.__check_differentiable()
 
     @property
+    def _correct_velocity_kwargs(self):
+        """Extra kwargs for `CorrectVelocity`, only the differentiable backend takes.
+
+        The non-differentiable backend is the raw C++ binding, which would reject
+        the gradient-exclusion kwarg, so it is passed only in differentiable mode.
+        """
+        if self.differentiable and self.exclude_pressure_gradient_adjoint:
+            return {"exclude_pressure_grad": True}
+        return {}
+
+    @property
     def non_orthogonal(self):
         return self.__non_orthogonal
 
@@ -752,7 +855,7 @@ class Simulation:
     def __get_time_step_torch(self):
         self._check_domain()
         return torch.tensor(
-            [self.__time_step], device=torch.device("cpu"), dtype=self.__get_dtype()
+            [self.__time_step], device=cpu_device, dtype=self.__get_dtype()
         )
 
     @property
@@ -850,9 +953,11 @@ class Simulation:
 
     @advection_tol.setter
     def advection_tol(self, advection_tol):
-        if advection_tol is not None:
+        if advection_tol is not None and not isinstance(advection_tol, SolverTolerance):
             if not isinstance(advection_tol, numbers.Real):
-                raise TypeError("advection_tol must be float or None.")
+                raise TypeError(
+                    "advection_tol must be float, SolverTolerance or None."
+                )
             if not advection_tol > 0:
                 raise ValueError("advection_tol must be positive.")
         self.__advection_tol = advection_tol
@@ -900,12 +1005,185 @@ class Simulation:
 
     @pressure_tol.setter
     def pressure_tol(self, pressure_tol):
-        if pressure_tol is not None:
+        if pressure_tol is not None and not isinstance(pressure_tol, SolverTolerance):
             if not isinstance(pressure_tol, numbers.Real):
-                raise TypeError("pressure_tol must be float or None.")
+                raise TypeError("pressure_tol must be float, SolverTolerance or None.")
             if not pressure_tol > 0:
                 raise ValueError("pressure_tol must be positive.")
         self.__pressure_tol = pressure_tol
+
+    @property
+    def pressure_tol_intermediate(self):
+        """Tolerance for every pressure solve that is not the final corrector.
+
+        ``None`` (the default) means every corrector uses ``pressure_tol``, i.e.
+        the historical behaviour. Only the last corrector's pressure survives into
+        the solution -- the earlier ones are intermediate fields that the next
+        corrector overwrites -- so solving them to the final accuracy is wasted
+        work. This is the ``p`` / ``pFinal`` split OpenFOAM makes.
+        """
+        return self.__pressure_tol_intermediate
+
+    @pressure_tol_intermediate.setter
+    def pressure_tol_intermediate(self, value):
+        if value is not None and not isinstance(value, SolverTolerance):
+            if not isinstance(value, numbers.Real):
+                raise TypeError(
+                    "pressure_tol_intermediate must be float, SolverTolerance or None."
+                )
+            if not value > 0:
+                raise ValueError("pressure_tol_intermediate must be positive.")
+        self.__pressure_tol_intermediate = value
+
+    @property
+    def pressure_warm_start(self):
+        """Seed each pressure solve with the previous sub-step's result.
+
+        Off by default. ``pressure_non_ortho_steps`` is 1 in every current
+        configuration, so the existing ``pstep > 0`` reuse never triggers and every
+        pressure solve starts from zero -- discarding a field that is nearly
+        identical to the one converged one sub-step (dt) earlier.
+
+        An initial guess cannot change the converged answer, only the iteration
+        count, so this is safe by construction. The guesses are detached, so no
+        gradient path is created across sub-steps.
+        """
+        return self.__pressure_warm_start
+
+    @pressure_warm_start.setter
+    def pressure_warm_start(self, value):
+        if not isinstance(value, bool):
+            raise TypeError("pressure_warm_start must be bool.")
+        self.__pressure_warm_start = value
+
+    def _solve_is_differentiated(self):
+        """Whether a linear solve issued right now would record a graph.
+
+        ``differentiable`` picks the autograd backend once, at construction, but
+        individual solves opt out of the graph by running under ``torch.no_grad()``
+        (see the ``exclude_*_solve_gradients`` flags). Only a solve that is both
+        needs the autograd backend; the rest can take the in-place path, which is
+        numerically identical -- both end in ``PISOtorch.SolveLinear`` -- and does
+        support an initial guess.
+        """
+        return self.differentiable and torch.is_grad_enabled()
+
+    def _pressure_tol_for(self, cstep, pstep, corrector_steps):
+        """``pressure_tol`` on the final corrector, the intermediate one before."""
+        if self.__pressure_tol_intermediate is None:
+            return self.pressure_tol
+        is_final = (cstep == corrector_steps - 1) and (
+            pstep == self.pressure_non_ortho_steps - 1
+        )
+        return self.pressure_tol if is_final else self.__pressure_tol_intermediate
+
+    @staticmethod
+    def _as_guess(t):
+        """A detached, finite initial iterate for a linear solve, or ``None``.
+
+        An initial guess is a *constant* of the solve: the map being
+        differentiated is ``b -> A^-1 b``, whose Jacobian does not depend on the
+        starting iterate, so detaching here is exact rather than an
+        approximation (see the long comment in
+        ``PISOtorch_diff.linear_solve_GPU``). The finiteness guard mirrors the
+        one ``MHDSimulation._epot_initial_guess`` already applies -- a NaN guess
+        would poison a solve that would otherwise have converged from zero.
+        """
+        if t is None or not torch.is_tensor(t) or t.numel() == 0:
+            return None
+        if not torch.isfinite(t).all():
+            return None
+        return t.detach()
+
+    def _pressure_initial_guess(self, cstep, reference):
+        """Cached guess for corrector ``cstep``, or ``None`` if unusable.
+
+        Offered on the differentiable path too: ``linear_solve_GPU`` takes the
+        guess as a detached constant, so it changes how fast the solve converges
+        and not what it converges to, and it keeps the differentiated forward on
+        the same trajectory as an evaluation run.
+        """
+        if not self.__pressure_warm_start:
+            return None
+        guess = self.__pressure_guess.get(cstep, None)
+        if guess is None or guess.shape != reference.shape:
+            return None
+        return guess.to(dtype=reference.dtype, device=reference.device)
+
+    def _pressure_rank_deficient(self, P) -> bool:
+        """Does the pressure Poisson operator have the constant nullspace?
+
+        True when the matrix is pure Neumann, i.e. no boundary prescribes a
+        pressure value. That is the case for the MHD duct, where every face
+        carries a velocity condition (Dirichlet inflow, varying outflow, walls):
+        the row sums are then exactly zero and ``1`` spans both ``null(A)`` and
+        ``null(A^T)``.
+
+        Decided from the assembled matrix rather than from the boundary flags so
+        it cannot drift out of sync with how the kernel actually builds the rows.
+        The row-sum reduction runs once per matrix object -- ``PrepareSolve``
+        allocates it once and only rebinds ``.value`` afterwards -- and the answer
+        is cached against that object's identity.
+
+        Only the *adjoint* solve uses this (``adjoint_rank_deficient``); the
+        forward is left exactly as it was.
+        """
+        if P is None:
+            return False
+        cached = getattr(self, "_pressure_rank_deficient_cache", None)
+        if cached is not None and cached[0] is P:
+            return cached[1]
+
+        value = P.value.reshape(-1)
+        row = P.row
+        n = row.numel() - 1
+        counts = (row[1:] - row[:-1]).to(torch.int64).to(value.device)
+        segment = torch.repeat_interleave(
+            torch.arange(n, device=value.device), counts
+        )
+        row_sum = torch.zeros(
+            n, dtype=value.dtype, device=value.device
+        ).index_add_(0, segment, value)
+        # Scale-relative: the Laplacian's entries carry the cell metric, so an
+        # absolute threshold would be meaningless across resolutions.
+        deficient = bool(
+            (row_sum.abs() > 1e-10 * value.abs().max()).sum().item() == 0
+        )
+        self._pressure_rank_deficient_cache = (P, deficient)
+        self.__LOG.debug(
+            "Pressure matrix is %s; the adjoint solve %s project out the "
+            "constant mode.",
+            "singular (pure Neumann)" if deficient else "anchored (full rank)",
+            "will" if deficient else "will not",
+        )
+        return deficient
+
+    def _store_pressure_guess(self, cstep, result):
+        if self.__pressure_warm_start:
+            self.__pressure_guess[cstep] = result.detach().clone()
+
+    def clear_pressure_guess(self):
+        """Drop the warm-start cache, e.g. after the domain or dt changed."""
+        self.__pressure_guess.clear()
+
+    @property
+    def pressure_guess_state(self) -> torch.Tensor | None:
+        """The warm-start cache as one stacked tensor, or None if empty.
+
+        Cross-step solver state, so a BPTT checkpoint has to carry it; see
+        ``FluidEnv._checkpoint_accessors``.
+        """
+        if not self.__pressure_guess:
+            return None
+        keys = sorted(self.__pressure_guess)
+        return torch.stack([self.__pressure_guess[k] for k in keys])
+
+    @pressure_guess_state.setter
+    def pressure_guess_state(self, value: torch.Tensor | None) -> None:
+        if value is None:
+            self.__pressure_guess.clear()
+            return
+        self.__pressure_guess = {k: value[k] for k in range(value.size(0))}
 
     @property
     def normalize_pressure_result(self):
@@ -1091,8 +1369,11 @@ class Simulation:
         double_fallback: bool = False,
         BiCG_with_preconditioner=True,
         BiCG_precondition_fallback=False,
+        adjoint_rank_deficient: bool = False,
+        tag: str = "unknown",
+        amg_hierarchy=None,
     ):
-        if self.__backend == PISOtorch:
+        if not self._solve_is_differentiated():
             convergence_criterion = (
                 PISOtorch.ConvergenceCriterion.NORM2_NORMALIZED
             )  # RMSE of residual vector
@@ -1104,9 +1385,16 @@ class Simulation:
                 tol, rhs.dtype
             )  # torch.ones([1], dtype = rhs.dtype)*tol
             with SAMPLE("GPU linear solve"):
-                x_given = x is not None
-                if not x_given:
+                if x is None:
                     x = torch.zeros_like(rhs)
+                elif self.differentiable:
+                    # The kernel writes the iterate through `x`'s data pointer,
+                    # which autograd's version counter cannot see. On a
+                    # differentiable run the caller's buffer (e.g.
+                    # `domain.velocityResult`) may already be saved for a
+                    # backward, so solve into a private copy instead. Bit-identical
+                    # on a non-differentiable run, where no copy is made at all.
+                    x = x.detach().clone()
 
                 PISOtorch_diff._linear_solve_wrapper(
                     csrMat,
@@ -1125,12 +1413,11 @@ class Simulation:
                     debug_out=False,
                     BiCG_with_preconditioner=BiCG_with_preconditioner,
                     BiCG_precondition_fallback=BiCG_precondition_fallback,
+                    tag=tag,
                 )
 
                 return x, True
         else:
-            if x is not None:
-                self.__LOG.warning("x is ignored when using PISOtorch_diff.")
             return (
                 self.__backend.linear_solve_GPU(
                     csrMat,
@@ -1143,9 +1430,78 @@ class Simulation:
                     double_fallback=double_fallback,
                     BiCG_with_preconditioner=BiCG_with_preconditioner,
                     BiCG_precondition_fallback=BiCG_precondition_fallback,
+                    adjoint_rank_deficient=adjoint_rank_deficient,
+                    tag=tag,
+                    x0=self._as_guess(x),
+                    amg_hierarchy=amg_hierarchy,
+                    matrix_rank_deficient=matrix_rank_deficient,
+                    residual_reset_step=residual_reset_step,
                 ),
                 True,
             )
+
+    def linear_solve_AMG(
+        self,
+        rhs: torch.Tensor,
+        x: torch.Tensor,
+        amg_hierarchy,
+        tol,
+        max_iter: int,
+        return_best_result: bool = False,
+        tag: str = "unknown",
+    ):
+        """Solve with AMG-preconditioned CG (host setup, on-device V-cycle).
+
+        The operator is the finest level of ``amg_hierarchy``, not ``csrMat``:
+        the hierarchy was built from that matrix, so this guarantees the Krylov
+        iteration and the preconditioner cannot disagree about the operator.
+
+        Emits the same telemetry and raises the same errors as the CUDA path --
+        the result infos duck-type ``LinearSolverResultInfo``, so
+        ``_check_solver_return_infos`` and ``solver_stats`` handle them unchanged.
+        """
+        tol_value = float(
+            tol
+            if not isinstance(tol, torch.Tensor)
+            else tol.detach().cpu().reshape(-1)[0]
+        )
+        if x is None:
+            x = torch.zeros_like(rhs)
+
+        probe = solver_stats.Probe(rhs, tag) if solver_stats.is_active() else None
+        if probe is not None:
+            probe.start()
+
+        with SAMPLE("AMG linear solve"):
+            solver_infos = amg_pcg_solve(
+                rhs,
+                x,
+                amg_hierarchy,
+                tol=tol_value,
+                max_iter=max_iter,
+                return_best_result=return_best_result,
+            )
+
+        if probe is not None:
+            probe.stop(
+                solver_infos,
+                tolerance=tol_value,
+                max_iterations=int(max_iter),
+                use_BiCG=False,
+            )
+
+        PISOtorch_diff._check_solver_return_infos(
+            solver_infos,
+            False,
+            False,
+            tol_value,
+            max_iter,
+            return_best_result,
+            is_FWD=None,
+            debug_out=False,
+        )
+
+        return x, True
 
     def linear_solve(
         self,
@@ -1159,12 +1515,44 @@ class Simulation:
         residual_reset_step=0,
         use_scipy=False,
         return_best_result=False,
+        amg_hierarchy=None,
+        adjoint_rank_deficient: bool = False,
+        tag: str = "unknown",
     ):  # , double_fallback:bool=False):
         if use_scipy:
             return self.linear_solve_scipy(csrMat, rhs, x), True
         else:
             if max_iter == None:
                 max_iter = self.linear_solve_max_iterations
+            # Single choke point for every solve in the codebase: a relative
+            # SolverTolerance is turned into the absolute number the kernels
+            # expect here, against this solve's own RHS. Floats pass through
+            # untouched, so absolute tolerances keep their exact behaviour.
+            tol = resolve_tolerance(tol, rhs)
+            # AMG is *outside-an-autograd.Function-only*, not forward-only.
+            # `linear_solve_AMG` is plain tensor ops -- no autograd.Function, no
+            # no_grad -- so calling it here on a differentiated solve would trace
+            # every CG iteration and every V-cycle of the preconditioner. That is
+            # wrong twice over: it yields the gradient of a truncated iteration
+            # rather than the adjoint of the solve, and it retains the whole
+            # hierarchy per iteration (the potential solve's 10-level hierarchy has
+            # ~108M nnz; the run is killed by the host OOM killer inside
+            # amg_pcg_solve).
+            #
+            # A differentiated solve still gets AMG, just from inside
+            # `PISOtorch_diff.LinearSolveFunction`, whose forward and backward both
+            # run with grad disabled -- so the hierarchy is threaded through
+            # `linear_solve_GPU` below rather than used here.
+            if amg_hierarchy is not None and not self._solve_is_differentiated():
+                return self.linear_solve_AMG(
+                    rhs,
+                    x,
+                    amg_hierarchy,
+                    tol=tol,
+                    max_iter=max_iter,
+                    return_best_result=return_best_result,
+                    tag=tag,
+                )
             return self.linear_solve_GPU(
                 csrMat,
                 rhs,
@@ -1178,13 +1566,16 @@ class Simulation:
                 double_fallback=self.solver_double_fallback,
                 BiCG_with_preconditioner=self.preconditionBiCG,
                 BiCG_precondition_fallback=self.BiCG_precondition_fallback,
+                adjoint_rank_deficient=adjoint_rank_deficient,
+                tag=tag,
+                amg_hierarchy=amg_hierarchy,
             )
 
     # advect only the passive scalar
     def advect_static(self, iterations, time_step=None):
         self._check_domain()
         solve_ok = True
-        advect_non_ortho_reuse_result = True and not self.differentiable
+        advect_non_ortho_reuse_result = True
 
         if isinstance(iterations, torch.Tensor):
             iterations = iterations.numpy()[0]
@@ -1275,6 +1666,7 @@ class Simulation:
                                     use_BiCG=self.advection_use_BiCG,
                                     use_scipy=self.scipy_solve_advection,
                                     tol=self.advection_tol,
+                                    tag="scalar",
                                 )
                                 scalarResult.append(sR)
                             del x
@@ -1293,6 +1685,7 @@ class Simulation:
                                 use_BiCG=self.advection_use_BiCG,
                                 use_scipy=self.scipy_solve_advection,
                                 tol=self.advection_tol,
+                                tag="scalar",
                             )
                             del x
 
@@ -1320,9 +1713,10 @@ class Simulation:
     def make_divergence_free(self, iterations=1, max_iter=1000):
         self._check_domain()
         corrector_steps = 1
-        pressure_reuse_result = (
-            True and not self.differentiable
-        )  # speeds up pressure_non_ortho_steps, no difference in result noticed.
+        # speeds up pressure_non_ortho_steps, no difference in result noticed.
+        # On for differentiable runs too: guesses are detached, so this changes how
+        # fast a solve converges, not what it converges to.
+        pressure_reuse_result = True
         pressure_use_face_transform = False
         vcv = self._velocity_corrector_version
 
@@ -1332,7 +1726,7 @@ class Simulation:
         domain = self.domain
         non_ortho_flags = self.__non_ortho_flags
         # overwrite time step and A
-        time_step = torch.tensor([1], device=torch.device("cpu"), dtype=domain.A.dtype)
+        time_step = torch.tensor([1], device=cpu_device, dtype=domain.A.dtype)
         domain.setA(torch.ones_like(domain.A))
 
         for step in range(iterations):
@@ -1392,6 +1786,10 @@ class Simulation:
                                     tol=self.pressure_tol,
                                     return_best_result=self.pressure_return_best_result,
                                     max_iter=max_iter,
+                                    adjoint_rank_deficient=self._pressure_rank_deficient(
+                                        domain.P
+                                    ),
+                                    tag="pressure",
                                 )
                                 del x
 
@@ -1417,6 +1815,7 @@ class Simulation:
                             time_step,
                             version=vcv,
                             timeStepNorm=self.pressure_time_step_normalized,
+                            **self._correct_velocity_kwargs,
                         )
 
                 self.__backend.CopyVelocityResultToBlocks(domain)
@@ -1433,11 +1832,12 @@ class Simulation:
         solve_ok = True
         if time_step is None:
             time_step = self.__get_time_step_torch()
-        advect_use_prev_result = True and not self.differentiable
-        advect_non_ortho_reuse_result = True and not self.differentiable
-        pressure_reuse_result = (
-            True and not self.differentiable
-        )  # speeds up pressure_non_ortho_steps, no difference in result noticed.
+        advect_use_prev_result = True
+        advect_non_ortho_reuse_result = True
+        # speeds up pressure_non_ortho_steps, no difference in result noticed.
+        # On for differentiable runs too: guesses are detached, so this changes how
+        # fast a solve converges, not what it converges to.
+        pressure_reuse_result = True
         pressure_use_face_transform = False
         # velocity corrector version. use different pressure gradients: 0 default (finite volume), 1 for finite differences, 4 for correcting fluxes (orthogonal), 5 for finite volume, 6 FVM with face transformations
         vcv = self._velocity_corrector_version
@@ -1543,6 +1943,7 @@ class Simulation:
                                             use_BiCG=self.advection_use_BiCG,
                                             use_scipy=self.scipy_solve_advection,
                                             tol=self.advection_tol,
+                                            tag="scalar",
                                         )
                                         scalarResult.append(sR)
                                         del sR
@@ -1556,6 +1957,7 @@ class Simulation:
                                         use_BiCG=self.advection_use_BiCG,
                                         use_scipy=self.scipy_solve_advection,
                                         tol=self.advection_tol,
+                                        tag="scalar",
                                     )
 
                             domain.setScalarResult(scalarResult)
@@ -1608,6 +2010,7 @@ class Simulation:
                                                 use_BiCG=self.advection_use_BiCG,
                                                 use_scipy=self.scipy_solve_advection,
                                                 tol=self.advection_tol,
+                                                tag="scalar",
                                             )
                                             scalarResult.append(sR)
                                         del x
@@ -1629,6 +2032,7 @@ class Simulation:
                                             use_BiCG=self.advection_use_BiCG,
                                             use_scipy=self.scipy_solve_advection,
                                             tol=self.advection_tol,
+                                            tag="scalar",
                                         )
                                     del x
 
@@ -1698,6 +2102,7 @@ class Simulation:
                                 use_BiCG=self.advection_use_BiCG,
                                 use_scipy=self.scipy_solve_advection,
                                 tol=self.advection_tol,
+                                tag="velocity",
                             )
                             del x
 
@@ -1747,6 +2152,7 @@ class Simulation:
                                     use_BiCG=self.advection_use_BiCG,
                                     use_scipy=self.scipy_solve_advection,
                                     tol=self.advection_tol,
+                                    tag="velocity",
                                 )
                                 del x
 
@@ -1804,11 +2210,19 @@ class Simulation:
                                 pressureResult, solve_ok = self.linear_solve(
                                     domain.P,
                                     domain.pressureRHSdiv,
-                                    x=None,  # matrix_rank_deficient=False, residual_reset_step=100,
+                                    x=self._pressure_initial_guess(
+                                        cstep, domain.pressureRHSdiv
+                                    ),  # matrix_rank_deficient=False, residual_reset_step=100,
                                     use_BiCG=self.pressure_use_BiCG,
                                     use_scipy=self.scipy_solve_pressure,
-                                    tol=self.pressure_tol,
+                                    tol=self._pressure_tol_for(
+                                        cstep, 0, self.corrector_steps
+                                    ),
                                     return_best_result=self.pressure_return_best_result,
+                                    adjoint_rank_deficient=self._pressure_rank_deficient(
+                                        domain.P
+                                    ),
+                                    tag="pressure",
                                 )
 
                             if not solve_ok:
@@ -1818,6 +2232,7 @@ class Simulation:
                                 pressureResult = pressureResult - torch.mean(
                                     pressureResult
                                 )  # for numerical and backwards stability
+                            self._store_pressure_guess(cstep, pressureResult)
                             domain.setPressureResult(pressureResult)
                             domain.UpdateDomainData()
 
@@ -1875,13 +2290,21 @@ class Simulation:
                                     else nullcontext()
                                 ):
                                     # _LOG.info("Start pressure solve #%d", cstep)
+                                    # pstep > 0 reuses the previous non-ortho
+                                    # iterate; pstep == 0 falls back to the
+                                    # per-corrector cache from the last sub-step.
                                     x = (
-                                        None
-                                        if (pstep == 0 or not pressure_reuse_result)
-                                        else domain.pressureResult
+                                        domain.pressureResult
+                                        if (pstep > 0 and pressure_reuse_result)
+                                        else self._pressure_initial_guess(
+                                            cstep, domain.pressureRHSdiv
+                                        )
+                                    )
+                                    p_tol = self._pressure_tol_for(
+                                        cstep, pstep, self.corrector_steps
                                     )
                                     if pressure_dp:
-                                        self.__LOG.info(
+                                        self.__LOG.debug(
                                             "Pressure solve is double precision."
                                         )
                                         P = domain.P.toType(torch.float64)
@@ -1896,8 +2319,9 @@ class Simulation:
                                             x=x,
                                             use_BiCG=self.pressure_use_BiCG,
                                             use_scipy=self.scipy_solve_pressure,
-                                            tol=self.pressure_tol,
+                                            tol=p_tol,
                                             return_best_result=self.pressure_return_best_result,
+                                            tag="pressure",
                                         )  # , x=domain.pressureResult
                                         pressureResult = pressureResult.to(
                                             domain.pressureRHSdiv.dtype
@@ -1913,8 +2337,12 @@ class Simulation:
                                             residual_reset_step=100,
                                             use_BiCG=self.pressure_use_BiCG,
                                             use_scipy=self.scipy_solve_pressure,
-                                            tol=self.pressure_tol,
+                                            tol=p_tol,
                                             return_best_result=self.pressure_return_best_result,
+                                            adjoint_rank_deficient=self._pressure_rank_deficient(
+                                                domain.P
+                                            ),
+                                            tag="pressure",
                                         )
                                     del x
                                 # solve_ok = True #DEBUG
@@ -1923,6 +2351,11 @@ class Simulation:
                                     pressureResult = pressureResult - torch.mean(
                                         pressureResult
                                     )  # for numerical and backwards stability
+                                # Cache the last non-ortho iterate of this
+                                # corrector as the guess for the same corrector at
+                                # the next sub-step.
+                                if pstep == self.pressure_non_ortho_steps - 1:
+                                    self._store_pressure_guess(cstep, pressureResult)
                                 domain.setPressureResult(pressureResult)
                                 domain.UpdateDomainData()
 
@@ -1957,6 +2390,7 @@ class Simulation:
                             time_step,
                             version=vcv,
                             timeStepNorm=self.pressure_time_step_normalized,
+                            **self._correct_velocity_kwargs,
                         )  # vcv
 
                         self._run_prep_fn(
@@ -2027,7 +2461,7 @@ class Simulation:
 
                 time_step_target -= ts
                 ts = torch.tensor(
-                    [ts], dtype=domain.getBlock(0).velocity.dtype, device=torch.device("cpu")
+                    [ts], dtype=domain.getBlock(0).velocity.dtype, device=cpu_device
                 )
 
                 # _LOG.info("Adaptive step v2: maxVel %f, substep %d, timestep %f, remaining time %f", max_vel_np, substep, ts, time_step_target)
@@ -2041,7 +2475,7 @@ class Simulation:
                     )
                     warned = True
                 elif substep == 0 and self.print_adaptive_step_info:  #
-                    self.__LOG.info(
+                    self.__LOG.debug(
                         "Adaptive step %d substeps: %d. From CFL = %.02f, max vel = %.03e, time step = %.03e.",
                         substep,
                         substeps,
@@ -2055,7 +2489,7 @@ class Simulation:
 
                 if not sim_ok or self._check_stop():
                     return False
-        self.__LOG.info(
+        self.__LOG.debug(
             "Adaptive time step %.03e (CFL=%.02f) used %d substeps.",
             self.time_step,
             CFL_cond,
@@ -2089,9 +2523,9 @@ class Simulation:
             self.log_dir or "NONE",
         )
         if log_domain:
-            self.__LOG.info(str(domain))
+            self.__LOG.debug(str(domain))
             for blockIdx in range(domain.getNumBlocks()):
-                self.__LOG.info(str(domain.getBlock(blockIdx)))
+                self.__LOG.debug(str(domain.getBlock(blockIdx)))
 
         domain_orientation = domain.GetCoordinateOrientation()
         if domain_orientation == 0:
@@ -2131,7 +2565,7 @@ class Simulation:
                 time_step, substeps = get_max_time_step(
                     domain, time_step_target, CFL_cond, with_transformations=True
                 )
-                self.__LOG.info(
+                self.__LOG.debug(
                     "Setting time step to %.02e, substeps to %d based on initial conditions.",
                     time_step,
                     substeps,
@@ -2139,7 +2573,7 @@ class Simulation:
                 time_step = torch.tensor(
                     [time_step],
                     dtype=domain.getBlock(0).velocity.dtype,
-                    device=torch.device("cpu"),
+                    device=cpu_device,
                 )
             else:
                 raise ValueError("Invalid substeps")
@@ -2166,7 +2600,7 @@ class Simulation:
                     # LOG.info("It: %d/%d", it, iterations)
                     log = self.log_interval > 0 and (it % self.log_interval) == 0
 
-                    self.__LOG.info(
+                    self.__LOG.debug(
                         "It: %d/%d, substeps:%s, timestep:%f",
                         it,
                         iterations,

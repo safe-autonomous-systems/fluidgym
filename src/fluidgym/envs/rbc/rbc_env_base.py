@@ -1,6 +1,7 @@
 """Rayleigh-Bénard Convection (RBC) environment base class."""
 
 from abc import abstractmethod
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +10,7 @@ import numpy as np
 import torch
 
 import fluidgym.simulation.pict.data.shapes as shapes
-from fluidgym import config as global_config
+from fluidgym._palette import DEFAULT_PALETTE
 from fluidgym.envs import FluidEnv
 from fluidgym.simulation import Simulation
 from fluidgym.simulation.extensions import (
@@ -17,6 +18,7 @@ from fluidgym.simulation.extensions import (
 )
 from fluidgym.simulation.helpers import get_cell_size
 from fluidgym.simulation.pict.util.output import _resample_block_data
+from fluidgym.simulation.solver_tolerance import SolverTolerance
 
 
 class RBCEnvBase(FluidEnv):
@@ -87,6 +89,38 @@ class RBCEnvBase(FluidEnv):
     differentiable: bool
         Whether to enable differentiable simulation. Defaults to False.
 
+    advection_tol: float | SolverTolerance | Mapping | None
+        Tolerance for the momentum and passive-scalar advection solves. None (the
+        default) keeps the tolerance this environment is tuned at.
+
+    pressure_tol: float | SolverTolerance | Mapping | None
+        Tolerance for the pressure solve. None (the default) keeps the tolerance
+        this environment is tuned at.
+
+    pressure_tol_intermediate: float | SolverTolerance | Mapping | None
+        Tolerance for the pressure solves before the final corrector. None (the
+        default) applies ``pressure_tol`` everywhere.
+
+    pressure_warm_start: bool
+        Whether to seed each pressure solve with the previous sub-step's result.
+        Defaults to False.
+
+    linear_solve_max_iter: int | None
+        Iteration limit for the advection and pressure solves. None (the default)
+        leaves the solver's own limit in place.
+
+    exclude_advection_solve_gradients: bool | None
+        Drop the gradient of the advection solve. Diagnostic only; None (the
+        default) keeps it.
+
+    exclude_pressure_solve_gradients: bool | None
+        Drop the gradient of the pressure solve. Diagnostic only; None (the
+        default) keeps it.
+
+    exclude_pressure_gradient_adjoint: bool | None
+        Drop the pressure path of the PISO velocity-correction backward.
+        Diagnostic only; None (the default) keeps it.
+
     References
     ----------
     [1] C. Vignon, J. Rabault, J. Vasanth, F. Alcántara-Ávila,
@@ -147,6 +181,16 @@ class RBCEnvBase(FluidEnv):
         randomize_initial_state: bool = True,
         enable_actions: bool = True,
         differentiable: bool = False,
+        advection_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol_intermediate: (
+            float | SolverTolerance | Mapping[str, float] | None
+        ) = None,
+        pressure_warm_start: bool = False,
+        linear_solve_max_iter: int | None = None,
+        exclude_advection_solve_gradients: bool | None = None,
+        exclude_pressure_solve_gradients: bool | None = None,
+        exclude_pressure_gradient_adjoint: bool | None = None,
     ):
         self._rayleigh_number = rayleigh_number
         self._prandtl_number = prandtl_number
@@ -170,6 +214,14 @@ class RBCEnvBase(FluidEnv):
             randomize_initial_state=randomize_initial_state,
             enable_actions=enable_actions,
             differentiable=differentiable,
+            advection_tol=advection_tol,
+            pressure_tol=pressure_tol,
+            pressure_tol_intermediate=pressure_tol_intermediate,
+            pressure_warm_start=pressure_warm_start,
+            linear_solve_max_iter=linear_solve_max_iter,
+            exclude_advection_solve_gradients=exclude_advection_solve_gradients,
+            exclude_pressure_solve_gradients=exclude_pressure_solve_gradients,
+            exclude_pressure_gradient_adjoint=exclude_pressure_gradient_adjoint,
         )
 
         self._aspect_ratio = aspect_ratio * torch.pi
@@ -315,16 +367,24 @@ class RBCEnvBase(FluidEnv):
             adaptive_CFL=self._adaptive_cfl,
             dt=self._dt,
             corrector_steps=2,
-            pressure_tol=1e-5,
+            # None leaves the advection solve on the solver's dtype default,
+            # which is what this env was tuned with
+            advection_tol=self._resolve_advection_tol(None),
+            pressure_tol=self._resolve_pressure_tol(SolverTolerance(atol=1e-5)),
+            pressure_tol_intermediate=self._pressure_tol_intermediate,
+            pressure_warm_start=self._pressure_warm_start,
             advect_non_ortho_steps=1,
             pressure_non_ortho_steps=1,
             pressure_return_best_result=True,
             velocity_corrector="FD",
             non_orthogonal=False,
-            output_resampling_shape=self.render_shape[: self._ndims],
+            output_resampling_shape=self.obs_resampling_shape[: self._ndims],
             output_resampling_fill_max_steps=16,
             differentiable=self._differentiable,
         )
+
+        # Retry a failed single-precision solve in double precision
+        sim.solver_double_fallback = True
 
         return sim
 
@@ -397,8 +457,8 @@ class RBCEnvBase(FluidEnv):
             self._sim.single_step()
 
     @property
-    def render_shape(self) -> tuple[int, ...]:
-        """The shape of the rendered domain."""
+    def obs_resampling_shape(self) -> tuple[int, ...]:
+        """The shape of the observation resampling grid."""
         nx = self._n_heaters * 20
         height = round(nx / self._aspect_ratio)
 
@@ -454,7 +514,7 @@ class RBCEnvBase(FluidEnv):
         -------
             torch.Tensor of shape (2, n_sensors_x * n_sensors_y), dtype=torch.int32
         """
-        nx, ny = self.render_shape[:-1]
+        nx, ny = self.obs_resampling_shape[:-1]
 
         # sensor grid positions (exclude domain boundaries)
         sensor_x = torch.linspace(0, nx, self._n_sensors_x + 1)[:-1] + nx / (
@@ -520,6 +580,8 @@ class RBCEnvBase(FluidEnv):
         torch.Tensor
             The global Nusselt number.
         """
+        assert isinstance(self._block.passiveScalar, torch.Tensor)
+
         T = self._block.passiveScalar[0]
         T = T.squeeze()
 
@@ -543,47 +605,56 @@ class RBCEnvBase(FluidEnv):
         render_3d: bool,
         output_path: Path | None = None,
     ) -> dict[str, np.ndarray]:
-        T = self.get_temperature()
-
         min_val = self._T_cold
         max_val = self._T_hot + self._heater_limit
-        T = (T - min_val) / (max_val - min_val)
 
+        def format_temperature(data: np.ndarray) -> np.ndarray:
+            return self._format_render_data(
+                data=(data - min_val) / (max_val - min_val),
+                v_min=0,
+                v_max=1.0,
+                cmap="rainbow",
+            )
+
+        T_blocks = [block.passiveScalar for block in self._domain.getBlocks()]
         render_data = {}
-        if self._ndims == 2:
-            render_data["temperature"] = self._format_render_data(
-                data=T.detach().cpu().numpy(), v_min=0, v_max=1.0, cmap="rainbow"
-            )
-            render_data["temperature"] = np.flipud(render_data["temperature"])
-        else:
-            T_xy = T[T.shape[0] // 2, :, :]
-            T_xz = T[:, T.shape[1] // 2, :]
-            T_yz = T[:, :, T.shape[2] // 2]
 
-            render_data["x-y-temperature"] = self._format_render_data(
-                data=T_xy.detach().cpu().numpy(), v_min=0, v_max=1.0, cmap="rainbow"
-            )
-            render_data["x-y-temperature"] = np.flipud(render_data["x-y-temperature"])
-            render_data["x-z-temperature"] = self._format_render_data(
-                data=T_xz.detach().cpu().numpy(), v_min=0, v_max=1.0, cmap="rainbow"
-            )
-            render_data["y-z-temperature"] = self._format_render_data(
-                data=T_yz.detach().cpu().numpy(), v_min=0, v_max=1.0, cmap="rainbow"
-            )
-            render_data["y-z-temperature"] = render_data["y-z-temperature"].transpose(
-                1, 0, 2
-            )
+        if self._ndims == 2:
+            T = self._render_plane(T_blocks)  # (ny, nx)
+
+            render_data["temperature"] = np.flipud(format_temperature(T))
+        else:
+            T_xy = self._render_plane(T_blocks, axis="z")  # (ny, nx)
+            T_xz = self._render_plane(T_blocks, axis="y")  # (nz, nx)
+            T_yz = self._render_plane(T_blocks, axis="x")  # (nz, ny)
+
+            render_data["x-y-temperature"] = np.flipud(format_temperature(T_xy))
+            render_data["x-z-temperature"] = format_temperature(T_xz)
+            render_data["y-z-temperature"] = format_temperature(T_yz).transpose(1, 0, 2)
 
         return render_data
 
-    def _step_impl(
-        self, action: torch.Tensor
-    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
+    def _advance_impl(
+        self, action: torch.Tensor, n_sim_steps: int
+    ) -> dict[str, torch.Tensor]:
+        """Run ``n_sim_steps`` PISO steps under the given action.
+
+        Nothing is measured per substep here -- the reward is read off the state
+        the step ends in -- so the metrics are empty. The action is (re-)applied at
+        the start of every segment, which sets the same heater boundary the whole
+        env step is run at either way.
+        """
         if self._enable_actions:
             self._apply_action(action)
-        for _ in range(self._n_sim_steps):
+        for _ in range(n_sim_steps):
             self._sim.single_step()
 
+        return {}
+
+    def _finish_step(
+        self, metrics: dict[str, torch.Tensor]
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
+        """Read the Nusselt number and the observation off the state of the step."""
         nu = self.compute_global_nusselt()
         obs = self._get_global_obs()
 
@@ -610,13 +681,13 @@ class RBCEnvBase(FluidEnv):
             f"_NH{self._n_heaters}_HW{self._heater_width}"
         )
 
-    def _step_marl_impl(
-        self, actions: torch.Tensor
+    def _finish_marl_step(
+        self, metrics: dict[str, torch.Tensor]
     ) -> tuple[torch.Tensor, torch.Tensor, bool, dict[str, torch.Tensor]]:
         if self._local_reward_weight is None:
             raise ValueError("local_reward_weight must be set for multi-agent step.")
 
-        _, global_reward, terminated, info = self._step_impl(actions)
+        _, global_reward, terminated, info = self._finish_step(metrics)
 
         local_obs = self._get_local_obs()
 
@@ -661,7 +732,7 @@ class RBCEnvBase(FluidEnv):
             torch.stack([grid_x, grid_y], dim=-1).reshape(-1, 2).T.numpy()
         )
 
-        colors = global_config.palette
+        colors = DEFAULT_PALETTE
 
         plt.figure(figsize=(10, 5))
         ax = plt.gca()

@@ -126,7 +126,11 @@ def setup_run(base_dir, name="TEST", logging=True, console=True, debug=False):
 
 
 def get_logger(name):
-    return logging.getLogger(name)
+    # Keep every logger under the "fluidgym" namespace so that
+    # fluidgym.set_verbosity() controls the whole package at once.
+    from fluidgym.logging import get_logger as _get_namespaced_logger
+
+    return _get_namespaced_logger(name)
 
 
 def close_logging():

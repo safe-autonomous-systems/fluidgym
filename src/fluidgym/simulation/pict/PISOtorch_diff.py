@@ -12,16 +12,64 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
+import os
+
 import torch
 from fluidgym.simulation.extensions import PISOtorch  # type: ignore[import-untyped]
 
+from fluidgym.simulation import solver_stats
+from fluidgym.simulation.amg import amg_pcg_solve
 from fluidgym.simulation.pict.util.profiling import SAMPLE
 from fluidgym.simulation.pict.util.output import StringWriter
 
 import logging
 
-_LOG = logging.getLogger("Diff")
+_LOG = logging.getLogger("fluidgym.Diff")
 _LOG_DEBUG = False
+
+
+_LINSOLVE_BACKEND = None
+
+
+def set_linsolve_backend(backend):
+    """Select the backend used for every linear solve.
+
+    Parameters
+    ----------
+    backend : str or None
+        ``"piso"`` for the bundled CUDA CG/BiCGStab kernels (default),
+        ``"sla"`` for the torch-sla backed solver. ``None`` restores the
+        default, re-reading ``FLUIDGYM_LINSOLVE_BACKEND``.
+
+    Notes
+    -----
+    Every solve in the codebase funnels through ``_linear_solve_wrapper``, so
+    this switches both the differentiable and non-differentiable paths, forward
+    and backward, at once.
+    """
+    global _LINSOLVE_BACKEND
+    if backend is None:
+        _LINSOLVE_BACKEND = None
+        return
+    if backend not in ("piso", "sla"):
+        raise ValueError(
+            "Unknown linear solve backend %r, expected 'piso' or 'sla'." % (backend,)
+        )
+    if backend == "sla":
+        from fluidgym.simulation.pict.PISOtorch_sla import PISOtorchSLA
+
+        _LINSOLVE_BACKEND = PISOtorchSLA()
+    else:
+        _LINSOLVE_BACKEND = PISOtorch
+
+
+def _get_linsolve_backend():
+    """Return the module-like object providing ``SolveLinear``."""
+    global _LINSOLVE_BACKEND
+    if _LINSOLVE_BACKEND is None:
+        set_linsolve_backend(os.environ.get("FLUIDGYM_LINSOLVE_BACKEND", "piso"))
+    return _LINSOLVE_BACKEND
 
 
 _EXCLUDED_GRADIENTS = {}
@@ -112,6 +160,8 @@ def flatten_domain(
     add_tensor(domain_dict, "VELOCITY_RESULT_GRAD", domain.velocityResultGrad)
     add_tensor(domain_dict, "PRESSURE_RESULT", domain.pressureResult)
     add_tensor(domain_dict, "PRESSURE_RESULT_GRAD", domain.pressureResultGrad)
+    add_tensor(domain_dict, "EPOT_RESULT", domain.epotResult)
+    add_tensor(domain_dict, "EPOT_RESULT_GRAD", domain.epotResultGrad)
 
     add_tensor(domain_dict, "PASSIVE_SCALAR_RHS", domain.scalarRHS)
     add_tensor(domain_dict, "PASSIVE_SCALAR_RHS_GRAD", domain.scalarRHSGrad)
@@ -136,6 +186,8 @@ def flatten_domain(
         add_tensor(block_dict, "PASSIVE_SCALAR_GRAD", block.passiveScalarGrad)
         add_tensor(block_dict, "PRESSURE", block.pressure)
         add_tensor(block_dict, "PRESSURE_GRAD", block.pressureGrad)
+        add_tensor(block_dict, "EPOT", block.epot)
+        add_tensor(block_dict, "EPOT_GRAD", block.epotGrad)
 
         block_dict["BOUNDARIES"] = [None] * (domain.getSpatialDims() * 2)
         for boundary_idx in range(domain.getSpatialDims() * 2):
@@ -164,7 +216,7 @@ def set_domain_tensors_from_flat(
 ):
     def set_tensor(dict, name, setter, clear_fn=None):
         if (tensor_filter is None or name in tensor_filter) and (name in dict):
-            # _LOG.info("set '"+name+"' to domain")
+            # _LOG.debug("set '"+name+"' to domain")
             tensor = tensor_list[dict[name]]
             if tensor is not None:
                 if clone:
@@ -194,6 +246,8 @@ def set_domain_tensors_from_flat(
     set_tensor(domain_dict, "VELOCITY_RESULT_GRAD", domain.setVelocityResultGrad)
     set_tensor(domain_dict, "PRESSURE_RESULT", domain.setPressureResult)
     set_tensor(domain_dict, "PRESSURE_RESULT_GRAD", domain.setPressureResultGrad)
+    set_tensor(domain_dict, "EPOT_RESULT", domain.setEpotResult)
+    set_tensor(domain_dict, "EPOT_RESULT_GRAD", domain.setEpotResultGrad)
 
     set_tensor(domain_dict, "PASSIVE_SCALAR_RHS", domain.setScalarRHS)
     set_tensor(domain_dict, "PASSIVE_SCALAR_RHS_GRAD", domain.setScalarRHSGrad)
@@ -224,6 +278,8 @@ def set_domain_tensors_from_flat(
         set_tensor(block_dict, "PASSIVE_SCALAR_GRAD", block.setPassiveScalarGrad)
         set_tensor(block_dict, "PRESSURE", block.setPressure)
         set_tensor(block_dict, "PRESSURE_GRAD", block.setPressureGrad)
+        set_tensor(block_dict, "EPOT", block.setEpot)
+        set_tensor(block_dict, "EPOT_GRAD", block.setEpotGrad)
 
         for boundary_idx in range(domain.getSpatialDims() * 2):
             bound = block.getBoundary(boundary_idx)
@@ -257,6 +313,70 @@ def _get_solver_tolerance_torch(tol=None, dtype=torch.float32):
     tol = _get_solver_tolerance(tol, dtype)
     tol_torch = torch.tensor([tol], dtype=dtype)
     return tol_torch
+
+
+def _tol_value(tol) -> float:
+    """A tolerance as a Python float, whether it arrives as a tensor or a number.
+
+    ``amg_pcg_solve`` takes a float where the CUDA kernels take a 1-element
+    tensor; this is the same conversion ``Simulation.linear_solve_AMG`` does.
+    """
+    if isinstance(tol, torch.Tensor):
+        return float(tol.detach().cpu().reshape(-1)[0])
+    return float(tol)
+
+
+# The forward stops the moment it crosses its threshold, so the relative accuracy
+# it *achieved* is essentially that threshold. Asking the adjoint for exactly the
+# same on a different right-hand side therefore has no margin over the same
+# stagnation floor, and misses it about as often as not: on the 2D cylinder every
+# non-converged adjoint solve of a checkpointed backward lands 1.16-1.28x above
+# what it was asked for, having found that iterate by iteration ~180 and then
+# spending the remaining ~4800 up to `max_iter` on nothing. This factor buys the
+# margin back
+_BWD_TOL_SAFETY = 2.0
+
+
+def _rescaled_bwd_tolerance(
+    tol_torch,
+    fwd_rhs_norm,
+    grad_x,
+    n_rows=None,
+    min_relative=1e-12,
+    safety=_BWD_TOL_SAFETY,
+):
+    """Hold the adjoint solve to the forward's *relative* accuracy, both ways.
+
+    The kernels take an absolute tolerance (ConvergenceCriterion.NORM2_NORMALIZED
+    is ``||r|| / sqrt(n)``), and the number handed to a solve is resolved once,
+    against the forward RHS. The adjoint system has the same operator but a
+    completely different right-hand side, so reusing that number silently changes
+    the requested tolerance.
+    """
+    fwd = float(fwd_rhs_norm)
+    if not math.isfinite(fwd) or fwd <= 0:
+        return tol_torch
+    bwd = float(grad_x.detach().norm())
+    if not math.isfinite(bwd) or bwd <= 0:
+        return tol_torch
+
+    scaled = _tol_value(tol_torch) * (bwd / fwd) * safety
+
+    # The criterion divides by sqrt(n), so the attainable floor does too
+    n = float(n_rows) if n_rows else float(grad_x.numel())
+    rms = bwd / math.sqrt(max(n, 1.0))
+    floor = min_relative * rms
+    value = max(scaled, floor)
+
+    # Never tighter than the forward itself, unless that target is
+    # already met at the zero iterate, which would return a zero gradient
+    fwd_tol = _tol_value(tol_torch)
+    if rms > fwd_tol:
+        value = max(value, fwd_tol)
+
+    if isinstance(tol_torch, torch.Tensor):
+        return torch.full_like(tol_torch, value)
+    return value
 
 
 class LinsolveError(RuntimeError):
@@ -326,7 +446,7 @@ def _check_solver_return_infos(
                     solver_infos[i].finalResidual,
                     solver_infos[i].usedIterations,
                 )
-            _LOG.info("Using best results:\n%s", s)
+            _LOG.warning("Using best results:\n%s", s)
             s.reset()
             if debug_out:
                 converged_batches = [
@@ -341,7 +461,7 @@ def _check_solver_return_infos(
                         solver_infos[i].finalResidual,
                         solver_infos[i].usedIterations,
                     )
-                _LOG.info("Converged results:\n%s", s)
+                _LOG.debug("Converged results:\n%s", s)
                 s.reset()
         else:
             s = StringWriter()
@@ -359,7 +479,7 @@ def _check_solver_return_infos(
                 solver_info.finalResidual,
                 solver_info.usedIterations,
             )
-        _LOG.info(
+        _LOG.debug(
             "Linear solve (%sT:%s, BiCG:%s, tol:%.03e) converged:\n%s",
             fwd_str,
             transpose,
@@ -388,10 +508,19 @@ def _linear_solve_wrapper(
     double_fallback: bool = False,
     BiCG_with_preconditioner: bool = True,
     BiCG_precondition_fallback: bool = False,
+    tag: str = "unknown",
 ):
     if not rhs.eq(0).all():
+        backend = _get_linsolve_backend()
+
+        # Opt-in telemetry (fluidgym.simulation.solver_stats). Nothing is
+        # measured, allocated or synchronized unless a recorder is active.
+        probe = solver_stats.Probe(rhs, tag) if solver_stats.is_active() else None
+        if probe is not None:
+            probe.start()
+
         # with SAMPLE("PISOtorch.SolveLinear"):
-        solver_infos = PISOtorch.SolveLinear(
+        solver_infos = backend.SolveLinear(
             csrMat,
             rhs,
             result,
@@ -419,7 +548,7 @@ def _linear_solve_wrapper(
             _LOG.warning("Single precision solve failed, trying double precision.")
             debug_out = True
             if debug_out:
-                _LOG.info(
+                _LOG.debug(
                     "Single precision solver infos:\n%s", [str(_) for _ in solver_infos]
                 )
 
@@ -427,7 +556,7 @@ def _linear_solve_wrapper(
             result_dp = torch.zeros_like(
                 result, dtype=dp
             )  # do not start with a possibly corrupted result tensor
-            solver_infos = PISOtorch.SolveLinear(
+            solver_infos = backend.SolveLinear(
                 csrMat.toType(dp),
                 rhs.to(dp),
                 result_dp,
@@ -455,11 +584,11 @@ def _linear_solve_wrapper(
             _LOG.warning("Not preconditioned BiCG solve failed, trying preconditioned.")
             debug_out = True
             if debug_out:
-                _LOG.info("Solver infos:\n%s", [str(_) for _ in solver_infos])
+                _LOG.debug("Solver infos:\n%s", [str(_) for _ in solver_infos])
 
             result.zero_()  # may contain nan after failed solve
 
-            solver_infos = PISOtorch.SolveLinear(
+            solver_infos = backend.SolveLinear(
                 csrMat,
                 rhs,
                 result,
@@ -475,12 +604,25 @@ def _linear_solve_wrapper(
                 BiCGwithPreconditioner=True,
             )
 
+        tol_value = tol_torch.detach().cpu().numpy()[0]
+        maxit_value = maxit_torch.detach().cpu().numpy()[0]
+
+        if probe is not None:
+            probe.stop(
+                solver_infos,
+                tolerance=float(tol_value),
+                max_iterations=int(maxit_value),
+                use_BiCG=use_BiCG,
+                transpose=transpose,
+                is_fwd=is_FWD,
+            )
+
         _check_solver_return_infos(
             solver_infos,
             transpose,
             use_BiCG,
-            tol_torch.detach().cpu().numpy()[0],
-            maxit_torch.detach().cpu().numpy()[0],
+            tol_value,
+            maxit_value,
             return_best_result,
             is_FWD=is_FWD,
             debug_out=debug_out,
@@ -488,6 +630,22 @@ def _linear_solve_wrapper(
 
     else:
         result.zero_()
+
+
+def _project_out_constant(v: torch.Tensor, n_rows: int) -> torch.Tensor:
+    """Remove the constant mode from each right-hand side in ``v``.
+
+    For a singular operator whose nullspace is the constant vector (a pure
+    Neumann Laplacian, i.e. every boundary carrying a flux condition and none
+    prescribing a value) ``A y = g`` is solvable only for ``g`` orthogonal to
+    ``null(A^T)``, and its solution is unique only up to ``null(A)``. Both spaces
+    are ``span(1)`` for the symmetric case, so projecting the RHS makes the solve
+    well posed and projecting the result selects the minimum-norm solution.
+    """
+    if n_rows <= 0 or v.numel() % n_rows != 0:
+        return v
+    shaped = v.reshape(-1, n_rows)
+    return (shaped - shaped.mean(dim=1, keepdim=True)).reshape(v.shape)
 
 
 def linear_solve_GPU(
@@ -501,12 +659,53 @@ def linear_solve_GPU(
     double_fallback: bool = False,
     BiCG_with_preconditioner: bool = True,
     BiCG_precondition_fallback: bool = False,
+    adjoint_rank_deficient: bool = False,
+    tag: str = "unknown",
+    x0: torch.Tensor = None,
+    amg_hierarchy=None,
+    matrix_rank_deficient: bool = False,
+    residual_reset_step: int = 0,
 ):
-    A = csrMat.clone()  # detaches and clones all held tensors
-    A.detach()
+    # The matrix is *not* cloned into this closure: a deep copy (value + index
+    # + row) per solve is retained for the whole graph and, living in a Python
+    # closure, is invisible to torch.autograd.graph hooks. Only the integer
+    # sparsity pattern is captured -- it is never differentiated and is the same
+    # object on every step, so it costs one pattern rather than one per solve.
+    # The values travel through save_for_backward instead, which keeps a single
+    # copy.
+    A_index = csrMat.index
+    A_row = csrMat.row
+
+    def _make_matrix(values):
+        """Rebuild the operator from a value vector and the shared pattern."""
+        return PISOtorch.CSRmatrix(values.detach(), A_index, A_row)
+
     convergence_criterion = PISOtorch.ConvergenceCriterion.NORM2_NORMALIZED
     dtype = rhs.dtype
-    matrix_rank_deficient = False  # not use_BiCG
+
+    # Captured at function scope and detached, so it can never become an autograd
+    # input. Exact: the map being differentiated is `b -> A^-1 b`, whose Jacobian
+    # does not depend on the initial iterate.
+    x0_const = (
+        None
+        if x0 is None
+        else x0.detach().reshape(rhs.shape).contiguous()
+    )
+
+    # Safe here because forward and backward both run with grad disabled, so no
+    # V-cycle is traced; `not use_BiCG` asserts the operator is symmetric, which is
+    # what makes the same hierarchy valid for the adjoint solve.
+    use_amg = amg_hierarchy is not None and not use_BiCG
+
+    # `adjoint_rank_deficient` says the operator has the constant nullspace. It
+    # deliberately does *not* touch the forward solve -- neither the kernel flag
+    # above nor the RHS -- so forward trajectories stay bit-identical and this
+    # change is confined to the gradient. The forward is well posed as it stands
+    # because its RHS is compatible by construction (for the pressure Poisson,
+    # `balance_boundary_fluxes` enforces zero net boundary flux). The adjoint RHS
+    # is an incoming gradient with no such guarantee, which is what makes the
+    # backward solve ill-posed on a duct where every boundary prescribes velocity.
+    A_rows = csrMat.getRows()
 
     tol_torch = _get_solver_tolerance_torch(
         tol, dtype
@@ -519,34 +718,84 @@ def linear_solve_GPU(
         def forward(ctx, A_val: torch.Tensor, b: torch.Tensor):
             with SAMPLE("%sCG-FWD" % ("Bi" if use_BiCG else "",)):
                 if _LOG_DEBUG:
-                    _LOG.info("linsolve %sCG forward", "Bi" if use_BiCG else "")
+                    _LOG.debug("linsolve %sCG forward", "Bi" if use_BiCG else "")
 
-                x = None
-                if x is None:
+                # Cloned because the solvers write the iterate into `x` in place.
+                if x0_const is None:
                     x = torch.zeros_like(b)
+                else:
+                    x = x0_const.to(dtype=b.dtype, device=b.device).clone()
 
-                _linear_solve_wrapper(
-                    A,
-                    b,
-                    x,
-                    maxit_torch,
-                    tol_torch,
-                    convergence_criterion,
-                    use_BiCG,
-                    matrix_rank_deficient,
-                    0,
-                    transpose,
-                    False,
-                    return_best_result,
-                    is_FWD=True,
-                    debug_out=False,
-                    double_fallback=double_fallback,
-                    BiCG_with_preconditioner=BiCG_with_preconditioner,
-                    BiCG_precondition_fallback=BiCG_precondition_fallback,
-                )
+                if use_amg:
+                    # Probed like every other solve, or an AMG solve would be
+                    # invisible to solver_stats and its cost unattributable.
+                    probe = (
+                        solver_stats.Probe(b, tag) if solver_stats.is_active() else None
+                    )
+                    if probe is not None:
+                        probe.start()
+                    with torch.no_grad():
+                        solver_infos = amg_pcg_solve(
+                            b,
+                            x,
+                            amg_hierarchy,
+                            tol=_tol_value(tol_torch),
+                            max_iter=max_iter,
+                            return_best_result=return_best_result,
+                        )
+                    if probe is not None:
+                        probe.stop(
+                            solver_infos,
+                            tolerance=_tol_value(tol_torch),
+                            max_iterations=max_iter,
+                            use_BiCG=use_BiCG,
+                            transpose=transpose,
+                            is_fwd=True,
+                        )
+                    _check_solver_return_infos(
+                        solver_infos,
+                        transpose,
+                        use_BiCG,
+                        _tol_value(tol_torch),
+                        max_iter,
+                        return_best_result,
+                        is_FWD=True,
+                        debug_out=False,
+                    )
+                else:
+                    # Local, so it is released when forward returns; only A_val is
+                    # retained, via save_for_backward below.
+                    A_fwd = _make_matrix(A_val)
+
+                    _linear_solve_wrapper(
+                        A_fwd,
+                        b,
+                        x,
+                        maxit_torch,
+                        tol_torch,
+                        convergence_criterion,
+                        use_BiCG,
+                        matrix_rank_deficient,
+                        residual_reset_step,
+                        transpose,
+                        False,
+                        return_best_result,
+                        is_FWD=True,
+                        debug_out=False,
+                        double_fallback=double_fallback,
+                        BiCG_with_preconditioner=BiCG_with_preconditioner,
+                        BiCG_precondition_fallback=BiCG_precondition_fallback,
+                        tag=tag,
+                    )
+
+                    del A_fwd
 
                 # ctx.save_for_backward(A_val, b, x)
                 ctx.save_for_backward(A_val, x)
+                # Scale `tol` was resolved against. `tol_torch` is computed once,
+                # from *this* RHS, but backward solves a system whose RHS is
+                # grad_x -- see the tolerance rescale in backward().
+                ctx.fwd_rhs_norm = b.detach().norm()
 
             return x  # , (0<=it and it<maxit)
 
@@ -555,7 +804,7 @@ def linear_solve_GPU(
         def backward(ctx, grad_x):
             with SAMPLE("%sCG-BWD" % ("Bi" if use_BiCG else "",)):
                 if _LOG_DEBUG:
-                    _LOG.info("linsolve %sCG backward", "Bi" if use_BiCG else "")
+                    _LOG.debug("linsolve %sCG backward", "Bi" if use_BiCG else "")
 
                 grad_b = None
                 grad_A_val = None
@@ -563,31 +812,103 @@ def linear_solve_GPU(
                     with SAMPLE("RHSgrad"):
                         # A_val, b, x = ctx.saved_tensors
                         A_val, x = ctx.saved_tensors
+                        A = _make_matrix(A_val)
                         grad_b = torch.zeros_like(grad_x)
+
+                        # Make the adjoint solve well posed on a singular
+                        # operator. Without this the incoming gradient carries a
+                        # component along null(A^T) that no iterate can reduce,
+                        # so CG cannot converge and returns a vector whose scale
+                        # is set by the residual floor rather than by the
+                        # gradient -- the mechanism behind the momentum adjoint
+                        # gaining ~1e10 per step on the MHD duct.
+                        if adjoint_rank_deficient:
+                            grad_x = _project_out_constant(grad_x, A_rows)
+
+                        # NORM2_NORMALIZED is an *absolute* RMS, and tol_torch
+                        # was resolved against the forward RHS, so on its own it
+                        # asks the adjoint for something unrelated to the adjoint:
+                        # unreachable when ||grad_x|| >> ||b||, and already met at
+                        # the zero iterate when ||grad_x|| << ||b||, which returns
+                        # a zero adjoint and severs the chain. Rescaling holds it
+                        # to the forward's relative accuracy either way.
+                        #
+                        # After the projection above, so the norm is the one the
+                        # solve actually starts from
+                        bwd_tol = _rescaled_bwd_tolerance(
+                            tol_torch, ctx.fwd_rhs_norm, grad_x, n_rows=A_rows
+                        )
 
                         # if not grad_x.eq(0).all(): # will not converge if all 0, but grad should be 0 anyways in that case
                         # solver_info = PISOtorch.SolveLinear(A, grad_x, grad_b, maxit_torch, tol_torch, conv, use_BiCG, False, 0, not transpose, False, return_best_result)
 
                         # _check_solver_return_infos(solver_info, not transpose, use_BiCG, tol, max_iter, return_best_result, is_FWD=False, debug_out=False)
-                        _linear_solve_wrapper(
-                            A,
-                            grad_x,
-                            grad_b,
-                            maxit_torch,
-                            tol_torch,
-                            convergence_criterion,
-                            use_BiCG,
-                            matrix_rank_deficient,
-                            0,
-                            not transpose,
-                            False,
-                            return_best_result,
-                            is_FWD=False,
-                            debug_out=False,
-                            double_fallback=double_fallback,
-                            BiCG_with_preconditioner=BiCG_with_preconditioner,
-                            BiCG_precondition_fallback=BiCG_precondition_fallback,
-                        )
+                        if use_amg:
+                            # A^T == A, so the same hierarchy preconditions the
+                            # adjoint solve; grad_b is already a zero iterate.
+                            probe = (
+                                solver_stats.Probe(grad_x, tag)
+                                if solver_stats.is_active()
+                                else None
+                            )
+                            if probe is not None:
+                                probe.start()
+                            with torch.no_grad():
+                                solver_infos = amg_pcg_solve(
+                                    grad_x,
+                                    grad_b,
+                                    amg_hierarchy,
+                                    tol=_tol_value(bwd_tol),
+                                    max_iter=max_iter,
+                                    return_best_result=return_best_result,
+                                )
+                            if probe is not None:
+                                probe.stop(
+                                    solver_infos,
+                                    tolerance=_tol_value(bwd_tol),
+                                    max_iterations=max_iter,
+                                    use_BiCG=use_BiCG,
+                                    transpose=not transpose,
+                                    is_fwd=False,
+                                )
+                            _check_solver_return_infos(
+                                solver_infos,
+                                not transpose,
+                                use_BiCG,
+                                _tol_value(bwd_tol),
+                                max_iter,
+                                return_best_result,
+                                is_FWD=False,
+                                debug_out=False,
+                            )
+                        else:
+                            _linear_solve_wrapper(
+                                A,
+                                grad_x,
+                                grad_b,
+                                maxit_torch,
+                                bwd_tol,
+                                convergence_criterion,
+                                use_BiCG,
+                                matrix_rank_deficient,
+                                0,
+                                not transpose,
+                                False,
+                                return_best_result,
+                                is_FWD=False,
+                                debug_out=False,
+                                double_fallback=double_fallback,
+                                BiCG_with_preconditioner=BiCG_with_preconditioner,
+                                BiCG_precondition_fallback=BiCG_precondition_fallback,
+                                tag=tag,
+                            )
+
+                    # Pick the minimum-norm adjoint: with a constant nullspace
+                    # grad_b is determined only up to a constant, and letting
+                    # that component ride along would feed an arbitrary offset
+                    # into SparseOuterProduct below and into the next step.
+                    if adjoint_rank_deficient:
+                        grad_b = _project_out_constant(grad_b, A_rows)
 
                     # print("grad_b", grad_b)
                     if ctx.needs_input_grad[0]:  # gradient w.r.t. matrix
@@ -596,7 +917,7 @@ def linear_solve_GPU(
                                 A.WithZeroValue()
                             )  # creates new tensor for a.value initialized to 0
                             grad_A_val = grad_A.value
-                            # if _LOG_DEBUG: _LOG.info("A %s, db %s, x %s", grad_A, grad_b.size(), x.size())
+                            # if _LOG_DEBUG: _LOG.debug("A %s, db %s, x %s", grad_A, grad_b.size(), x.size())
                             if grad_A.getRows() == grad_b.size(0):  # no batched RHS
                                 PISOtorch.SparseOuterProduct(grad_b, x, grad_A)
                             else:
@@ -644,7 +965,7 @@ def SetupAdvectionMatrix(
         def forward(ctx, *tracked_tensors):
             with SAMPLE("SetupAdvectionMatrix-FWD"):
                 if _LOG_DEBUG:
-                    _LOG.info("SetupAdvectionMatrix forward")
+                    _LOG.debug("SetupAdvectionMatrix forward")
 
                 domain.CreateA()
                 domain.C.CreateValue()
@@ -671,7 +992,7 @@ def SetupAdvectionMatrix(
             if any(ctx.needs_input_grad):
                 with SAMPLE("SetupAdvectionMatrix-BWD"):
                     if _LOG_DEBUG:
-                        _LOG.info("SetupAdvectionMatrix backward")
+                        _LOG.debug("SetupAdvectionMatrix backward")
                     time_step = ctx.saved_tensors[-1]
                     # domain.setAGrad(A_grad)
                     _set_gradient_input(
@@ -703,11 +1024,11 @@ def SetupAdvectionMatrix(
                     )
             else:
                 if _LOG_DEBUG:
-                    _LOG.info("SetupAdvectionMatrix backward empty")
+                    _LOG.debug("SetupAdvectionMatrix backward empty")
                 # block_velocity_grad = [None] * domain.getNumBlocks()
                 _, grad_tensors = flatten_domain(domain, grad_tensor_filter, empty=True)
 
-            # if _LOG_DEBUG: _LOG.info("->velocity grad: %s", block_velocity_grad)
+            # if _LOG_DEBUG: _LOG.debug("->velocity grad: %s", block_velocity_grad)
 
             return (*grad_tensors,)
 
@@ -731,7 +1052,7 @@ def SetupAdvectionScalar(domain, time_step, non_ortho_flags):
     - domain.scalarRHS
     """
     is_non_ortho = check_non_ortho_rhs(non_ortho_flags)
-    # _LOG.info("SetupAdvectionScalar is_non_ortho: %s",is_non_ortho)
+    # _LOG.debug("SetupAdvectionScalar is_non_ortho: %s",is_non_ortho)
     # additionally uses domain.scalarResult for non-orthogonal handling on the RHS
 
     tracked_tensor_filter = [
@@ -762,7 +1083,7 @@ def SetupAdvectionScalar(domain, time_step, non_ortho_flags):
         def forward(ctx, *tracked_tensors):
             with SAMPLE("SetupAdvectionScalar-FWD"):
                 if _LOG_DEBUG:
-                    _LOG.info("scalarRHS forward")
+                    _LOG.debug("scalarRHS forward")
                 with torch.no_grad():
                     domain.CreateScalarRHS()
                     domain.UpdateDomainData()
@@ -790,7 +1111,7 @@ def SetupAdvectionScalar(domain, time_step, non_ortho_flags):
                 if any(ctx.needs_input_grad):
                     with SAMPLE("SetupAdvectionScalar-BWD"):
                         if _LOG_DEBUG:
-                            _LOG.info("scalarRHS backward")
+                            _LOG.debug("scalarRHS backward")
                         time_step = ctx.saved_tensors[-1]
                         if ctx.saved_tensors_domain_dict is not None:
                             set_domain_tensors_from_flat(
@@ -824,7 +1145,7 @@ def SetupAdvectionScalar(domain, time_step, non_ortho_flags):
                         )
                 else:
                     if _LOG_DEBUG:
-                        _LOG.info("scalarRHS backward empty")
+                        _LOG.debug("scalarRHS backward empty")
                     _, grad_tensors = flatten_domain(
                         domain, grad_tensor_filter, empty=True
                     )
@@ -883,7 +1204,7 @@ def SetupAdvectionVelocity(
         def forward(ctx, *tracked_tensors):
             with SAMPLE("SetupAdvectionVelocity-FWD"):
                 if _LOG_DEBUG:
-                    _LOG.info("velocityRHS forward")
+                    _LOG.debug("velocityRHS forward")
 
                 domain.CreateVelocityRHS()
                 domain.UpdateDomainData()
@@ -913,7 +1234,7 @@ def SetupAdvectionVelocity(
             if any(ctx.needs_input_grad):
                 with SAMPLE("SetupAdvectionVelocity-BWD"):
                     if _LOG_DEBUG:
-                        _LOG.info("velocityRHS backward")
+                        _LOG.debug("velocityRHS backward")
                     time_step = ctx.saved_tensors[-1]
                     if ctx.saved_tensors_domain_dict is not None:
                         set_domain_tensors_from_flat(
@@ -938,7 +1259,7 @@ def SetupAdvectionVelocity(
                     PISOtorch.SetupAdvectionVelocityGrad(
                         domain, time_step, non_ortho_flags, apply_pressure_gradient
                     )
-                    # _LOG.info("boundary[0].velocityGrad:\n%s", domain.getBlock(0).getBoundary(0).velocityGrad)
+                    # _LOG.debug("boundary[0].velocityGrad:\n%s", domain.getBlock(0).getBoundary(0).velocityGrad)
                     _, grad_tensors = flatten_domain(
                         domain,
                         grad_tensor_filter,
@@ -946,7 +1267,7 @@ def SetupAdvectionVelocity(
                     )
             else:
                 if _LOG_DEBUG:
-                    _LOG.info("velocityRHS backward empty")
+                    _LOG.debug("velocityRHS backward empty")
                 _, grad_tensors = flatten_domain(domain, grad_tensor_filter, empty=True)
 
             return (*grad_tensors,)
@@ -967,7 +1288,7 @@ def CopyScalarResultToBlocks(domain):
         def forward(ctx, scalar_result):
             with SAMPLE("CopyScalarResultToBlocks-FWD"):
                 if _LOG_DEBUG:
-                    _LOG.info("copy scalar forward")
+                    _LOG.debug("copy scalar forward")
 
                 domain.CreatePassiveScalarOnBlocks()
                 domain.UpdateDomainData()
@@ -983,7 +1304,7 @@ def CopyScalarResultToBlocks(domain):
             if ctx.needs_input_grad[0]:
                 with SAMPLE("CopyScalarResultToBlocks-BWD"):
                     if _LOG_DEBUG:
-                        _LOG.info("copy scalar backward")
+                        _LOG.debug("copy scalar backward")
                     for block, s_grad in zip(
                         domain.getBlocks(), blocks_passive_scalar_grad
                     ):
@@ -994,7 +1315,7 @@ def CopyScalarResultToBlocks(domain):
                     scalarResultGrad = domain.scalarResultGrad
             else:
                 if _LOG_DEBUG:
-                    _LOG.info("copy scalar backward empty")
+                    _LOG.debug("copy scalar backward empty")
                 scalarResultGrad = None
 
             return scalarResultGrad
@@ -1015,7 +1336,7 @@ def CopyScalarResultFromBlocks(domain):
         def forward(ctx, *tracked_tensors):
             with SAMPLE("CopyScalarResultFromBlocks-FWD"):
                 if _LOG_DEBUG:
-                    _LOG.info("copy scalar forward")
+                    _LOG.debug("copy scalar forward")
 
                 domain.CreateScalarResult()
                 domain.UpdateDomainData()
@@ -1033,7 +1354,7 @@ def CopyScalarResultFromBlocks(domain):
             if any(ctx.needs_input_grad):
                 with SAMPLE("CopyScalarResultFromBlocks-BWD"):
                     if _LOG_DEBUG:
-                        _LOG.info("copy scalar backward")
+                        _LOG.debug("copy scalar backward")
                     domain.setScalarResultGrad(scalar_result_grad)
                     domain.CreatePassiveScalarGradOnBlocks()
                     domain.UpdateDomainData()
@@ -1043,7 +1364,7 @@ def CopyScalarResultFromBlocks(domain):
                     ]
             else:
                 if _LOG_DEBUG:
-                    _LOG.info("copy scalar backward empty")
+                    _LOG.debug("copy scalar backward empty")
                 block_scalar_grad = [None] * domain.getNumBlocks()
 
             return (*block_scalar_grad,)
@@ -1058,7 +1379,7 @@ def CopyVelocityResultToBlocks(domain):
         def forward(ctx, velocity_result):
             with SAMPLE("CopyVelocityResultToBlocks-FWD"):
                 if _LOG_DEBUG:
-                    _LOG.info("copy velocity to forward")
+                    _LOG.debug("copy velocity to forward")
 
                 domain.CreateVelocityOnBlocks()
                 domain.UpdateDomainData()
@@ -1072,7 +1393,7 @@ def CopyVelocityResultToBlocks(domain):
             if ctx.needs_input_grad[0]:
                 with SAMPLE("CopyVelocityResultToBlocks-BWD"):
                     if _LOG_DEBUG:
-                        _LOG.info("copy velocity to backward")
+                        _LOG.debug("copy velocity to backward")
                     for block, v_grad in zip(domain.getBlocks(), blocks_velocity_grad):
                         v_grad = v_grad.contiguous()
                         block.setVelocityGrad(v_grad)
@@ -1082,7 +1403,7 @@ def CopyVelocityResultToBlocks(domain):
                     velocityResultGrad = domain.velocityResultGrad
             else:
                 if _LOG_DEBUG:
-                    _LOG.info("copy velocity to backward empty")
+                    _LOG.debug("copy velocity to backward empty")
                 velocityResultGrad = None
 
             return velocityResultGrad
@@ -1096,7 +1417,7 @@ def CopyVelocityResultFromBlocks(domain):
         def forward(ctx, *tracked_tensors):
             with SAMPLE("CopyVelocityResultFromBlocks-FWD"):
                 if _LOG_DEBUG:
-                    _LOG.info("copy velocity from forward")
+                    _LOG.debug("copy velocity from forward")
 
                 domain.CreateVelocityResult()
                 domain.UpdateDomainData()
@@ -1110,7 +1431,7 @@ def CopyVelocityResultFromBlocks(domain):
             if any(ctx.needs_input_grad):
                 with SAMPLE("CopyVelocityResultFromBlocks-BWD"):
                     if _LOG_DEBUG:
-                        _LOG.info("copy velocity from backward")
+                        _LOG.debug("copy velocity from backward")
                     domain.setVelocityResultGrad(velocity_result_grad)
                     domain.CreateVelocityGradOnBlocks()
                     domain.UpdateDomainData()
@@ -1120,7 +1441,7 @@ def CopyVelocityResultFromBlocks(domain):
                     ]
             else:
                 if _LOG_DEBUG:
-                    _LOG.info("copy velocity from backward empty")
+                    _LOG.debug("copy velocity from backward empty")
                 block_velocity_grad = [None] * domain.getNumBlocks()
 
             return (*block_velocity_grad,)
@@ -1135,7 +1456,7 @@ def CopyPressureResultToBlocks(domain):
         def forward(ctx, pressure_result):
             with SAMPLE("CopyPressureResultToBlocks-FWD"):
                 if _LOG_DEBUG:
-                    _LOG.info("copy pressure to forward")
+                    _LOG.debug("copy pressure to forward")
 
                 domain.CreatePressureOnBlocks()
                 domain.UpdateDomainData()
@@ -1149,7 +1470,7 @@ def CopyPressureResultToBlocks(domain):
             if ctx.needs_input_grad[0]:
                 with SAMPLE("CopyPressureResultToBlocks-BWD"):
                     if _LOG_DEBUG:
-                        _LOG.info("copy pressure to backward")
+                        _LOG.debug("copy pressure to backward")
                     for block, p_grad in zip(domain.getBlocks(), blocks_pressure_grad):
                         block.setPressureGrad(p_grad)
                     domain.CreatePressureResultGrad()
@@ -1158,12 +1479,99 @@ def CopyPressureResultToBlocks(domain):
                     pressureResultGrad = domain.pressureResultGrad
             else:
                 if _LOG_DEBUG:
-                    _LOG.info("copy pressure to backward empty")
+                    _LOG.debug("copy pressure to backward empty")
                 pressureResultGrad = None
 
             return pressureResultGrad
 
     CopyPressureResultToBlocksFunction.apply(domain.pressureResult)
+
+
+def CopyEpotResultToBlocks(domain):
+    class CopyEpotResultToBlocksFunction(torch.autograd.Function):
+        @staticmethod
+        def forward(ctx, epot_result):
+            with SAMPLE("CopyEpotResultToBlocks-FWD"):
+                if _LOG_DEBUG:
+                    _LOG.debug("copy epot to blocks forward")
+
+                domain.CreateEpotOnBlocks()
+                domain.UpdateDomainData()
+                PISOtorch.CopyEpotResultToBlocks(domain)
+
+                return (*[block.epot for block in domain.getBlocks()],)
+
+        @staticmethod
+        @torch.autograd.function.once_differentiable
+        def backward(ctx, *blocks_epot_grad):
+            if ctx.needs_input_grad[0]:
+                with SAMPLE("CopyEpotResultToBlocks-BWD"):
+                    if _LOG_DEBUG:
+                        _LOG.debug("copy epot to blocks backward")
+                    for block, e_grad in zip(domain.getBlocks(), blocks_epot_grad):
+                        block.setEpotGrad(e_grad.contiguous())
+                    domain.CreateEpotResultGrad()
+                    domain.UpdateDomainData()
+                    PISOtorch.CopyEpotResultGradFromBlocks(domain)
+                    return domain.epotResultGrad
+            else:
+                if _LOG_DEBUG:
+                    _LOG.debug("copy epot to blocks backward empty")
+                return None
+
+    CopyEpotResultToBlocksFunction.apply(domain.epotResult)
+
+
+_EXCLUDED_GRADIENTS["ComputeEpotRHS"] = (set(), set())
+
+
+def ComputeEpotRHS(domain, u_cross_eb_flat):
+    class ComputeEpotRHSFunction(torch.autograd.Function):
+        @staticmethod
+        def forward(ctx, vec_field):
+            with SAMPLE("ComputeEpotRHS-FWD"):
+                if _LOG_DEBUG:
+                    _LOG.debug("ComputeEpotRHS forward")
+                return PISOtorch.ComputeEpotRHS(domain, vec_field.contiguous())
+
+        @staticmethod
+        @torch.autograd.function.once_differentiable
+        def backward(ctx, grad_divergence):
+            if ctx.needs_input_grad[0]:
+                with SAMPLE("ComputeEpotRHS-BWD"):
+                    if _LOG_DEBUG:
+                        _LOG.debug("ComputeEpotRHS backward")
+                    return PISOtorch.ComputeEpotRHSGrad(domain, grad_divergence)
+            return None
+
+    return ComputeEpotRHSFunction.apply(u_cross_eb_flat)
+
+
+_EXCLUDED_GRADIENTS["ComputeCurrentDensityFaceBased"] = (set(), set())
+
+
+def ComputeCurrentDensityFaceBased(domain, epot_result, u_cross_eb_flat):
+    class ComputeCurrentDensityFaceBasedFunction(torch.autograd.Function):
+        @staticmethod
+        def forward(ctx, epot, u_cross_eb):
+            with SAMPLE("ComputeCurrentDensityFaceBased-FWD"):
+                if _LOG_DEBUG:
+                    _LOG.debug("ComputeCurrentDensityFaceBased forward")
+                epot = epot.contiguous()
+                u_cross_eb = u_cross_eb.contiguous()
+                ctx.save_for_backward(epot, u_cross_eb)
+                return PISOtorch.ComputeCurrentDensityFaceBased(domain, epot, u_cross_eb)
+
+        @staticmethod
+        @torch.autograd.function.once_differentiable
+        def backward(ctx, grad_J):
+            epot, u_cross_eb = ctx.saved_tensors
+            grad_epot, grad_ucb = PISOtorch.ComputeCurrentDensityFaceBasedGrad(
+                domain, epot, u_cross_eb, grad_J
+            )
+            return grad_epot, grad_ucb
+
+    return ComputeCurrentDensityFaceBasedFunction.apply(epot_result, u_cross_eb_flat)
 
 
 _EXCLUDED_GRADIENTS["SetupPressureCorrection"] = (set(), set())
@@ -1215,7 +1623,7 @@ def SetupPressureCorrection(
         def forward(ctx, *tracked_tensors):
             with SAMPLE("SetupPressureCorrection-FWD"):
                 if _LOG_DEBUG:
-                    _LOG.info("setup pressure forward")
+                    _LOG.debug("setup pressure forward")
 
                 domain.CreatePressureRHS()
                 domain.CreatePressureRHSdiv()
@@ -1259,7 +1667,7 @@ def SetupPressureCorrection(
             if any(ctx.needs_input_grad):
                 with SAMPLE("SetupPressureCorrection-BWD"):
                     if _LOG_DEBUG:
-                        _LOG.info("setup pressure backward")
+                        _LOG.debug("setup pressure backward")
 
                     time_step = ctx.saved_tensors[-1]
                     if ctx.saved_tensors_domain_dict is not None:
@@ -1315,7 +1723,7 @@ def SetupPressureCorrection(
                     )
             else:
                 if _LOG_DEBUG:
-                    _LOG.info("setup pressure backward empty")
+                    _LOG.debug("setup pressure backward empty")
                 _, grad_tensors = flatten_domain(domain, grad_tensor_filter, empty=True)
 
             return (*grad_tensors,)
@@ -1352,7 +1760,7 @@ def SetupPressureMatrix(domain, time_step, non_ortho_flags, use_face_transform=F
         def forward(ctx, A_diag):
             with SAMPLE("SetupPressureMatrix-FWD"):
                 if _LOG_DEBUG:
-                    _LOG.info("setup pressure matrix forward")
+                    _LOG.debug("setup pressure matrix forward")
 
                 domain.P.CreateValue()
                 domain.UpdateDomainData()
@@ -1378,7 +1786,7 @@ def SetupPressureMatrix(domain, time_step, non_ortho_flags, use_face_transform=F
         @torch.autograd.function.once_differentiable
         def backward(ctx, P_value_grad):
             if _LOG_DEBUG:
-                _LOG.info("setup pressure matrix backward (empty)")
+                _LOG.debug("setup pressure matrix backward (empty)")
             # if not non_ortho_flags==0: raise NotImplementedError("SetupPressureMatrix: Only Orthogonal gradients are supported.")
             if use_face_transform:
                 raise NotImplementedError(
@@ -1482,7 +1890,7 @@ def SetupPressureRHS(
         def forward(ctx, *tracked_tensors):
             with SAMPLE("SetupPressureRHS-FWD"):
                 if _LOG_DEBUG:
-                    _LOG.info("setup pressure RHS forward")
+                    _LOG.debug("setup pressure RHS forward")
 
                 domain.CreatePressureRHS()
                 domain.CreatePressureRHSdiv()
@@ -1525,7 +1933,7 @@ def SetupPressureRHS(
             if any(ctx.needs_input_grad):
                 with SAMPLE("SetupPressureRHS-BWD"):
                     if _LOG_DEBUG:
-                        _LOG.info("setup pressure RHS backward")
+                        _LOG.debug("setup pressure RHS backward")
 
                     time_step = ctx.saved_tensors[-1]
                     if ctx.saved_tensors_domain_dict is not None:
@@ -1572,7 +1980,7 @@ def SetupPressureRHS(
                     )
             else:
                 if _LOG_DEBUG:
-                    _LOG.info("setup pressure backward empty")
+                    _LOG.debug("setup pressure backward empty")
                 _, grad_tensors = flatten_domain(domain, grad_tensor_filter, empty=True)
 
             return (*grad_tensors,)
@@ -1622,7 +2030,7 @@ def SetupPressureRHSdiv(
         def forward(ctx, *tracked_tensors):
             with SAMPLE("SetupPressureRHSdiv-FWD"):
                 if _LOG_DEBUG:
-                    _LOG.info("setup pressure RHS div forward")
+                    _LOG.debug("setup pressure RHS div forward")
 
                 domain.CreatePressureRHSdiv()
                 domain.UpdateDomainData()
@@ -1663,7 +2071,7 @@ def SetupPressureRHSdiv(
             if any(ctx.needs_input_grad):
                 with SAMPLE("SetupPressureRHSdiv-BWD"):
                     if _LOG_DEBUG:
-                        _LOG.info("setup pressure RHS div backward")
+                        _LOG.debug("setup pressure RHS div backward")
 
                     time_step = ctx.saved_tensors[-1]
                     if ctx.saved_tensors_domain_dict is not None:
@@ -1700,7 +2108,7 @@ def SetupPressureRHSdiv(
                     )
             else:
                 if _LOG_DEBUG:
-                    _LOG.info("setup pressure backward empty")
+                    _LOG.debug("setup pressure backward empty")
                 _, grad_tensors = flatten_domain(domain, grad_tensor_filter, empty=True)
 
             return tuple(grad_tensors)
@@ -1711,8 +2119,13 @@ def SetupPressureRHSdiv(
 _EXCLUDED_GRADIENTS["CorrectVelocity"] = (set(), set())
 
 
-def CorrectVelocity(domain, time_step, version, timeStepNorm=False):
+def CorrectVelocity(
+    domain, time_step, version, timeStepNorm=False, exclude_pressure_grad=False
+):
     """
+    `exclude_pressure_grad` drops PRESSURE_GRAD from this call's backward only,
+    without touching the global `_EXCLUDED_GRADIENTS` entry.
+
     inputs:
     - block.pressure
     - domain.A
@@ -1738,7 +2151,7 @@ def CorrectVelocity(domain, time_step, version, timeStepNorm=False):
         def forward(ctx, *tracked_tensors):
             with SAMPLE("CorrectVelocity-FWD"):
                 if _LOG_DEBUG:
-                    _LOG.info("correct velocity forward")
+                    _LOG.debug("correct velocity forward")
 
                 domain.CreateVelocityResult()
                 domain.UpdateDomainData()
@@ -1772,7 +2185,7 @@ def CorrectVelocity(domain, time_step, version, timeStepNorm=False):
             if any(ctx.needs_input_grad):
                 with SAMPLE("CorrectVelocity-BWD"):
                     if _LOG_DEBUG:
-                        _LOG.info("correct velocity backward")
+                        _LOG.debug("correct velocity backward")
 
                     time_step = ctx.saved_tensors[-1]
                     if ctx.saved_tensors_domain_dict is not None:
@@ -1793,14 +2206,17 @@ def CorrectVelocity(domain, time_step, version, timeStepNorm=False):
                     domain.UpdateDomainData()
 
                     PISOtorch.CorrectVelocityGrad(domain, time_step, timeStepNorm)
+                    exclusion_list = _EXCLUDED_GRADIENTS["CorrectVelocity"][1]
+                    if exclude_pressure_grad:
+                        exclusion_list = exclusion_list | {"PRESSURE_GRAD"}
                     _, grad_tensors = flatten_domain(
                         domain,
                         grad_tensor_filter,
-                        exclusion_list=_EXCLUDED_GRADIENTS["CorrectVelocity"][1],
+                        exclusion_list=exclusion_list,
                     )
             else:
                 if _LOG_DEBUG:
-                    _LOG.info("correct velocity backward empty")
+                    _LOG.debug("correct velocity backward empty")
                 _, grad_tensors = flatten_domain(domain, grad_tensor_filter, empty=True)
 
             return (*grad_tensors,)
@@ -1837,6 +2253,12 @@ def detach_domain_fwd(domain):
     domain.setPressureRHS(domain.pressureRHS.detach())
     domain.setPressureRHSdiv(domain.pressureRHSdiv.detach())
     domain.setPressureResult(domain.pressureResult.detach())
+    if domain.hasEpot():
+        for block in domain.getBlocks():
+            if block.hasEpot():
+                block.setEpot(block.epot.detach())
+        domain.setEpotRHS(domain.epotRHS.detach())
+        domain.setEpotResult(domain.epotResult.detach())
 
 
 def is_tensor_empty(tensor):
@@ -1869,6 +2291,11 @@ def detach_domain_grad(domain):
         domain.setPressureRHSdivGrad(domain.pressureRHSdivGrad.detach())
     if not is_tensor_empty(domain.pressureResultGrad):
         domain.setPressureResultGrad(domain.pressureResultGrad.detach())
+    if domain.hasEpotResultGrad():
+        for block in domain.getBlocks():
+            if block.hasEpotGrad() and not is_tensor_empty(block.epotGrad):
+                block.setEpotGrad(block.epotGrad.detach())
+        domain.setEpotResultGrad(domain.epotResultGrad.detach())
 
 
 def detach_domain(domain):
@@ -1904,7 +2331,7 @@ def matmul(
         def forward(ctx, vectorMatrixA, vectorMatrixB):
             with SAMPLE("matmul-FWD"):
                 if _LOG_DEBUG:
-                    _LOG.info("matmul forward")
+                    _LOG.debug("matmul forward")
 
                 ctx.transposeA = transposeA
                 ctx.invertA = invertA
@@ -1934,7 +2361,7 @@ def matmul(
             if any(ctx.needs_input_grad):
                 with SAMPLE("matmul-BWD"):
                     if _LOG_DEBUG:
-                        _LOG.info("matmul backward")
+                        _LOG.debug("matmul backward")
 
                     if ctx.invertOutput:
                         raise NotImplementedError(
@@ -1970,7 +2397,7 @@ def matmul(
                     )
             else:
                 if _LOG_DEBUG:
-                    _LOG.info("matmul backward empty")
+                    _LOG.debug("matmul backward empty")
                 grad_tensors = (None, None)
 
             return (*grad_tensors,)

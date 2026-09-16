@@ -1,3 +1,4 @@
+from ._palette import DEFAULT_PALETTE
 from .config import config
 from .envs.airfoil import (
     AIRFOIL_2D_DEFAULT_CONFIG,
@@ -13,13 +14,19 @@ from .envs.cylinder import (
     CylinderJetEnv3D,
     CylinderRotEnv2D,
 )
-from .envs.rbc import RBC_2D_DEFAULT_CONFIG, RBC_3D_DEFAULT_CONFIG, RBCEnv2D, RBCEnv3D
+from .envs.rbc import (
+    RBC_2D_DEFAULT_CONFIG,
+    RBC_3D_DEFAULT_CONFIG,
+    RBCEnv2D,
+    RBCEnv3D,
+)
 from .envs.tcf import (
     LARGE_TCF_3D_DEFAULT_CONFIG,
     SMALL_TCF_3D_DEFAULT_CONFIG,
     TCF3DBothEnv,
     TCF3DBottomEnv,
 )
+from .logging import get_logger, set_verbosity
 from .registry import make, register
 
 # ------------------------------------------------------------------------
@@ -352,4 +359,4 @@ register(
 )
 
 
-__all__ = ["config", "make"]
+__all__ = ["DEFAULT_PALETTE", "config", "get_logger", "make", "set_verbosity"]

@@ -250,8 +250,8 @@ def make_channel_flow_domain(
     )
 
     if init_with_noise:
-        from fluidgym.simulation.extensions import (
-            SimplexNoiseVariations,  # type: ignore[import-untyped,import-not-found]
+        from fluidgym.simulation.extensions import (  # type: ignore[attr-defined]
+            SimplexNoiseVariations,  # type: ignore
         )
 
         curl_noise = SimplexNoiseVariations.GenerateSimplexNoiseVariation(

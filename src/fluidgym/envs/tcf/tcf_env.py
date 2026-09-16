@@ -1,5 +1,6 @@
 """Environment for turbulent channel flow control."""
 
+from collections.abc import Mapping
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,7 @@ import pandas as pd
 import torch
 from gymnasium import spaces
 
-from fluidgym.config import config as global_config
+from fluidgym._palette import DEFAULT_PALETTE
 from fluidgym.envs.fluid_env import FluidEnv, Stats
 from fluidgym.envs.tcf.grid import (
     get_van_driest_sqr,
@@ -26,11 +27,10 @@ from fluidgym.simulation.extensions import (
 )
 from fluidgym.simulation.helpers import get_cell_centers, get_cell_size
 from fluidgym.simulation.pict.data import TCF_tools
-from fluidgym.simulation.pict.PISOtorch_simulation import (
-    append_prep_fn,
-)
 from fluidgym.simulation.pict.util.output import _resample_block_data
+from fluidgym.simulation.sgs import append_sgs_viscosity_prep_fn
 from fluidgym.simulation.simulation import Simulation
+from fluidgym.simulation.solver_tolerance import SolverTolerance
 from fluidgym.types import EnvMode
 
 Q_CRITERION_ISOS = {
@@ -169,6 +169,38 @@ class TCF3DBottomEnv(FluidEnv):
     differentiable: bool
         Whether to enable differentiable simulation mode. Defaults to False.
 
+    advection_tol: float | SolverTolerance | Mapping | None
+        Tolerance for the momentum and passive-scalar advection solves. None (the
+        default) keeps the tolerance this environment is tuned at.
+
+    pressure_tol: float | SolverTolerance | Mapping | None
+        Tolerance for the pressure solve. None (the default) keeps the tolerance
+        this environment is tuned at.
+
+    pressure_tol_intermediate: float | SolverTolerance | Mapping | None
+        Tolerance for the pressure solves before the final corrector. None (the
+        default) applies ``pressure_tol`` everywhere.
+
+    pressure_warm_start: bool
+        Whether to seed each pressure solve with the previous sub-step's result.
+        Defaults to False.
+
+    linear_solve_max_iter: int | None
+        Iteration limit for the advection and pressure solves. None (the default)
+        leaves the solver's own limit in place.
+
+    exclude_advection_solve_gradients: bool | None
+        Drop the gradient of the advection solve. Diagnostic only; None (the
+        default) keeps it.
+
+    exclude_pressure_solve_gradients: bool | None
+        Drop the gradient of the pressure solve. Diagnostic only; None (the
+        default) keeps it.
+
+    exclude_pressure_gradient_adjoint: bool | None
+        Drop the pressure path of the PISO velocity-correction backward.
+        Diagnostic only; None (the default) keeps it.
+
     References
     ----------
     [1] L. Guastoni, J. Rabault, P. Schlatter, H. Azizpour, and R. Vinuesa, “Deep
@@ -185,6 +217,11 @@ class TCF3DBottomEnv(FluidEnv):
 
     _actuation: str = "bottom"
     _supports_marl: bool = True
+
+    # Half of the 10 PISO steps of an env step (``dt = step_length / 10``): the 3D
+    # replay tape is what caps a differentiable rollout here (see
+    # ``FluidEnv.bptt_segment_size``)
+    _default_bptt_segment_size: int | None = 5
 
     # We need to be able to disable action scaling for opposition control
     _scale_actions: bool = True
@@ -237,6 +274,16 @@ class TCF3DBottomEnv(FluidEnv):
         randomize_initial_state: bool = True,
         enable_actions: bool = True,
         differentiable: bool = False,
+        advection_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol_intermediate: (
+            float | SolverTolerance | Mapping[str, float] | None
+        ) = None,
+        pressure_warm_start: bool = False,
+        linear_solve_max_iter: int | None = None,
+        exclude_advection_solve_gradients: bool | None = None,
+        exclude_pressure_solve_gradients: bool | None = None,
+        exclude_pressure_gradient_adjoint: bool | None = None,
     ):
         self._L = L
         self._D = D
@@ -277,6 +324,14 @@ class TCF3DBottomEnv(FluidEnv):
             randomize_initial_state=randomize_initial_state,
             enable_actions=enable_actions,
             differentiable=differentiable,
+            advection_tol=advection_tol,
+            pressure_tol=pressure_tol,
+            pressure_tol_intermediate=pressure_tol_intermediate,
+            pressure_warm_start=pressure_warm_start,
+            linear_solve_max_iter=linear_solve_max_iter,
+            exclude_advection_solve_gradients=exclude_advection_solve_gradients,
+            exclude_pressure_solve_gradients=exclude_pressure_solve_gradients,
+            exclude_pressure_gradient_adjoint=exclude_pressure_gradient_adjoint,
         )
         self._viscosity = self._viscosity.to(self._cpu_device)
 
@@ -293,8 +348,8 @@ class TCF3DBottomEnv(FluidEnv):
             self._initial_domain_steps *= 2
 
     @property
-    def render_shape(self) -> tuple[int, ...]:
-        """The shape of the rendered domain."""
+    def obs_resampling_shape(self) -> tuple[int, ...]:
+        """The shape of the observation resampling grid."""
         x_render_size = 2 * self._x
         y_render_size = int(x_render_size / self._L * self._H)
         z_render_size = int(x_render_size / self._L * self._D)
@@ -439,39 +494,26 @@ class TCF3DBottomEnv(FluidEnv):
         prep_fn: dict[str, Any] = {}
         set_dynamic_forcing(self._ndims, domain, prep_fn)
 
-        if self._C_smag != 0:
-            block = domain.getBlock(0)
-            SGS_coefficient = torch.tensor(
-                [self._C_smag], dtype=self._dtype, device=self._cpu_device
-            )
-
-            if self._use_van_driest:
-                van_driest_scale_sqr = [
-                    get_van_driest_sqr(block, domain, self._u_wall, self._cuda_device)
-                ]
-
-            def get_SGS_viscosity(domain):
-                return PISOtorch.SGSviscosityIncompressibleSmagorinsky(
-                    domain, SGS_coefficient
+        # NOTE: C_smag is C_s**2, not C_s, see append_sgs_viscosity_prep_fn
+        van_driest_scale_sqr = (
+            [
+                get_van_driest_sqr(
+                    domain.getBlock(0), domain, self._u_wall, self._cuda_device
                 )
-
-            def add_block_SGS_viscosity(domain, **kwargs):
-                domain.UpdateDomainData()
-
-                SGS_viscosities = get_SGS_viscosity(domain)
-                base_viscosity = domain.viscosity.to(self._cuda_device)
-
-                for idx, (block, visc) in enumerate(
-                    zip(domain.getBlocks(), SGS_viscosities, strict=True)
-                ):
-                    if self._use_van_driest:
-                        visc = visc * van_driest_scale_sqr[idx]
-                    visc = visc + base_viscosity
-                    block.setViscosity(visc)
-
-                domain.UpdateDomainData()
-
-            append_prep_fn(prep_fn, "PRE", add_block_SGS_viscosity)
+            ]
+            if (self._C_smag != 0 and self._use_van_driest)
+            else None
+        )
+        append_sgs_viscosity_prep_fn(
+            prep_fn,
+            model="smagorinsky",
+            coefficient=self._C_smag,
+            ndims=self._ndims,
+            dtype=self._dtype,
+            cuda_device=self._cuda_device,
+            cpu_device=self._cpu_device,
+            scale_sqr=van_driest_scale_sqr,
+        )
 
         return prep_fn
 
@@ -487,20 +529,23 @@ class TCF3DBottomEnv(FluidEnv):
             dt=self._dt,
             corrector_steps=2,
             advection_use_BiCG=True,
-            advection_tol=1e-6,
-            pressure_tol=1e-6,
+            advection_tol=self._resolve_advection_tol(SolverTolerance(atol=1e-6)),
+            pressure_tol=self._resolve_pressure_tol(SolverTolerance(atol=1e-6)),
+            pressure_tol_intermediate=self._pressure_tol_intermediate,
+            pressure_warm_start=self._pressure_warm_start,
             adaptive_CFL=self._adaptive_cfl,
             advect_non_ortho_steps=1,
             pressure_non_ortho_steps=1,
             pressure_return_best_result=True,
             velocity_corrector="FD",
             non_orthogonal=True,
-            output_resampling_shape=self.render_shape[: self._ndims],
+            output_resampling_shape=self.obs_resampling_shape[: self._ndims],
             output_resampling_fill_max_steps=16,
             differentiable=self._differentiable,
         )
 
-        sim.solver_double_fallback = False
+        # Retry a failed single-precision solve in double precision
+        sim.solver_double_fallback = True
         sim.preconditionBiCG = False
         sim.BiCG_precondition_fallback = True
 
@@ -599,19 +644,21 @@ class TCF3DBottomEnv(FluidEnv):
         """
         self._domain.UpdateDomainData()
         gradients = PISOtorch.ComputeSpatialVelocityGradients(self._domain)
-        d_dx, d_dy, d_dz = gradients[0]
+        # gradients[block][k] is the gradient of the k'th velocity component,
+        # with the channel axis holding the spatial direction: g_u[:, i] = du/dx_i
+        g_u, g_v, g_w = gradients[0]
 
-        du_dx = d_dx[0, 0, ...]
-        du_dy = d_dy[0, 0, ...]
-        du_dz = d_dz[0, 0, ...]
+        du_dx = g_u[0, 0, ...]
+        du_dy = g_u[0, 1, ...]
+        du_dz = g_u[0, 2, ...]
 
-        dv_dy = d_dy[0, 1, ...]
-        dv_dx = d_dx[0, 1, ...]
-        dv_dz = d_dz[0, 1, ...]
+        dv_dx = g_v[0, 0, ...]
+        dv_dy = g_v[0, 1, ...]
+        dv_dz = g_v[0, 2, ...]
 
-        dw_dx = d_dx[0, 2, ...]
-        dw_dy = d_dy[0, 2, ...]
-        dw_dz = d_dz[0, 2, ...]
+        dw_dx = g_w[0, 0, ...]
+        dw_dy = g_w[0, 1, ...]
+        dw_dz = g_w[0, 2, ...]
 
         grad_u = torch.stack(
             [
@@ -683,7 +730,7 @@ class TCF3DBottomEnv(FluidEnv):
     ) -> dict[str, np.ndarray]:
         y_wall = 150
         y = self._y_wall_to_y(y_wall)
-        y_shape_idx = round((y + self._delta) / self._H * self.render_shape[1])
+        y_shape_idx = round((y + self._delta) / self._H * self.obs_resampling_shape[1])
 
         q = self._get_q_criterion()
         q_arr = q.squeeze().detach().cpu().numpy()
@@ -693,14 +740,28 @@ class TCF3DBottomEnv(FluidEnv):
         u = torch.linalg.vector_norm(u, dim=0)
 
         # Flip x- and y-axis
-        u = torch.flip(u, dims=[-2, -1])
+        # u = torch.flip(u, dims=[-2, -1])
 
-        vorticity = self.get_vorticity()
-        vorticity = vorticity.squeeze()
+        # The x-z planes are taken at the wall-normal position the observation is
+        # taken at, the other two planes are centered
+        y_obs_index = self._resampler.axis_index(
+            "y", self._y_wall_to_y(self._y_obs_wall)
+        )
 
-        # Flip x- and y-axis
-        vorticity = torch.flip(vorticity, dims=[-2, -1])
-        vorticity_arr = vorticity.detach().cpu().numpy()
+        u_blocks = [block.velocity for block in self._domain.getBlocks()]
+        vorticity_blocks = self._vorticity_blocks()
+
+        # Velocity and vorticity are shown on the same three planes
+        u_xy = np.linalg.norm(self._render_plane(u_blocks, axis="z"), axis=0)
+        u_xz = np.linalg.norm(
+            self._render_plane(u_blocks, axis="y", index=y_obs_index), axis=0
+        )
+        u_yz = np.linalg.norm(self._render_plane(u_blocks, axis="x"), axis=0)
+
+        # Of the vorticity vector, take the component normal to each plane
+        vort_xy = self._render_plane(vorticity_blocks, axis="z")[2]
+        vort_xz = self._render_plane(vorticity_blocks, axis="y", index=y_obs_index)[1]
+        vort_yz = self._render_plane(vorticity_blocks, axis="x")[0]
 
         u_min = 0.0
         u_max = VELOCITY_MAX[self._D][int(self._re_wall)]
@@ -716,8 +777,11 @@ class TCF3DBottomEnv(FluidEnv):
             vort_min = self._vorticity_stats.min
             vort_max = self._vorticity_stats.p95
         else:
-            vort_min = vorticity_arr.min().item()
-            vort_max = vorticity_arr.max().item()
+            rendered_vorticity = np.concatenate(
+                [vort_xy.ravel(), vort_xz.ravel(), vort_yz.ravel()]
+            )
+            vort_min = rendered_vorticity.min().item()
+            vort_max = rendered_vorticity.max().item()
 
         # We take the max abs value for symmetric colormap
         abs_max = max(abs(vort_min), abs(vort_max))
@@ -732,19 +796,10 @@ class TCF3DBottomEnv(FluidEnv):
         )
 
         render_data = {}
-        u_xy = u[u.shape[0] // 2, :, :]
-        u_xz = u[:, y_shape_idx // 2, :]
-        u_yz = u[:, :, u.shape[2] // 2]
 
-        render_data["x-y-velocity"] = format_velocity(data=u_xy.detach().cpu().numpy())
-        render_data["x-z-velocity"] = format_velocity(data=u_xz.detach().cpu().numpy())
-        render_data["y-z-velocity"] = format_velocity(
-            data=u_yz.T.detach().cpu().numpy()
-        )
-
-        vort_xy = vorticity_arr[2, vorticity_arr.shape[0] // 2, :, :]
-        vort_xz = vorticity_arr[1, :, y_shape_idx // 2, :]
-        vort_yz = vorticity_arr[0, :, :, vorticity_arr.shape[2] // 2]
+        render_data["x-y-velocity"] = format_velocity(data=u_xy)
+        render_data["x-z-velocity"] = format_velocity(data=u_xz)
+        render_data["y-z-velocity"] = format_velocity(data=u_yz.T)
 
         render_data["x-y-vorticity"] = format_vorticity(data=vort_xy)
         render_data["x-z-vorticity"] = format_vorticity(data=vort_xz)
@@ -763,7 +818,7 @@ class TCF3DBottomEnv(FluidEnv):
 
             q_iso_value = Q_CRITERION_ISOS[self._D][int(self._re_wall)]
             render_data["3d_q_criterion"] = render_3d_iso(
-                iso_field=q_wall,
+                iso_field=np.abs(q_wall),
                 iso=[q_iso_value],
                 color_range=(u_min, u_max),
                 output_path=output_path,
@@ -785,9 +840,14 @@ class TCF3DBottomEnv(FluidEnv):
         # For the bottom case, we only consider the bottom wall stress
         return 1 - tau_bottom / self.tau_ref
 
-    def _step_impl(
-        self, action: torch.Tensor
-    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
+    def _advance_impl(
+        self, action: torch.Tensor, n_sim_steps: int
+    ) -> dict[str, torch.Tensor]:
+        """Run ``n_sim_steps`` PISO steps, returning the wall stress per substep.
+
+        The action is (re-)applied at the start of every segment, which sets the
+        same bottom plate the whole env step is run at either way.
+        """
         flat_action = action.squeeze()
 
         if self._enable_actions:
@@ -795,16 +855,25 @@ class TCF3DBottomEnv(FluidEnv):
 
         tau_top_list = []
         tau_bottom_list = []
-        for _ in range(self._n_sim_steps):
+        for _ in range(n_sim_steps):
             self._sim.single_step()
             _tau_bottom, _tau_top = self._get_wall_stress()
 
             tau_bottom_list += [_tau_bottom]
             tau_top_list += [_tau_top]
 
+        return {
+            "wall_stress_bottom": torch.stack(tau_bottom_list),
+            "wall_stress_top": torch.stack(tau_top_list),
+        }
+
+    def _finish_step(
+        self, metrics: dict[str, torch.Tensor]
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
+        """Average the substeps of the env step and read the state they left."""
         # Average over simulation steps
-        tau_bottom = torch.stack(tau_bottom_list).mean()
-        tau_top = torch.stack(tau_top_list).mean()
+        tau_bottom = metrics["wall_stress_bottom"].mean()
+        tau_top = metrics["wall_stress_top"].mean()
 
         tau_total = 0.5 * (tau_bottom + tau_top)
 
@@ -837,7 +906,7 @@ class TCF3DBottomEnv(FluidEnv):
 
         y_sensor = self._y_wall_to_y(self._y_obs_wall)
 
-        colors = global_config.palette
+        colors = DEFAULT_PALETTE
 
         plt.figure(figsize=(10, 5))
         ax = plt.gca()
@@ -880,7 +949,7 @@ class TCF3DBottomEnv(FluidEnv):
         velocity_noise = 0.01
         pressure_noise = 0.01
 
-        max_n_steps = int(0.01 * self._episode_length)
+        max_n_steps = min(int(0.01 * self._episode_length), 1)
         n_steps = self._np_rng.integers(int(0.5 * max_n_steps), max_n_steps) + 1
 
         blocks = self._domain.getBlocks()
@@ -991,13 +1060,13 @@ class TCF3DBottomEnv(FluidEnv):
             "pressure": local_obs_p,
         }
 
-    def _step_marl_impl(
-        self, actions: torch.Tensor
+    def _finish_marl_step(
+        self, metrics: dict[str, torch.Tensor]
     ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         if self._local_reward_weight is None:
             raise ValueError("local_reward_weight must be set for multi-agent step.")
 
-        _, global_reward, terminated, info = self._step_impl(actions)
+        _, global_reward, terminated, info = self._finish_step(metrics)
 
         local_obs = self._get_local_obs()
         agent_rewards = global_reward * torch.ones(

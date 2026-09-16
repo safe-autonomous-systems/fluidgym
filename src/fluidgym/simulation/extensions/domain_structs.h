@@ -201,7 +201,35 @@ public:
 	void setTransform(torch::Tensor &transform); //NDHWT, T=transform data. Would NTDWH be better?
 	void clearTransform();
 	GET_OPTIONAL_DATA_PRT(Transform, m_transform);
-	
+
+	// Thin-wall conductance ratio for electric potential (MHD)
+	// Cw = 0 or nullopt: insulating (default, Neumann BC)
+	// Cw > 0: thin-wall conducting
+	optional<double> m_epotCw = nullopt;
+	bool hasEpotCw() const { return m_epotCw.has_value() && m_epotCw.value() > 0.0; };
+	double getEpotCw() const { return m_epotCw.value_or(0.0); };
+	void setEpotCw(double cw);
+
+	// Dirichlet φ=0 for the electric potential (used at open outflow planes)
+	optional<bool> m_epotDirichlet = nullopt;
+	bool hasEpotDirichlet() const { return m_epotDirichlet.value_or(false); }
+	void setEpotDirichlet(bool d);
+
+	// Whether this face is insulating for the inductionless MHD solve (j_n = 0).
+	// True (default) for a solid wall; false for an open in/outflow plane, where current
+	// leaves the domain and closes virtually outside (dphi/dn = 0, j_n = (u×B)_n).
+	// This cannot be inferred: Block::CloseBoundary makes walls AND prescribed-velocity
+	// in/outflows alike as BoundaryType::FIXED with a DIRICHLET velocity BC, so open
+	// boundaries must be marked explicitly. Defaulting to true keeps domains that predate
+	// this flag behaving as the all-walls case (e.g. the Hartmann/Shercliff/Hunt ducts).
+	optional<bool> m_epotInsulating = nullopt;
+	bool isEpotInsulating() const { return m_epotInsulating.value_or(true); }
+	void setEpotInsulating(bool insulating);
+
+	// Carry the epot settings above onto a Copy()/Clone(), which rebuild via a constructor
+	// that does not take them.
+	void CopyEpotSettingsTo(FixedBoundary &other) const;
+
 #ifdef WITH_GRAD
 	torch::Tensor m_velocity_grad = torch::empty(0);
 	void setVelocityGrad(torch::Tensor &t);
@@ -417,7 +445,12 @@ public:
 	void CreatePressure();
 	// template <typename scalar_t>
 	// scalar_t* getPressureData() {return velocity.data_ptr<scalar_t>();};
-	
+
+	optional<torch::Tensor> epot = nullopt;
+	void setEpot(torch::Tensor &e);
+	void CreateEpot();
+	bool hasEpot() const { return epot.has_value(); };
+
 	optional<torch::Tensor> passiveScalar = nullopt;
 	void setPassiveScalar(torch::Tensor &s);
 	void CreatePassiveScalar();
@@ -457,7 +490,13 @@ public:
 	torch::Tensor passiveScalar_grad = torch::empty(0);
 	void setPassiveScalarGrad(torch::Tensor &sg);
 	void CreatePassiveScalarGrad();
-	
+
+	optional<torch::Tensor> epot_grad;
+	void setEpotGrad(torch::Tensor &eg);
+	void CreateEpotGrad();
+	bool hasEpotGrad() const { return epot_grad.has_value(); }
+	GET_OPTIONAL_DATA_PRT(EpotGrad, epot_grad);
+
 	void CreatePassiveScalarGradOnBoundaries();
 	void CreateVelocityGradOnBoundaries();
 	//void CreatePressureGradOnBoundaries();
@@ -501,6 +540,13 @@ public:
 	/** Create FixedBoundary */
 	void CloseBoundary(const index_t face, optional<torch::Tensor> velocity, optional<torch::Tensor> passiveScalar);
 	void CloseBoundary(const std::string & face, optional<torch::Tensor> velocity, optional<torch::Tensor> passiveScalar);
+	/** Create a FixedBoundary with zero-Neumann (free-slip) velocity BC at the specified face.
+	 * Normal velocity is zero; tangential velocity has zero gradient (du/dn=0).
+	 * Passive scalar BC defaults to Neumann unless passiveScalar tensor is provided (Dirichlet).
+	 * Existing Connected/Periodic boundaries are handled the same as CloseBoundary.
+	*/
+	void OpenBoundary(const index_t face, optional<torch::Tensor> passiveScalar = nullopt);
+	void OpenBoundary(const std::string &face, optional<torch::Tensor> passiveScalar = nullopt);
 	
 	bool IsUnconnectedBoundary(const index_t index) const;
 	bool hasPrescribedBoundary() const;
@@ -669,6 +715,7 @@ struct Domain : public std::enable_shared_from_this<Domain>{
 	
 	void CreateVelocityOnBlocks();
 	void CreatePressureOnBlocks();
+	void CreateEpotOnBlocks();
 	void CreatePassiveScalarOnBlocks();
 	void clearPassiveScalarOnBlocks();
 	/** true iff all blocks have a passive scalar set. no additional tests. */
@@ -706,7 +753,32 @@ struct Domain : public std::enable_shared_from_this<Domain>{
 	torch::Tensor pressureResult;
 	void setPressureResult(torch::Tensor &pr);
 	void CreatePressureResult();
-	
+
+	// Electric potential fields (for MHD, optional — allocated explicitly by MHDSimulation)
+	optional<std::shared_ptr<CSRmatrix>> Epot;  // standard Laplacian matrix for phi
+	optional<torch::Tensor> epotRHS;            // RHS: div(u x e_b), shape [totalSize]
+	optional<torch::Tensor> epotResult;         // solved phi, shape [totalSize]
+	// Set by SetupEpotOnDomain(); propagated through Copy/Clone so PrepareSolve can auto-rebuild.
+	bool m_epotEnabled = false;
+	int8_t m_epotNonOrthoFlags = 0;
+	bool m_epotUseFaceTransform = false;
+	// Convective scheme for the momentum equation. CENTRAL reproduces the
+	// original discretization exactly; see AdvectionScheme in domain_structs_gpu.h.
+	AdvectionScheme m_advectionScheme = AdvectionScheme::CENTRAL;
+	void setAdvectionScheme(AdvectionScheme scheme);
+	AdvectionScheme getAdvectionScheme() const { return m_advectionScheme; }
+	bool hasEpot() const;
+	void setEpotRHS(torch::Tensor &erhs);
+	void CreateEpotRHS();
+	void setEpotResult(torch::Tensor &er);
+	void CreateEpotResult();
+	void CreateEpotMatrix();  // allocates Epot CSR with same sparsity structure as P
+	// Full epot setup (matrix alloc + CUDA fill + block epots). Stores flags for Copy/Clone.
+	void SetupEpotOnDomain(int8_t nonOrthoFlags = 0, bool useFaceTransform = false);
+	GET_OPTIONAL_DATA_PRT(EpotRHS, epotRHS);
+	GET_OPTIONAL_DATA_PRT(EpotResult, epotResult);
+
+
 #ifdef WITH_GRAD
 	void CreatePassiveScalarGradOnBlocks();
 	void CreateVelocityGradOnBlocks();
@@ -764,6 +836,14 @@ struct Domain : public std::enable_shared_from_this<Domain>{
 	torch::Tensor pressureResult_grad = torch::empty(0);
 	void setPressureResultGrad(torch::Tensor &pr);
 	void CreatePressureResultGrad();
+
+	optional<torch::Tensor> epotResult_grad;
+	void setEpotResultGrad(torch::Tensor &erg);
+	void CreateEpotResultGrad();
+	bool hasEpotResultGrad() const { return epotResult_grad.has_value(); }
+	GET_OPTIONAL_DATA_PRT(EpotResultGrad, epotResult_grad);
+
+	void CreateEpotGradOnBlocks();
 #endif
 	
 	torch::TensorOptions getValueOptions() const { return valueOptions; };

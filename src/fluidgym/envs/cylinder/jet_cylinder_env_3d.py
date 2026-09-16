@@ -1,5 +1,6 @@
 """3D Environment for flow around a cylinder with jet actuation."""
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +12,7 @@ from fluidgym.envs.util.obs_extraction import extract_global_3d_obs
 from fluidgym.envs.util.profiles import get_jet_profile
 from fluidgym.envs.util.visualization import render_3d_iso
 from fluidgym.simulation.pict.PISOtorch_simulation import balance_boundary_fluxes
+from fluidgym.simulation.solver_tolerance import SolverTolerance
 
 VORTICITY_RENDER_LEVELS = {
     100: 1.5,
@@ -104,6 +106,38 @@ class CylinderJetEnv3D(CylinderEnvBase):
     differentiable: bool, optional
         Whether to enable differentiable simulation. Defaults to False.
 
+    advection_tol: float | SolverTolerance | Mapping | None, optional
+        Tolerance for the momentum and passive-scalar advection solves. None (the
+        default) keeps the tolerance this environment is tuned at.
+
+    pressure_tol: float | SolverTolerance | Mapping | None, optional
+        Tolerance for the pressure solve. None (the default) keeps the tolerance
+        this environment is tuned at.
+
+    pressure_tol_intermediate: float | SolverTolerance | Mapping | None, optional
+        Tolerance for the pressure solves before the final corrector. None (the
+        default) applies ``pressure_tol`` everywhere.
+
+    pressure_warm_start: bool, optional
+        Whether to seed each pressure solve with the previous sub-step's result.
+        Defaults to False.
+
+    linear_solve_max_iter: int | None, optional
+        Iteration limit for the advection and pressure solves. None (the default)
+        leaves the solver's own limit in place.
+
+    exclude_advection_solve_gradients: bool | None, optional
+        Drop the gradient of the advection solve. Diagnostic only; None (the
+        default) keeps it.
+
+    exclude_pressure_solve_gradients: bool | None, optional
+        Drop the gradient of the pressure solve. Diagnostic only; None (the
+        default) keeps it.
+
+    exclude_pressure_gradient_adjoint: bool | None, optional
+        Drop the pressure path of the PISO velocity-correction backward.
+        Diagnostic only; None (the default) keeps it.
+
     References
     ----------
     [1] P. Suárez et al., “Active Flow Control for Drag Reduction Through Multi-agent
@@ -116,10 +150,15 @@ class CylinderJetEnv3D(CylinderEnvBase):
     """
 
     _default_render_key: str = "3d_vorticity"
+    _render_resolution: int = 1
 
     _jet_angle: float = 10.0  # degrees
     _n_sensors_per_agent: int = 2
     _supports_marl: bool = True
+
+    # A fifth of the 25 PISO steps of a registered env step: the 3D replay tape is
+    # what caps a differentiable rollout here (see ``FluidEnv.bptt_segment_size``)
+    _default_bptt_segment_size: int | None = 5
 
     def __init__(
         self,
@@ -142,6 +181,16 @@ class CylinderJetEnv3D(CylinderEnvBase):
         randomize_initial_state: bool = True,
         enable_actions: bool = True,
         differentiable: bool = False,
+        advection_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol_intermediate: (
+            float | SolverTolerance | Mapping[str, float] | None
+        ) = None,
+        pressure_warm_start: bool = False,
+        linear_solve_max_iter: int | None = None,
+        exclude_advection_solve_gradients: bool | None = None,
+        exclude_pressure_solve_gradients: bool | None = None,
+        exclude_pressure_gradient_adjoint: bool | None = None,
     ):
         if n_jets < 1 or resolution % n_jets != 0:
             raise ValueError(
@@ -183,6 +232,14 @@ class CylinderJetEnv3D(CylinderEnvBase):
             randomize_initial_state=randomize_initial_state,
             enable_actions=enable_actions,
             differentiable=differentiable,
+            advection_tol=advection_tol,
+            pressure_tol=pressure_tol,
+            pressure_tol_intermediate=pressure_tol_intermediate,
+            pressure_warm_start=pressure_warm_start,
+            linear_solve_max_iter=linear_solve_max_iter,
+            exclude_advection_solve_gradients=exclude_advection_solve_gradients,
+            exclude_pressure_solve_gradients=exclude_pressure_solve_gradients,
+            exclude_pressure_gradient_adjoint=exclude_pressure_gradient_adjoint,
         )
 
     def _get_action_space(self) -> spaces.Box:
@@ -417,17 +474,19 @@ class CylinderJetEnv3D(CylinderEnvBase):
             self._domain.getBlock(self._bottom_block_idx).getBoundary("+y"),
             self._domain.getBlock(self._vortex_street_block_idx).getBoundary("+x"),
         ]
-        balance_boundary_fluxes(self._domain, out_bounds, tol=1e-7)
+        balance_boundary_fluxes(
+            self._domain, out_bounds, tol=1e-7, differentiable=self._differentiable
+        )
 
     @property
     def id(self) -> str:
         """Unique identifier for the environment."""
         return f"JetCylinder3D_Re{self._reynolds_number}"
 
-    def _step_impl(
-        self, action: torch.Tensor
+    def _finish_step(
+        self, metrics: dict[str, torch.Tensor]
     ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
-        obs, reward, term, info = super()._step_impl(action)
+        obs, reward, term, info = super()._finish_step(metrics)
 
         all_cds = info.pop("drag")
         all_cls = info.pop("lift")
@@ -448,13 +507,13 @@ class CylinderJetEnv3D(CylinderEnvBase):
 
         return obs, reward, term, info
 
-    def _step_marl_impl(
-        self, actions: torch.Tensor
+    def _finish_marl_step(
+        self, metrics: dict[str, torch.Tensor]
     ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         if self._local_reward_weight is None:
             raise ValueError("local_reward_weight must be set for multi-agent step.")
 
-        _, global_reward, terminated, info = self._step_impl(actions)
+        _, global_reward, terminated, info = self._finish_step(metrics)
 
         local_obs = self._get_local_obs()
 
@@ -523,7 +582,7 @@ class CylinderJetEnv3D(CylinderEnvBase):
                 )
 
             render_data["3d_vorticity"] = render_3d_iso(
-                iso_field=curl_arr,
+                iso_field=np.abs(curl_arr),
                 iso=[iso_val],
                 output_path=output_path,
                 color_field=u_arr,

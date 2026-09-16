@@ -12,7 +12,7 @@ from fluidgym.simulation.extensions import (
 )
 from fluidgym.simulation.pict.util.output import plot_grids
 
-logger = logging.getLogger("env.cylinder.grid")
+logger = logging.getLogger("fluidgym.envs.cylinder.grid")
 
 
 def make_vortex_street_domain(
@@ -371,13 +371,13 @@ def make_vortex_street_domain(
     # same direction, 1 for inverted)
     #
     # Using block.ConnectBlock(faceIndex, otherBlock, otherFaceIndex, axis1Index,
-    # axis2Index), faceIndex of block is connected to otherFaceIndex of otherBlock.
+    # axis2Index), faceIndex of block is connected to otherFaceIndex of otherBlock
     # For 2D and 3D, the remaining axes are also mapped:
     #   faceIndex connects to otherFaceIndex
-    #   axis[(faceIndex / 2 + 1)%ndims] of block is aligned to axis1Index of otherBlock.
-    # The connection is inverted if axis1Index%2==1.
-    #   axis[(faceIndex / 2 + 2)%ndims] of block is aligned to axis2Index of otherBlock.
-    # The connection is inverted if axis2Index%2==1.
+    #   axis[(faceIndex / 2 + 1)%ndims] of block is aligned to axis1Index of otherBlock
+    # The connection is inverted if axis1Index%2==1
+    #   axis[(faceIndex / 2 + 2)%ndims] of block is aligned to axis2Index of otherBlock
+    # The connection is inverted if axis2Index%2==1
     # --------------------------------------------------------------------------------
     if ndims == 2:
         # The last argument (axis2Index) can be omitted for 2D

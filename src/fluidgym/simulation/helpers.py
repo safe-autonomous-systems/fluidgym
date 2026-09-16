@@ -10,6 +10,7 @@ from fluidgym.simulation.extensions import (
 def get_cell_size(block: PISOtorch.Block) -> torch.Tensor:
     """Get cell volumes from a block."""
     if block.hasTransform():
+        assert isinstance(block.transform, torch.Tensor)
         dims = block.getSpatialDims()
         p = [0, dims + 1] + list(range(1, dims + 1))
         return torch.permute(block.transform[..., -1:], p)

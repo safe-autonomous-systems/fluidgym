@@ -48,9 +48,6 @@ class ParallelFluidEnv(FluidEnvLike):
         self.__cuda_ids = cuda_ids
         self.__env_id = env_id
 
-        if not torch.cuda.is_available():
-            raise RuntimeError("CUDA is not available. FluidGym requires CUDA.")
-
         if env_kwargs.get("differentiable", False):
             raise ValueError(
                 "ParallelFluidEnv does not support differentiable environments."
@@ -64,7 +61,7 @@ class ParallelFluidEnv(FluidEnvLike):
         self.__pipes, self.__processes = self.__make_vec_gpu_envs()
 
     def __getattr__(self, name: str) -> Any:
-        # Only called if normal attribute lookup fails on self.
+        # Only called if normal attribute lookup fails on self
         return getattr(self._env, name)
 
     @property
@@ -156,6 +153,7 @@ class ParallelFluidEnv(FluidEnvLike):
             elif cmd == Command.CLOSE:
                 break
 
+        env.close()
         torch.cuda.empty_cache()
         pipe.close()
 
@@ -199,7 +197,7 @@ class ParallelFluidEnv(FluidEnvLike):
                 aggregated_obs[key] = torch.stack([o[key].cpu() for o in obs], dim=0)
         return aggregated_obs
 
-    def reset(
+    def reset(  # type: ignore[override]
         self, seed: int | None = None, randomize: bool | None = None
     ) -> tuple[dict[str, torch.Tensor], list[dict[str, torch.Tensor]]]:
         """Resets the environment to an initial internal state, returning an initial
@@ -230,7 +228,7 @@ class ParallelFluidEnv(FluidEnvLike):
 
         return self.__aggregate_obs(obs), infos_list
 
-    def step(
+    def step(  # type: ignore[override]
         self, action: torch.Tensor
     ) -> tuple[
         dict[str, torch.Tensor],

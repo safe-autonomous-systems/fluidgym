@@ -25,7 +25,7 @@ class FluidWrapper(FluidEnvLike, Generic[EnvT]):  # type: ignore[misc]
         self._env = env
 
     def __getattr__(self, name: str) -> Any:
-        # Only called if normal attribute lookup fails on self.
+        # Only called if normal attribute lookup fails on self
         return getattr(self._env, name)
 
     @property
@@ -127,6 +127,7 @@ class FluidWrapper(FluidEnvLike, Generic[EnvT]):  # type: ignore[misc]
         self,
         seed: int | None = None,
         randomize: bool | None = None,
+        domain_idx: int | None = None,
     ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         """Resets the environment to an initial internal state, returning an initial
         observation and info.
@@ -141,12 +142,16 @@ class FluidWrapper(FluidEnvLike, Generic[EnvT]):  # type: ignore[misc]
             Whether to randomize the initial state. If None, the default behavior is
             used.
 
+        domain_idx: int | None
+            Index of the initial domain to load. If None, the default behavior is
+            used. Defaults to None.
+
         Returns
         -------
         tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]
             A tuple containing the initial observation and an info dictionary.
         """
-        return self._env.reset(seed=seed, randomize=randomize)
+        return self._env.reset(seed=seed, randomize=randomize, domain_idx=domain_idx)
 
     def render(
         self,

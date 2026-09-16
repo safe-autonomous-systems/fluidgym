@@ -399,6 +399,15 @@ FixedBoundary::~FixedBoundary(){
 }
 #endif
 
+// The FixedBoundary constructor does not take the MHD epot settings, so Copy/Clone must
+// carry them over explicitly or a copied domain silently reverts to the defaults:
+// insulating walls everywhere and no thin-wall conductance.
+void FixedBoundary::CopyEpotSettingsTo(FixedBoundary &other) const {
+	if(m_epotCw.has_value()){ other.setEpotCw(m_epotCw.value()); }
+	if(m_epotDirichlet.has_value()){ other.setEpotDirichlet(m_epotDirichlet.value()); }
+	if(m_epotInsulating.has_value()){ other.setEpotInsulating(m_epotInsulating.value()); }
+}
+
 std::shared_ptr<Boundary> FixedBoundary::Copy() const {
 	torch::Tensor v = m_velocity;
 	//torch::Tensor p = pressure;
@@ -406,6 +415,7 @@ std::shared_ptr<Boundary> FixedBoundary::Copy() const {
 	optional<torch::Tensor> t = m_transform;
 	std::shared_ptr<FixedBoundary> newBound = std::make_shared<FixedBoundary>(v, m_velocityType, s, nullopt, t, getParentDomain());
 	if(hasPassiveScalar()){ newBound->setPassiveScalarType(m_passiveScalarTypes.value());}
+	CopyEpotSettingsTo(*newBound);
 	return newBound;
 }
 
@@ -416,6 +426,7 @@ std::shared_ptr<Boundary> FixedBoundary::Clone() const {
 	optional<torch::Tensor> t = cloneOptionalTensor(m_transform);
 	std::shared_ptr<FixedBoundary> newBound = std::make_shared<FixedBoundary>(v, m_velocityType, s, nullopt, t, getParentDomain());
 	if(hasPassiveScalar()){ newBound->setPassiveScalarType(m_passiveScalarTypes.value());}
+	CopyEpotSettingsTo(*newBound);
 	return newBound;
 }
 
@@ -462,7 +473,6 @@ void FixedBoundary::setVelocity(torch::Tensor &t){
 }
 
 void FixedBoundary::setVelocityType(const BoundaryConditionType velocityType){
-	TORCH_CHECK(velocityType==BoundaryConditionType::DIRICHLET, "Invalid velocity boundary type: Currently only Dirichlet boundaries are supported");
 	m_velocityType = velocityType;
 }
 
@@ -1294,7 +1304,8 @@ void Block::DetachFwd() {
 	if(m_vertexCoordinates){ m_vertexCoordinates = m_vertexCoordinates.value().detach(); }
 	if(m_transform){ m_transform = m_transform.value().detach(); }
 	if(m_faceTransform){ m_faceTransform = m_faceTransform.value().detach(); }
-	
+	if(hasEpot()) { epot = epot.value().detach(); }
+
 	for(const auto &bound : getFixedBoundaries()){
 		bound.second->DetachFwd();
 	}
@@ -1304,7 +1315,8 @@ void Block::DetachGrad() {
 	if(velocitySource_grad){ velocitySource_grad = velocitySource_grad.value().detach(); }
 	if(!IsTensorEmpty(pressure_grad)){ pressure_grad = pressure_grad.detach(); }
 	if(hasPassiveScalar()) { passiveScalar_grad = passiveScalar_grad.detach(); }
-	
+	if(hasEpotGrad()) { epot_grad = epot_grad.value().detach(); }
+
 	for(const auto &bound : getFixedBoundaries()){
 		bound.second->DetachGrad();
 	}
@@ -1473,6 +1485,15 @@ void Block::CreatePressure(){
 	torch::Tensor p = CreateDataTensor(1);
 	setPressure(p);
 }
+void Block::setEpot(torch::Tensor &e){
+	CheckDataTensor(e, 1, false, "Epot");
+	epot = e;
+	isTensorChanged=true;
+}
+void Block::CreateEpot(){
+	torch::Tensor e = CreateDataTensor(1);
+	setEpot(e);
+}
 void Block::CreateVelocity(){
 	torch::Tensor v = CreateDataTensor(getSpatialDims());
 	setVelocity(v);
@@ -1557,6 +1578,15 @@ void Block::CreatePassiveScalarGrad(){
 	setPassiveScalarGrad(sg);
 }
 
+
+void Block::setEpotGrad(torch::Tensor &eg){
+	epot_grad = eg;
+	isTensorChanged=true;
+}
+void Block::CreateEpotGrad(){
+	torch::Tensor eg = CreateDataTensor(1);
+	setEpotGrad(eg);
+}
 
 void Block::CreatePassiveScalarGradOnBoundaries(){
 	for(auto boundary : boundaries){
@@ -2001,6 +2031,19 @@ void Block::CloseBoundary(const std::string & face, optional<torch::Tensor> velo
 	CloseBoundary(BoundarySideToIndex(face), velocity, passiveScalar);
 }
 
+void Block::OpenBoundary(const index_t bound, optional<torch::Tensor> passiveScalar) {
+	CheckFaceIndex(bound);
+	CloseConnectedBoudary(bound, true);
+	optional<std::vector<BoundaryConditionType>> scalarType = nullopt;
+	if(!passiveScalar.has_value()){
+		scalarType = std::vector<BoundaryConditionType>{BoundaryConditionType::NEUMANN};
+	}
+	MakeFixedBoundary(bound, nullopt, BoundaryConditionType::NEUMANN, passiveScalar, scalarType);
+}
+void Block::OpenBoundary(const std::string &face, optional<torch::Tensor> passiveScalar) {
+	OpenBoundary(BoundarySideToIndex(face), passiveScalar);
+}
+
 bool Block::IsUnconnectedBoundary(const index_t index) const {
     BoundaryType bt = boundaries.at(index)->type;
 	return bt==BoundaryType::FIXED || bt==BoundaryType::DIRICHLET || bt==BoundaryType::DIRICHLET_VARYING || bt==BoundaryType::NEUMANN;
@@ -2258,11 +2301,11 @@ std::shared_ptr<Domain> Domain::Copy(optional<std::string> newName) const{
 	std::string n = newName.value_or(name+"_copy");
 	torch::Tensor v = viscosity;
 	std::shared_ptr<Domain> cDomain = std::make_shared<Domain>(getSpatialDims(), v, n, getDtype(), pyDtype, getDevice(), getPassiveScalarChannels(), passiveScalarViscosity);
-	
+
 	for(auto block : blocks){
 		cDomain->AddBlock(block->Copy());
 	}
-	
+
 	// copy connected boundaries
 	for(index_t blockIdx=0, numBlocks=blocks.size(); blockIdx<numBlocks; ++blockIdx){
 		for(index_t boundIdx=0, numBounds=blocks[blockIdx]->boundaries.size(); boundIdx<numBounds; ++boundIdx){
@@ -2274,7 +2317,12 @@ std::shared_ptr<Domain> Domain::Copy(optional<std::string> newName) const{
 			}
 		}
 	}
-	
+
+	cDomain->m_epotEnabled = m_epotEnabled;
+	cDomain->m_epotNonOrthoFlags = m_epotNonOrthoFlags;
+	cDomain->m_epotUseFaceTransform = m_epotUseFaceTransform;
+	cDomain->m_advectionScheme = m_advectionScheme;
+
 	return cDomain;
 }
 std::shared_ptr<Domain> Domain::Clone(optional<std::string> newName) const{
@@ -2282,11 +2330,11 @@ std::shared_ptr<Domain> Domain::Clone(optional<std::string> newName) const{
 	torch::Tensor v = viscosity.clone();
 	optional<torch::Tensor> psv = cloneOptionalTensor(passiveScalarViscosity);
 	std::shared_ptr<Domain> cDomain = std::make_shared<Domain>(getSpatialDims(), v, n, getDtype(), pyDtype, getDevice(), getPassiveScalarChannels(), psv);
-	
+
 	for(auto block : blocks){
 		cDomain->AddBlock(block->Clone());
 	}
-	
+
 	// copy connected boundaries
 	for(index_t blockIdx=0, numBlocks=blocks.size(); blockIdx<numBlocks; ++blockIdx){
 		for(index_t boundIdx=0, numBounds=blocks[blockIdx]->boundaries.size(); boundIdx<numBounds; ++boundIdx){
@@ -2298,7 +2346,12 @@ std::shared_ptr<Domain> Domain::Clone(optional<std::string> newName) const{
 			}
 		}
 	}
-	
+
+	cDomain->m_epotEnabled = m_epotEnabled;
+	cDomain->m_epotNonOrthoFlags = m_epotNonOrthoFlags;
+	cDomain->m_epotUseFaceTransform = m_epotUseFaceTransform;
+	cDomain->m_advectionScheme = m_advectionScheme;
+
 	return cDomain;
 }
 std::shared_ptr<Domain> Domain::To(const torch::Dtype dtype, optional<std::string> newName){
@@ -2689,6 +2742,10 @@ void Domain::PrepareSolve(){
 	}));
 
 	initialized = true;
+
+	if (m_epotEnabled) {
+		SetupEpotOnDomain(m_epotNonOrthoFlags, m_epotUseFaceTransform);
+	}
 }
 
 void Domain::DetachFwd() {
@@ -2705,6 +2762,9 @@ void Domain::DetachFwd() {
 	pressureRHS = pressureRHS.detach();
 	pressureRHSdiv = pressureRHSdiv.detach();
 	pressureResult = pressureResult.detach();
+	if(Epot) { (*Epot)->Detach(); }
+	if(epotRHS) { epotRHS = epotRHS.value().detach(); }
+	if(epotResult) { epotResult = epotResult.value().detach(); }
 }
 void Domain::DetachGrad() {
 	for(std::shared_ptr<Block> block : blocks){
@@ -2721,6 +2781,7 @@ void Domain::DetachGrad() {
 	pressureRHS_grad = pressureRHS_grad.detach();
 	pressureRHSdiv_grad = pressureRHSdiv_grad.detach();
 	pressureResult_grad = pressureResult_grad.detach();
+	if(hasEpotResultGrad()) { epotResult_grad = epotResult_grad.value().detach(); }
 }
 void Domain::Detach() {
 	DetachFwd();
@@ -2729,6 +2790,11 @@ void Domain::Detach() {
 void Domain::CreatePressureOnBlocks(){
 	for(auto block : blocks){
 		block->CreatePressure();
+	}
+}
+void Domain::CreateEpotOnBlocks(){
+	for(auto block : blocks){
+		block->CreateEpot();
 	}
 }
 void Domain::CreateVelocityOnBlocks(){
@@ -2840,6 +2906,78 @@ void Domain::CreatePressureResult(){
 	pressureResult = torch::zeros(totalSize, valueOptions);
 	isTensorChanged=true;
 }
+
+bool Domain::hasEpot() const {
+	return epotRHS.has_value() && epotResult.has_value() && Epot.has_value();
+}
+void Domain::setEpotRHS(torch::Tensor &erhs){
+	CheckDataTensor(erhs, 1, "EpotRHS");
+	epotRHS = erhs;
+	isTensorChanged=true;
+}
+void Domain::CreateEpotRHS(){
+	epotRHS = torch::zeros(totalSize, valueOptions);
+	isTensorChanged=true;
+}
+void Domain::setEpotResult(torch::Tensor &er){
+	CheckDataTensor(er, 1, "EpotResult");
+	epotResult = er;
+	isTensorChanged=true;
+}
+void Domain::CreateEpotResult(){
+	epotResult = torch::zeros(totalSize, valueOptions);
+	isTensorChanged=true;
+}
+void Domain::CreateEpotMatrix(){
+	TORCH_CHECK(initialized, "Domain is not initialized. Run domain.PrepareSolve() before CreateEpotMatrix().");
+	Epot = std::make_shared<CSRmatrix>(P->getSize(), P->getRows(), getDtype(), getDevice());
+	isTensorChanged=true;
+}
+
+void Domain::setAdvectionScheme(AdvectionScheme scheme){
+	m_advectionScheme = scheme;
+	// mirrored into DomainGPU by UpdateDomain()
+	isTensorChanged = true;
+}
+
+void Domain::SetupEpotOnDomain(int8_t nonOrthoFlags, bool useFaceTransform){
+	m_epotNonOrthoFlags = nonOrthoFlags;
+	m_epotUseFaceTransform = useFaceTransform;
+	m_epotEnabled = true;
+	if(!epotRHS){ CreateEpotRHS(); }
+	const bool hadEpotResult = epotResult.has_value();
+	if(!hadEpotResult){ CreateEpotResult(); }
+	CreateEpotMatrix();
+	UpdateDomain();
+	SetupEpotMatrix(shared_from_this(), nonOrthoFlags, useFaceTransform);
+	bool allBlocksHadEpot = true;
+	for(auto block : blocks){
+		if(!block->hasEpot()){
+			block->CreateEpot();
+			allBlocksHadEpot = false;
+		}
+	}
+	UpdateDomain();
+	if(!hadEpotResult && allBlocksHadEpot){
+		CopyEpotResultFromBlocks(shared_from_this());
+	}
+}
+
+// --- Thin-wall epot system ---
+
+void FixedBoundary::setEpotCw(double cw) {
+	TORCH_CHECK(cw >= 0.0, "Epot wall conductance Cw must be non-negative.");
+	m_epotCw = cw;
+}
+
+void FixedBoundary::setEpotDirichlet(bool d) {
+	m_epotDirichlet = d;
+}
+
+void FixedBoundary::setEpotInsulating(bool insulating) {
+	m_epotInsulating = insulating;
+}
+
 
 #ifdef WITH_GRAD
 
@@ -3002,6 +3140,19 @@ void Domain::CreatePressureResultGrad(){
 	isTensorChanged=true;
 }
 
+void Domain::setEpotResultGrad(torch::Tensor &erg){
+	CheckDataTensor(erg, 1, "epotResult_grad");
+	epotResult_grad = erg;
+	isTensorChanged=true;
+}
+void Domain::CreateEpotResultGrad(){
+	epotResult_grad = torch::zeros(totalSize, valueOptions);
+	isTensorChanged=true;
+}
+void Domain::CreateEpotGradOnBlocks(){
+	for(auto block : blocks) block->CreateEpotGrad();
+}
+
 #endif //WITH_GRAD
 
 template <typename scalar_t>
@@ -3063,6 +3214,7 @@ void Domain::UpdateDomainGPU(){
 	
 	p_domainCPU->numDims = getSpatialDims();
 	p_domainCPU->passiveScalarChannels = getPassiveScalarChannels();
+	p_domainCPU->advectionScheme = m_advectionScheme;
 	p_domainCPU->numBlocks = blocks.size();
 	p_domainCPU->numCells = totalSize;
 	p_domainCPU->blocks = p_blocksGPU; //already set correct pointer for GPU version
@@ -3103,7 +3255,21 @@ void Domain::UpdateDomainGPU(){
 	p_domainCPU->pressureRHS = pressureRHS.data_ptr<scalar_t>();
 	p_domainCPU->pressureRHSdiv = pressureRHSdiv.data_ptr<scalar_t>();
 	p_domainCPU->pressureResult = pressureResult.data_ptr<scalar_t>();
-	
+
+	// Electric potential fields (optional)
+	if(Epot.has_value()){
+		p_domainCPU->Epot.value = Epot.value()->value.data_ptr<scalar_t>();
+		p_domainCPU->Epot.index = Epot.value()->index.data_ptr<index_t>();
+		p_domainCPU->Epot.row   = Epot.value()->row.data_ptr<index_t>();
+	} else {
+		p_domainCPU->Epot.value = nullptr;
+		p_domainCPU->Epot.index = nullptr;
+		p_domainCPU->Epot.row   = nullptr;
+	}
+	p_domainCPU->epotRHS    = getEpotRHSDataPtr<scalar_t>();
+	p_domainCPU->epotResult = getEpotResultDataPtr<scalar_t>();
+
+
 #ifdef WITH_GRAD
 	if(hasPassiveScalar()){
 		p_domainCPU->scalarRHS_grad = getTensorDataPtr<scalar_t>(scalarRHS_grad);
@@ -3117,6 +3283,8 @@ void Domain::UpdateDomainGPU(){
 	p_domainCPU->pressureRHS_grad = getTensorDataPtr<scalar_t>(pressureRHS_grad);
 	p_domainCPU->pressureRHSdiv_grad = getTensorDataPtr<scalar_t>(pressureRHSdiv_grad);
 	p_domainCPU->pressureResult_grad = getTensorDataPtr<scalar_t>(pressureResult_grad);
+	p_domainCPU->epotResult_grad = hasEpotResultGrad()
+		? epotResult_grad.value().data_ptr<scalar_t>() : nullptr;
 #endif
 	
 	for(index_t blockIdx=0, numBlocks=blocks.size(); blockIdx<numBlocks; ++blockIdx){
@@ -3191,6 +3359,12 @@ void Domain::UpdateDomainGPU(){
 				
 				fb.hasTransform = bound->hasTransform();
 				fb.transform = bound->getTransformDataPtr<scalar_t>();
+
+				// Thin-wall MHD fields
+				fb.epotCw = static_cast<scalar_t>(bound->getEpotCw());
+				fb.epotDirichlet = bound->hasEpotDirichlet();
+				fb.epotInsulating = bound->isEpotInsulating();
+
 				p_blockCPU->boundaries[boundIdx].fb = fb;
 				//TORCH_CHECK(false, "FixedBoundary is not yet supported by the simulator.");
 				break;

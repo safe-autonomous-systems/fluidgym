@@ -12,6 +12,7 @@ from fluidgym.envs.util.visualization import (
     render_3d_voxels,
 )
 from fluidgym.simulation.helpers import get_cell_size
+from fluidgym.simulation.solver_tolerance import SolverTolerance
 
 RBC_3D_DEFAULT_CONFIG = {
     "rayleigh_number": 2e3,
@@ -32,6 +33,8 @@ RBC_3D_DEFAULT_CONFIG = {
     "load_domain_statistics": True,
     "randomize_initial_state": True,
     "enable_actions": True,
+    "pressure_tol_intermediate": SolverTolerance(atol=1e-4),
+    "pressure_warm_start": True,
     "differentiable": False,
 }
 
@@ -114,6 +117,11 @@ class RBCEnv3D(RBCEnvBase):
     _default_render_key: str = "3d_temperature"
     _ndims = 3
 
+    # A quarter of the 20 PISO steps of a registered env step: the 3D replay tape
+    # is what caps a differentiable rollout here (see
+    # ``FluidEnv.bptt_segment_size``)
+    _default_bptt_segment_size: int | None = 5
+
     # Based on reference [1] with half domain size (division by sqrt(2))
     _initial_domain_steps = 1500
 
@@ -172,8 +180,8 @@ class RBCEnv3D(RBCEnvBase):
         )
 
     @property
-    def render_shape(self) -> tuple[int, int, int]:
-        """The shape of the rendered domain."""
+    def obs_resampling_shape(self) -> tuple[int, int, int]:
+        """The shape of the observation resampling grid."""
         nx = self._n_heaters * 20
         height = round(nx / self._aspect_ratio)
 
@@ -181,11 +189,11 @@ class RBCEnv3D(RBCEnvBase):
 
     def _get_sensor_locations(self) -> torch.Tensor:
         sensor_locations_2d = self._get_sensor_locations_2d()
-        nz = self.render_shape[-1]
+        nz = self.obs_resampling_shape[-1]
         n_sensors_z = self._n_sensors_per_heater * self._n_heaters
         sensor_z = torch.linspace(
             start=0,
-            end=self.render_shape[-1],
+            end=self.obs_resampling_shape[-1],
             steps=n_sensors_z + 1,
         )[:-1] + nz / (2 * n_sensors_z)
         sensor_z = sensor_z.round().to(torch.int).to(self._cuda_device)
@@ -256,8 +264,8 @@ class RBCEnv3D(RBCEnvBase):
             torch.clamp(T_shifted.abs(), min=1.0) / self._heater_limit
         )
 
-        # So far, we have computed the derivation from the bottom temperature.
-        # We need to shift it to the actual temperature range.
+        # So far, we have computed the derivation from the bottom temperature
+        # We need to shift it to the actual temperature range
         T_action += self._T_hot
 
         T_smooth = self.__smooth_action_profile_2d(T_action=T_action)
@@ -279,7 +287,7 @@ class RBCEnv3D(RBCEnvBase):
         z_idx = agent_idx // self._n_heaters
 
         if userender_shape:
-            heater_width_x_z = self.render_shape[0] // self._n_heaters
+            heater_width_x_z = self.obs_resampling_shape[0] // self._n_heaters
         else:
             heater_width_x_z = self._heater_width
 
@@ -381,6 +389,8 @@ class RBCEnv3D(RBCEnvBase):
         }
 
     def _get_local_rewards(self) -> torch.Tensor:
+        assert isinstance(self._block.passiveScalar, torch.Tensor)
+
         T: torch.Tensor = self._block.passiveScalar[0, 0]  # [Z, Y, X]
 
         u: torch.Tensor = self._block.getVelocity(False)
@@ -415,10 +425,13 @@ class RBCEnv3D(RBCEnvBase):
 
         return self.nu_ref - local_nu
 
-    def plot(self) -> None:
+    def plot(self, output_path: Path | None = None) -> None:
         """Plot the environments configuration."""
         # Plot sensor locations in 3D
         import matplotlib.pyplot as plt
+
+        if output_path is None:
+            output_path = Path(".")
 
         plt.figure(figsize=(8, 6))
         ax = plt.axes(projection="3d")
@@ -451,12 +464,12 @@ class RBCEnv3D(RBCEnvBase):
         ax.set_ylabel("Z axis")
         ax.set_zlabel("Y axis")  # type: ignore
 
-        ax.set_xlim(0, self.render_shape[0])
-        ax.set_ylim(0, self.render_shape[2])
-        ax.set_zlim(0, self.render_shape[1])  # type: ignore
+        ax.set_xlim(0, self.obs_resampling_shape[0])
+        ax.set_ylim(0, self.obs_resampling_shape[2])
+        ax.set_zlim(0, self.obs_resampling_shape[1])  # type: ignore
 
         plt.title("3D Sensor Locations")
-        plt.savefig("3d_sensor_locations.png", dpi=300)
+        plt.savefig(output_path / "3d_sensor_locations.png", dpi=300)
         plt.close()
 
     def plot_actuation(self, action: torch.Tensor, action_smooth: torch.Tensor) -> None:

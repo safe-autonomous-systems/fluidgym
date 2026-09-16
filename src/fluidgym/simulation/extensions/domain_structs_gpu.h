@@ -41,6 +41,30 @@
  * - local(block data)/global(rhs, result) for position indexing
  * - fwd/gradient
  */
+/* Convective interpolation scheme for the momentum/advection equation.
+ *
+ * Both variants share the flux-limiter form of the face value
+ *   phi_f = phi_U + 0.5*psi(r)*(phi_D - phi_U),   r = (phi_U - phi_UU)/(phi_D - phi_U)
+ * with U the upwind, D the downwind and UU the far-upwind cell along the face
+ * normal, so they differ only in the limiter psi.
+ *
+ * CENTRAL keeps the original discretization: the face value is assembled
+ * directly into the matrix and no deferred correction is built. LINEAR_UPWIND
+ * puts first-order upwind into the matrix (which keeps it an M-matrix) and
+ * carries (phi_f^HO - phi_f^UD) as an explicit correction on the RHS, the usual
+ * deferred-correction arrangement.
+ *
+ * Motivation: central differencing has *exactly* zero dissipation at the 2*dx
+ * mode (its symbol is i*sin(k*dx)), so grid-scale oscillations generated at a
+ * steep shear layer have no sink. LINEAR_UPWIND has a real symbol part of 4.0
+ * there but only 0.006 at 16*dx, i.e. it damps the checkerboard while leaving
+ * resolved scales essentially untouched.
+ */
+enum class AdvectionScheme : int8_t{
+	CENTRAL        = 0, // psi = 1, assembled implicitly (original behaviour)
+	LINEAR_UPWIND  = 1, // psi = r, second-order upwind (OpenFOAM "linearUpwind"), unbounded
+};
+
 enum class GridDataType : int8_t{
 	// ordered to use for indexing
 	_INDEX_MASK    = 3, // first 2 bits are used for indexing
@@ -219,6 +243,11 @@ struct FixedBoundaryGPU{
 	};
 	bool hasTransform;
 	scalar_t *transform;
+
+	// Thin-wall MHD
+	scalar_t epotCw;            // wall conductance ratio (0 = insulating)
+	bool epotDirichlet;         // φ=0 Dirichlet at this face (open outflow)
+	bool epotInsulating;        // solid wall (j_n=0); false at an open in/outflow plane
 };
 
 template <typename scalar_t>
@@ -321,6 +350,7 @@ struct BlockGPU{
 	scalar_t *transform;
 	bool hasFaceTransform;
 	scalar_t *faceTransform;
+
 };
 
 template <typename scalar_t>
@@ -331,7 +361,9 @@ struct DomainGPU{
 	//scalar_t timeStep;
 	dim_t numDims;
 	index_t passiveScalarChannels;
-	
+
+	AdvectionScheme advectionScheme;
+
 	scalar_t viscosity;
 	scalar_t *scalarViscosity;
 	bool scalarViscosityStatic;
@@ -339,6 +371,9 @@ struct DomainGPU{
 	CSRmatrixGPU<scalar_t> C;
 	scalar_t *Adiag;
 	CSRmatrixGPU<scalar_t> P;
+	CSRmatrixGPU<scalar_t> Epot;      // electric potential Laplacian matrix (MHD)
+	scalar_t *epotRHS;                // RHS: div(u x e_b), shape [totalSize]
+	scalar_t *epotResult;             // solved electric potential phi, shape [totalSize]
 
 	union{
 		struct{
@@ -385,6 +420,8 @@ struct DomainGPU{
 		};
 		scalar_t *results_grad[3];
 	};
+
+	scalar_t *epotResult_grad;   // shape [totalSize], gradient w.r.t. φ
 
 #endif
 };

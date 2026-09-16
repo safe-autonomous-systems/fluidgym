@@ -88,11 +88,15 @@ def rotate_grid(
     axis: list = None,
     center: str = "CENTER",
     distance_scaling: callable = None,
+    distance_axes: list = None,
 ):
     # angle: rotation angle in degrees
     # axis: axis to rotate around for 3D
     # center: the position to rotate around. coordinate or string
     # distance_scaling: function to return a weighting factor for axis, depending on a points distance to center
+    # distance_axes: per-axis radii [r_x, r_y] or [r_x, r_y, r_z] for elliptical distance computation.
+    #   Each coordinate is divided by its radius before computing the norm, so the influence region
+    #   stretches further along axes with larger radii. Only used when distance_scaling is provided.
     pass
     assert (
         isinstance(grid, torch.Tensor)
@@ -110,6 +114,11 @@ def rotate_grid(
             raise ValueError("rotation axis is too short for normalization")
         axis /= axis_norm
 
+    if distance_axes is not None:
+        assert (
+            isinstance(distance_axes, (list, tuple)) and len(distance_axes) == dims
+        ), f"distance_axes must have {dims} elements, one per spatial dimension"
+
     grid = torch.moveaxis(grid, 1, -1)
     grid_size = grid.size()
     grid = torch.reshape(grid, (-1, dims))
@@ -126,7 +135,11 @@ def rotate_grid(
     grid = grid - center  # now centered on origin
 
     if distance_scaling is not None:
-        distances = torch.linalg.norm(grid, dim=-1, keepdims=False).cpu().numpy()
+        if distance_axes is not None:
+            axes_tensor = torch.tensor(distance_axes, device=grid.device, dtype=grid.dtype)
+            distances = torch.linalg.norm(grid / axes_tensor, dim=-1, keepdims=False).cpu().numpy()
+        else:
+            distances = torch.linalg.norm(grid, dim=-1, keepdims=False).cpu().numpy()
         angle = [angle * distance_scaling(distance) for distance in distances]
 
         make_matrix_rotation = (
@@ -638,9 +651,14 @@ def make_wall_refined_ortho_grid(
     return grid
 
 
-def extrude_grid_z(grid, res_z, start_z=0, end_z=1, weights_z=None, exp_base=1.05):
-    # res_z z resolution of the cell grid. coordinates grid will have res_z+1.
-
+def extrude_grid_z(
+        grid: torch.Tensor,
+        res_z: int,
+        start_z: float = 0.0,
+        end_z: float = 1.0,
+        weights_z: list | str | None = None,
+        exp_base: float = 1.05
+    ):
     assert grid.dim() == 4 and grid.size(1) == 2
     res_x = grid.size(-1) - 1
     res_y = grid.size(-2) - 1

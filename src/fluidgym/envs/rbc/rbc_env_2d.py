@@ -165,8 +165,8 @@ class RBCEnv2D(RBCEnvBase):
         )
 
     @property
-    def render_shape(self) -> tuple[int, ...]:
-        """The shape of the rendered domain."""
+    def obs_resampling_shape(self) -> tuple[int, ...]:
+        """The shape of the observation resampling grid."""
         nx = self._n_heaters * 20
         height = round(nx / self._aspect_ratio)
 
@@ -260,8 +260,8 @@ class RBCEnv2D(RBCEnvBase):
             torch.clamp(T_shifted.abs(), min=1.0) / self._heater_limit
         )
 
-        # So far, we have computed the derivation from the bottom temperature.
-        # We need to shift it to the actual temperature range.
+        # So far, we have computed the derivation from the bottom temperature
+        # We need to shift it to the actual temperature range
         T_action += self._T_hot
 
         # Smoothing according to https://doi.org/10.1063/5.0153181
@@ -326,6 +326,8 @@ class RBCEnv2D(RBCEnvBase):
         }
 
     def _get_local_rewards(self) -> torch.Tensor:
+        assert isinstance(self._block.passiveScalar, torch.Tensor)
+
         T: torch.Tensor = self._block.passiveScalar[0, 0]  # [Y, X]
 
         u: torch.Tensor = self._block.getVelocity(False)

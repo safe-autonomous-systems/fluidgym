@@ -95,46 +95,43 @@ class TorchRLFluidEnv(EnvBase):
     ----------
     env: FluidEnvLike
         The FluidGym environment to wrap.
-
-    from_pixels: bool
-        If True, the environment will add pixel observations to the observation spec
-        and return them in the step output.
     """
 
-    def __init__(self, env: FluidEnvLike, from_pixels: bool = False):
+    def __init__(self, env: FluidEnvLike):
         n_agents = env.n_agents if env.use_marl else None
         batch_size = torch.Size([n_agents]) if n_agents is not None else torch.Size([])
 
         super().__init__(device=env.cuda_device, batch_size=batch_size)
-        self._env = env
+        self.__env = env
         self._n_agents = n_agents
-        self._make_spec()
-        self._from_pixels = from_pixels
 
-        if from_pixels:
-            pixel_shape = env.render().shape
-            W, H, C = pixel_shape
-            if W % 2 != 0:
-                W = W - 1
-            if H % 2 != 0:
-                H = H - 1
-            self._pixel_shape = (W, H, C)
-            self.observation_spec["pixels"] = Unbounded(
-                shape=torch.Size((*batch_size, *self._pixel_shape)),
-                dtype=torch.uint8,
-                device=self.device,
-            )
+        # The specs are float32 while the simulation may run in float64 (MHD). The
+        # casts in _step/_reset are differentiable, so a gradient crosses back into
+        # the solver's precision on its way into the simulation
+        unwrapped = getattr(env, "unwrapped", env)
+        self._env_dtype = getattr(unwrapped, "_dtype", torch.float32)
+
+        self._make_spec()
+
+    @property
+    def fluid_env(self) -> FluidEnvLike:
+        """The wrapped FluidGym environment."""
+        return self.__env
+
+    # ------------------------------------------------------------------
+    # Spec construction
+    # ------------------------------------------------------------------
 
     def _make_spec(self) -> None:
         device = self.device
         batch_shape = self.batch_size  # () for single-agent, (N,) for multi-agent
 
         self.observation_spec = _obs_space_to_composite(
-            self._env.observation_space, device, batch_shape
+            self.__env.observation_space, device, batch_shape
         )
         self.state_spec = self.observation_spec.clone()
 
-        action_space = self._env.action_space
+        action_space = self.__env.action_space
         if self._n_agents is not None:
             n = self._n_agents
             low = (
@@ -186,21 +183,6 @@ class TorchRLFluidEnv(EnvBase):
             ),
         )
 
-    def _flag_tensor(self, flag: bool) -> torch.Tensor:
-        """Broadcast a scalar bool flag to (*batch_shape, 1)."""
-        t = torch.tensor([[flag]], dtype=torch.bool, device=self.device)
-        if self._n_agents is not None:
-            t = t.expand(self._n_agents, 1)
-        return t
-
-    def _to_spec_shape(self, t: torch.Tensor) -> torch.Tensor:
-        """Ensure a reward tensor matches (*batch_shape, 1)."""
-        if self._n_agents is not None and t.ndim == 1:
-            t = t.unsqueeze(-1)
-        elif t.ndim == 0:
-            t = t.unsqueeze(-1)
-        return t
-
     def _step(self, tensordict: TensorDict) -> TensorDict:
         """Take a step in the environment using the action from tensordict.
 
@@ -215,29 +197,51 @@ class TorchRLFluidEnv(EnvBase):
         TensorDict
             A TensorDict containing the next observation, reward, and done flags.
         """
-        with torch.no_grad():
-            obs, reward, term, trunc, _ = self._env.step(tensordict["action"])
+        action = tensordict["action"].to(dtype=self._env_dtype)
+        if not self.__env.differentiable:
+            with torch.no_grad():
+                obs, reward, term, trunc, _ = self.__env.step(action)
+        else:
+            with torch.enable_grad():
+                obs, reward, term, trunc, _ = self.__env.step(action)
 
         if not isinstance(obs, dict):
             obs = {"observation": obs}
+        obs = {k: v.to(dtype=torch.float32) for k, v in obs.items()}
+
+        # In differentiable mode the reward keeps its graph, which is what an analytic
+        # policy gradient differentiates
+        reward = reward.to(dtype=torch.float32)
+        if not self.__env.differentiable:
+            reward = reward.detach()
 
         done = term | trunc
+
+        def _flag_tensor(flag: bool) -> torch.Tensor:
+            """Broadcast a scalar bool flag to (*batch_shape, 1)."""
+            t = torch.tensor([[flag]], dtype=torch.bool, device=self.device)
+            if self._n_agents is not None:
+                t = t.expand(self._n_agents, 1)
+            return t
+
+        def _to_spec_shape(t: torch.Tensor) -> torch.Tensor:
+            """Ensure a reward tensor matches (*batch_shape, 1)."""
+            if self._n_agents is not None and t.ndim == 1:
+                t = t.unsqueeze(-1)
+            elif t.ndim == 0:
+                t = t.unsqueeze(-1)
+            return t
 
         td = TensorDict(
             {
                 **obs,
-                "reward": self._to_spec_shape(reward),
-                "done": self._flag_tensor(done),
-                "terminated": self._flag_tensor(term),
-                "truncated": self._flag_tensor(trunc),
+                "reward": _to_spec_shape(reward),
+                "done": _flag_tensor(done),
+                "terminated": _flag_tensor(term),
+                "truncated": _flag_tensor(trunc),
             },
             batch_size=self.batch_size,
         )
-
-        if self._from_pixels:
-            pixels = self._env.render()
-            pixels = pixels[: self._pixel_shape[0], : self._pixel_shape[1], :]
-            td["pixels"] = self._to_spec_shape(torch.from_numpy(pixels).to(self.device))
 
         return td
 
@@ -254,18 +258,12 @@ class TorchRLFluidEnv(EnvBase):
         TensorDict
             A TensorDict containing the initial observation.
         """
-        obs, _ = self._env.reset()
+        obs, _ = self.__env.reset()
         if not isinstance(obs, dict):
             obs = {"observation": obs}
+        obs = {k: v.to(dtype=torch.float32) for k, v in obs.items()}
 
-        td = TensorDict(obs, batch_size=self.batch_size)
-
-        if self._from_pixels:
-            pixels = self._env.render()
-            pixels = pixels[: self._pixel_shape[0], : self._pixel_shape[1], :]
-            td["pixels"] = self._to_spec_shape(torch.from_numpy(pixels).to(self.device))
-
-        return td
+        return TensorDict(obs, batch_size=self.batch_size)
 
     def _set_seed(self, seed: int) -> None:
         """Sets the random seed for the environment.
@@ -275,4 +273,4 @@ class TorchRLFluidEnv(EnvBase):
         seed: int
             The random seed to set.
         """
-        self._env.seed(seed)
+        self.__env.seed(seed)

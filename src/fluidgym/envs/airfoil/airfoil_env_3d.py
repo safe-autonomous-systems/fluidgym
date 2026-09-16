@@ -1,5 +1,6 @@
 """Environment for 3D airfoil drag and lift reduction."""
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +17,7 @@ from fluidgym.simulation.extensions import (
     PISOtorch,  # type: ignore[import-untyped,import-not-found]
 )
 from fluidgym.simulation.pict.util.domain_io import load_domain
+from fluidgym.simulation.solver_tolerance import SolverTolerance
 from fluidgym.types import EnvMode
 
 VORTICITY_RENDER_LEVELS = {
@@ -118,6 +120,38 @@ class AirfoilEnv3D(AirfoilEnvBase):
     differentiable: bool
         Whether to enable differentiable simulation mode. Defaults to False.
 
+    advection_tol: float | SolverTolerance | Mapping | None
+        Tolerance for the momentum and passive-scalar advection solves. None (the
+        default) keeps the tolerance this environment is tuned at.
+
+    pressure_tol: float | SolverTolerance | Mapping | None
+        Tolerance for the pressure solve. None (the default) keeps the tolerance
+        this environment is tuned at.
+
+    pressure_tol_intermediate: float | SolverTolerance | Mapping | None
+        Tolerance for the pressure solves before the final corrector. None (the
+        default) applies ``pressure_tol`` everywhere.
+
+    pressure_warm_start: bool
+        Whether to seed each pressure solve with the previous sub-step's result.
+        Defaults to False.
+
+    linear_solve_max_iter: int | None
+        Iteration limit for the advection and pressure solves. None (the default)
+        leaves the solver's own limit in place.
+
+    exclude_advection_solve_gradients: bool | None
+        Drop the gradient of the advection solve. Diagnostic only; None (the
+        default) keeps it.
+
+    exclude_pressure_solve_gradients: bool | None
+        Drop the gradient of the pressure solve. Diagnostic only; None (the
+        default) keeps it.
+
+    exclude_pressure_gradient_adjoint: bool | None
+        Drop the pressure path of the PISO velocity-correction backward.
+        Diagnostic only; None (the default) keeps it.
+
     References
     ----------
     [1] R. Montalà et al., “Discovering Flow Separation Control Strategies in 3D Wings
@@ -126,9 +160,15 @@ class AirfoilEnv3D(AirfoilEnvBase):
     """
 
     _default_render_key: str = "3d_vorticity"
-
+    _render_resolution: int = 1
+    
     _n_sensors_per_agent: int = 1
     _supports_marl: bool = True
+
+    # One PISO step per segment, the finest cut of the 5 a registered env step has:
+    # the 3D replay tape is what caps a differentiable rollout here (see
+    # ``FluidEnv.bptt_segment_size``)
+    _default_bptt_segment_size: int | None = 1
 
     def __init__(
         self,
@@ -152,6 +192,16 @@ class AirfoilEnv3D(AirfoilEnvBase):
         randomize_initial_state: bool = True,
         enable_actions: bool = True,
         differentiable: bool = False,
+        advection_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol_intermediate: (
+            float | SolverTolerance | Mapping[str, float] | None
+        ) = None,
+        pressure_warm_start: bool = False,
+        linear_solve_max_iter: int | None = None,
+        exclude_advection_solve_gradients: bool | None = None,
+        exclude_pressure_solve_gradients: bool | None = None,
+        exclude_pressure_gradient_adjoint: bool | None = None,
     ):
         if n_agents < 1 or self._res_z % n_agents != 0:
             raise ValueError(
@@ -200,6 +250,14 @@ class AirfoilEnv3D(AirfoilEnvBase):
             randomize_initial_state=randomize_initial_state,
             enable_actions=enable_actions,
             differentiable=differentiable,
+            advection_tol=advection_tol,
+            pressure_tol=pressure_tol,
+            pressure_tol_intermediate=pressure_tol_intermediate,
+            pressure_warm_start=pressure_warm_start,
+            linear_solve_max_iter=linear_solve_max_iter,
+            exclude_advection_solve_gradients=exclude_advection_solve_gradients,
+            exclude_pressure_solve_gradients=exclude_pressure_solve_gradients,
+            exclude_pressure_gradient_adjoint=exclude_pressure_gradient_adjoint,
         )
 
     def _get_action_space(self) -> spaces.Box:
@@ -406,10 +464,10 @@ class AirfoilEnv3D(AirfoilEnvBase):
 
         return top_profile
 
-    def _step_impl(
-        self, action: torch.Tensor
+    def _finish_step(
+        self, metrics: dict[str, torch.Tensor]
     ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
-        obs, reward, term, info = super()._step_impl(action)
+        obs, reward, term, info = super()._finish_step(metrics)
 
         all_cds = info.pop("drag")
         all_cls = info.pop("lift")
@@ -428,13 +486,13 @@ class AirfoilEnv3D(AirfoilEnvBase):
 
         return obs, reward, term, info
 
-    def _step_marl_impl(
-        self, actions: torch.Tensor
+    def _finish_marl_step(
+        self, metrics: dict[str, torch.Tensor]
     ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         if self._local_reward_weight is None:
             raise ValueError("local_reward_weight must be set for multi-agent step.")
 
-        _, global_reward, terminated, info = self._step_impl(actions)
+        _, global_reward, terminated, info = self._finish_step(metrics)
 
         local_obs = self._get_local_obs()
 
@@ -498,7 +556,7 @@ class AirfoilEnv3D(AirfoilEnvBase):
 
             iso_val = VORTICITY_RENDER_LEVELS[int(self._reynolds_number)]
             render_data["3d_vorticity"] = render_3d_iso(
-                iso_field=curl_arr,
+                iso_field=np.abs(curl_arr),
                 iso=[iso_val],
                 output_path=output_path,
                 color_field=u_arr,

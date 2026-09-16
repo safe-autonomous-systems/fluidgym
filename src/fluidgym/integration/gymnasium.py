@@ -93,6 +93,7 @@ class GymFluidEnv(Env):
         seed: int | None = None,
         options: dict[str, Any] | None = None,
         randomize: bool | None = None,
+        domain_idx: int | None = None,
     ) -> tuple[np.ndarray | dict[str, np.ndarray], dict[str, np.ndarray]]:
         """Resets the environment to an initial internal state, returning an initial
         observation and info.
@@ -107,12 +108,18 @@ class GymFluidEnv(Env):
             Whether to randomize the initial state. If None, the default behavior is
             used.
 
+        domain_idx: int | None
+            Index of the initial domain to load. If None, the default behavior is
+            used. Defaults to None.
+
         Returns
         -------
         tuple[np.ndarray | dict[str, np.ndarray], dict[str, np.ndarray]]
             A tuple containing the initial observation and an info dictionary.
         """
-        obs, info = self.__env.reset(seed=seed, randomize=randomize)
+        obs, info = self.__env.reset(
+            seed=seed, randomize=randomize, domain_idx=domain_idx
+        )
         info_np = {k: np.array(self.__to_np(v)) for k, v in info.items()}
 
         return self.__to_np(obs), info_np

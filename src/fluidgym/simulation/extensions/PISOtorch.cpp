@@ -67,6 +67,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 		.export_values();
 
 
+	py::enum_<AdvectionScheme>(m, "AdvectionScheme")
+		.value("CENTRAL", AdvectionScheme::CENTRAL)
+		.value("LINEAR_UPWIND", AdvectionScheme::LINEAR_UPWIND)
+		.export_values();
+
+
 	py::enum_<BoundaryConditionType>(m, "BoundaryConditionType")
 		.value("DIRICHLET", BoundaryConditionType::DIRICHLET)
 		.value("NEUMANN", BoundaryConditionType::NEUMANN)
@@ -141,6 +147,23 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 		.def("hasTransform", &FixedBoundary::hasTransform)
 		.def("setTransform", &FixedBoundary::setTransform)
 		.def("clearTransform", &FixedBoundary::clearTransform)
+		// Thin-wall MHD
+		.def("setEpotCw", &FixedBoundary::setEpotCw,
+			"Set the wall conductance ratio C_w for thin-wall MHD.",
+			py::arg("cw"))
+		.def("hasEpotCw", &FixedBoundary::hasEpotCw)
+		.def("getEpotCw", &FixedBoundary::getEpotCw)
+		.def("setEpotDirichlet", &FixedBoundary::setEpotDirichlet,
+			"Set Dirichlet φ=0 BC on this boundary for the electric potential (use at open outflow planes).",
+			py::arg("dirichlet"))
+		.def("hasEpotDirichlet", &FixedBoundary::hasEpotDirichlet)
+		.def("setEpotInsulating", &FixedBoundary::setEpotInsulating,
+			"Set whether this face is insulating (j_n=0) for the inductionless MHD solve. "
+			"True (the default) is a solid wall; set False on an open in/outflow plane, where "
+			"current leaves the domain and closes virtually outside. Cannot be inferred from the "
+			"boundary type: CloseBoundary makes walls and prescribed-velocity in/outflows alike.",
+			py::arg("insulating"))
+		.def("isEpotInsulating", &FixedBoundary::isEpotInsulating)
 #ifdef WITH_GRAD
 		.def_readonly("velocityGrad", &FixedBoundary::m_velocity_grad)
 		.def("setVelocityGrad", &FixedBoundary::setVelocityGrad)
@@ -241,6 +264,16 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 		.def_readonly("pressure", &Block::pressure)
 		.def("setPressure", &Block::setPressure)
 		.def("CreatePressure", &Block::CreatePressure)
+		.def_readonly("epot", &Block::epot)
+		.def("setEpot", &Block::setEpot)
+		.def("CreateEpot", &Block::CreateEpot)
+		.def("hasEpot", &Block::hasEpot)
+#ifdef WITH_GRAD
+		.def_readonly("epotGrad", &Block::epot_grad)
+		.def("setEpotGrad", &Block::setEpotGrad)
+		.def("CreateEpotGrad", &Block::CreateEpotGrad)
+		.def("hasEpotGrad", &Block::hasEpotGrad)
+#endif //WITH_GRAD
 		.def_readonly("passiveScalar", &Block::passiveScalar)
 		.def("setPassiveScalar", &Block::setPassiveScalar)
 		.def("CreatePassiveScalar", &Block::CreatePassiveScalar)
@@ -348,6 +381,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 		.def("CloseBoundary", static_cast<void (Block::*)(const std::string&, optional<torch::Tensor>, optional<torch::Tensor>)>(&Block::CloseBoundary),
 			"Create a FixedBoundary with Dirichlet velocity and scalar at the specified face. Existing Connected and PeriodicBoudnaries cause the connected side to be closed as well. The new boundaries will use existing face transformations.",
 			py::arg("faceString"), py::arg("velocity")=nullopt, py::arg("passiveScalar")=nullopt)
+		.def("OpenBoundary", static_cast<void (Block::*)(const index_t, optional<torch::Tensor>)>(&Block::OpenBoundary),
+			"Create a FixedBoundary with zero-Neumann (free-slip) velocity BC at the specified face. Normal velocity is zero; tangential velocity has zero gradient (du/dn=0). Passive scalar defaults to Neumann unless a tensor is provided (Dirichlet).",
+			py::arg("faceIndex"), py::arg("passiveScalar")=nullopt)
+		.def("OpenBoundary", static_cast<void (Block::*)(const std::string&, optional<torch::Tensor>)>(&Block::OpenBoundary),
+			"Create a FixedBoundary with zero-Neumann (free-slip) velocity BC at the specified face. Normal velocity is zero; tangential velocity has zero gradient (du/dn=0). Passive scalar defaults to Neumann unless a tensor is provided (Dirichlet).",
+			py::arg("faceString"), py::arg("passiveScalar")=nullopt)
 		// misc
 		.def("ComputeCSRSize", &Block::ComputeCSRSize)
 		.def("getDevice", &Block::getDevice)
@@ -418,6 +457,15 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 		.def("hasPassiveScalarBlockViscosity", &Domain::hasPassiveScalarBlockViscosity, "Check if ANY block has passive scalar viscosity set.")
 		.def("CreatePassiveScalarOnBlocks", &Domain::CreatePassiveScalarOnBlocks)
 		.def("CreatePressureOnBlocks", &Domain::CreatePressureOnBlocks)
+		.def("CreateEpotOnBlocks", &Domain::CreateEpotOnBlocks)
+		.def("setAdvectionScheme", &Domain::setAdvectionScheme,
+			py::arg("scheme"),
+			"Convective scheme for the momentum and passive-scalar equations. CENTRAL (default) is the original discretization; LINEAR_UPWIND uses implicit first-order upwind plus an explicit second-order upwind correction.")
+		.def("getAdvectionScheme", &Domain::getAdvectionScheme)
+		.def("SetupEpotOnDomain", &Domain::SetupEpotOnDomain,
+			py::arg("nonOrthoFlags") = (int8_t)0,
+			py::arg("useFaceTransform") = false,
+			"Full epot setup (alloc + matrix fill + block epots). Stores flags so Copy/Clone+PrepareSolve auto-rebuilds.")
 		.def("CreateVelocityOnBlocks", &Domain::CreateVelocityOnBlocks)
 		.def_readonly("name", &Domain::name)
 		.def_readonly("C", &Domain::C)
@@ -446,6 +494,17 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 		.def_readonly("pressureResult", &Domain::pressureResult)
 		.def("setPressureResult", &Domain::setPressureResult)
 		.def("CreatePressureResult", &Domain::CreatePressureResult)
+		// Electric potential fields (MHD)
+		.def_readonly("Epot", &Domain::Epot)
+		.def("CreateEpotMatrix", &Domain::CreateEpotMatrix)
+		.def_readonly("epotRHS", &Domain::epotRHS)
+		.def("setEpotRHS", &Domain::setEpotRHS)
+		.def("CreateEpotRHS", &Domain::CreateEpotRHS)
+		.def_readonly("epotResult", &Domain::epotResult)
+		.def("setEpotResult", &Domain::setEpotResult)
+		.def("CreateEpotResult", &Domain::CreateEpotResult)
+		.def("hasEpot", &Domain::hasEpot)
+
 #ifdef WITH_GRAD
 		.def("CreatePassiveScalarGradOnBlocks", &Domain::CreatePassiveScalarGradOnBlocks)
 		.def("CreateVelocityGradOnBlocks", &Domain::CreateVelocityGradOnBlocks)
@@ -497,6 +556,11 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 		.def_readonly("pressureResultGrad", &Domain::pressureResult_grad)
 		.def("setPressureResultGrad", &Domain::setPressureResultGrad)
 		.def("CreatePressureResultGrad", &Domain::CreatePressureResultGrad)
+		.def_readonly("epotResultGrad", &Domain::epotResult_grad)
+		.def("setEpotResultGrad", &Domain::setEpotResultGrad)
+		.def("CreateEpotResultGrad", &Domain::CreateEpotResultGrad)
+		.def("hasEpotResultGrad", &Domain::hasEpotResultGrad)
+		.def("CreateEpotGradOnBlocks", &Domain::CreateEpotGradOnBlocks)
 #endif //WITH_GRAD
 		.def("IsTensorChanged", &Domain::IsTensorChanged)
 		.def_readonly("_packedCPU", &Domain::domainCPU)
@@ -542,20 +606,59 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 		py::arg("domain"), py::arg("timeStep"), py::arg("version")=0, py::arg("timeStepNorm")=false);
 	m.def("ComputeVelocityDivergence", &ComputeVelocityDivergence, "velocity divergence (CUDA)");
 	m.def("ComputePressureGradient", &ComputePressureGradient, "pressure gradient (CUDA)");
+	// MHD: electric potential
+	m.def("SetupEpotMatrix", &SetupEpotMatrix,
+		"Build the Laplacian matrix for the electric potential Poisson equation (MHD). "
+		"For thin-wall FIXED boundaries (epotCw>0) the Robin BC dphi/dn=Cw*nabla2_tau(phi) "
+		"is incorporated directly — no augmented system required. "
+		"Requires domain.CreateEpotMatrix() to have been called.",
+		py::arg("domain"), py::arg("nonOrthoMode")=0, py::arg("useFaceTransform")=false);
+	m.def("ComputeEpotRHS", &ComputeEpotRHS,
+		"Compute the electric-potential Poisson RHS div(u×B) [totalSize] from the flat u×B field "
+		"[totalSize*dims]. The normal flux through prescribed boundaries "
+		"(FIXED/DIRICHLET/DIRICHLET_VARYING/GRADIENT) is dropped for an insulating (j_n=0) outflow.",
+		py::arg("domain"), py::arg("vectorField"));
+	m.def("ComputeFieldGradient", &ComputeFieldGradient,
+		"Compute gradient of an arbitrary flat scalar field [totalSize] with Neumann BCs. Returns vector field [totalSize*dims].",
+		py::arg("domain"), py::arg("scalarField"));
+	m.def("ComputeFieldGradientFVM", &ComputeFieldGradientFVM,
+		"Compute FVM (Green-Gauss) gradient of a flat scalar field [totalSize]. "
+		"Uses face-based interpolation consistent with the Laplacian stencil. "
+		"Returns vector field [totalSize*dims].",
+		py::arg("domain"), py::arg("scalarField"));
+	m.def("ComputeCurrentDensityFaceBased", &ComputeCurrentDensityFaceBased,
+		"Compute face-based current density J = -grad(phi) + u×B. "
+		"Guarantees discrete div(J)=0. Returns J [totalSize*3] (always 3 components).",
+		py::arg("domain"), py::arg("epotField"), py::arg("uCrossBField"));
 	m.def("ComputeSpatialVelocityGradients", &ComputeSpatialVelocityGradients,
-		"Compute the spatial gradients of all velocity components of all blocks in the domain. Returns nested lists of tensors: [Blocks: [Components: NCDHW]]",
+		"Compute the spatial gradients of all velocity components of all blocks in the domain. "
+		"Returns nested lists of tensors: [Blocks: [Components: NCDHW]]. "
+		"The outer index selects the velocity component k, the tensor's channel axis C the "
+		"spatial direction i, i.e. result[block][k][:,i] = d(u_k)/d(x_i).",
 		py::arg("domain"));
 	m.def("CopyScalarResultToBlocks", &CopyScalarResultToBlocks, "PISO copy scalar result (CUDA)");
 	m.def("CopyScalarResultFromBlocks", &CopyScalarResultFromBlocks, "PISO copy scalar result (CUDA)");
 	m.def("CopyPressureResultToBlocks", &CopyPressureResultToBlocks, "PISO copy pressure result (CUDA)");
 	m.def("CopyPressureResultFromBlocks", &CopyPressureResultFromBlocks, "PISO copy pressure result (CUDA)");
+	m.def("CopyEpotResultToBlocks", &CopyEpotResultToBlocks, "Copy domain.epotResult to block.epot (CUDA)");
+	m.def("CopyEpotResultFromBlocks", &CopyEpotResultFromBlocks, "Copy block.epot to domain.epotResult (CUDA)");
 	m.def("CopyVelocityResultToBlocks", &CopyVelocityResultToBlocks, "PISO copy velocity result (CUDA)");
 	m.def("CopyVelocityResultFromBlocks", &CopyVelocityResultFromBlocks, "PISO copy velocity result back (CUDA)");
 	
 	m.def("SGSviscosityIncompressibleSmagorinsky", &SGSviscosityIncompressibleSmagorinsky,
-		"Compute the additive viscosities for a Smagorinsky SGS scheme based on the velocity field. Returns a list of viscosity tensors, one per block.",
+		"Compute the additive viscosities for a Smagorinsky SGS scheme based on the velocity field. Returns a list of viscosity tensors, one per block. "
+		"NOTE: 'coefficient' is already C_s^2 (not C_s), and the filter width used is the max cell edge length rather than cellVolume^(1/dims).",
 		py::arg("domain"), py::arg("coefficient"));
-	
+
+	m.def("SGSviscosityIncompressibleWALE", &SGSviscosityIncompressibleWALE,
+		"Compute the additive viscosities for a WALE (Wall-Adapting Local Eddy-viscosity, Nicoud & Ducros 1999) "
+		"SGS scheme based on the velocity field. Returns a list of viscosity tensors, one per block. "
+		"'coefficient' is the textbook Cw (typ. 0.325-0.5) and is SQUARED internally: "
+		"nu_t = (Cw*Delta)^2 * (Sd:Sd)^1.5 / ((S:S)^2.5 + (Sd:Sd)^1.25), with Delta = cellVolume^(1/dims). "
+		"NOTE: unlike SGSviscosityIncompressibleSmagorinsky, whose 'coefficient' is already C_s^2, this takes Cw, not Cw^2. "
+		"Only meaningful in 3D: the WALE operator vanishes identically for divergence-free 1D/2D fields.",
+		py::arg("domain"), py::arg("coefficient"));
+
 	py::enum_<ConvergenceCriterion>(m, "ConvergenceCriterion")
 		.value("NORM2", ConvergenceCriterion::NORM2)
 		.value("NORM2_NORMALIZED", ConvergenceCriterion::NORM2_NORMALIZED)
@@ -605,6 +708,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 	m.def("CopyPressureResultGradFromBlocks", &CopyPressureResultGradFromBlocks, "PISO copy scalar result grad (CUDA)");
 	m.def("CopyVelocityResultGradFromBlocks", &CopyVelocityResultGradFromBlocks, "PISO copy velocity result grad (CUDA)");
 	m.def("CopyVelocityResultGradToBlocks", &CopyVelocityResultGradToBlocks, "PISO copy velocity result grad (CUDA)");
+	m.def("CopyEpotResultGradFromBlocks", &CopyEpotResultGradFromBlocks, "Copy block.epot_grad to domain.epotResult_grad (CUDA)");
+	m.def("ComputeEpotRHSGrad", &ComputeEpotRHSGrad, "Backpropagate scalar divergence grad to vector field grad (CUDA)",
+		py::arg("domain"), py::arg("gradDivergence"));
+	m.def("ComputeCurrentDensityFaceBasedGrad", &ComputeCurrentDensityFaceBasedGrad,
+		"Backpropagate current density grad to epot and u_cross_eb grads (CUDA)",
+		py::arg("domain"), py::arg("epotField"), py::arg("uCrossBField"), py::arg("gradJ"));
 
 #endif //WITH_GRAD
 

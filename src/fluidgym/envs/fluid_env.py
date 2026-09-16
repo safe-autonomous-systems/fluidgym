@@ -1,8 +1,11 @@
 """Abstract base class for FluidGym environments."""
 
+import gc
 import logging
+import weakref
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -13,13 +16,17 @@ import seaborn as sns
 import torch
 from gymnasium import spaces
 
+from fluidgym._palette import DEFAULT_PALETTE
 from fluidgym.config import config as fluidgym_config
+from fluidgym.envs.util.visualization import MultiblockResampler, slice_plane_axes
+from fluidgym.logging import get_logger
 from fluidgym.simulation.extensions import (
     PISOtorch,  # type: ignore[import-untyped,import-not-found]
 )
 from fluidgym.simulation.pict.util.domain_io import load_domain, save_domain
 from fluidgym.simulation.pict.util.output import _resample_block_data, plot_grids
 from fluidgym.simulation.simulation import Simulation
+from fluidgym.simulation.solver_tolerance import SolverTolerance, parse_tolerance
 from fluidgym.types import EnvMode, FluidEnvLike
 from fluidgym.util.data_utils import (
     load_statistics,
@@ -99,9 +106,62 @@ class FluidEnv(ABC, FluidEnvLike):
     _cpu_device: torch.device
     _differentiable: bool
 
+    # Solver settings shared by every env, see ``_resolve_pressure_tol`` and
+    # ``_resolve_advection_tol``
+    _advection_tol: float | SolverTolerance | None
+    _pressure_tol: float | SolverTolerance | None
+    _pressure_tol_intermediate: float | SolverTolerance | None
+    _pressure_warm_start: bool
+
+    # Overrides applied to every simulation this env builds, see
+    # ``_apply_solver_overrides``. None leaves the concrete env's own choice alone
+    _linear_solve_max_iter: int | None
+    _exclude_advection_solve_gradients: bool | None
+    _exclude_pressure_solve_gradients: bool | None
+    _exclude_pressure_gradient_adjoint: bool | None
+
+    # Checkpoint each env step for differentiable BPTT. See ``bptt_checkpoint``
+    _bptt_checkpoint: bool = False
+
+    # Adjoint damping at every env-step boundary; 1.0 is exact BPTT. See
+    # ``adjoint_lambda``
+    _adjoint_lambda: float = 1.0
+
+    # PISO steps per checkpoint segment; 0 = one segment per env step. See
+    # ``bptt_segment_size``. Every env can be cut mid-step -- a step is
+    # ``_advance_impl`` + ``_finish_step`` -- so this is a memory/carry trade-off
+    # rather than a capability question
+    _bptt_segment_size: int = 0
+
+    # What ``bptt_segment_size`` starts at, and what setting it to None asks for.
+    # None leaves the env step whole, which is what the 2D envs want: their replay
+    # tape fits, and a whole step is the cheapest carry. The 3D envs override it
+    # with a segment their tape fits in. See ``default_bptt_segment_size``
+    _default_bptt_segment_size: int | None = None
+
+    # Where checkpoint carries live between forward and backward: a device, or a
+    # directory when ``_bptt_carry_spill_dir`` is set
+    _bptt_offload_device: torch.device | None = torch.device("cpu")
+    _bptt_carry_spill_dir: str | None = None
+    _bptt_spill_root: str | None = None
+    # Deletes ``_bptt_spill_root`` when this env is collected or the process exits,
+    # so a run does not leave its carries on disk. See ``close``
+    _bptt_spill_finalizer: weakref.finalize | None = None
+
     _seed: int | None = None
 
     _reset_called: bool = False
+    __resampler: MultiblockResampler | None = None
+    # (id(coords), id(out_indices)) -> DiffMultiblockResampler. See
+    # `_diff_resampler`; instance-level, assigned in __init__
+    __diff_resamplers: dict
+
+    # Axes ("x", "y", "z") to mirror when rendering a plane, so that an env whose
+    # domain is set up in an orientation that does not plot well can be shown the
+    # way it is read. Only affects rendering, never observations
+    _render_mirror_axes: tuple[str, ...] = ()
+
+    _render_resolution: int = 1
     _n_episodes: int = 0
     _n_steps: int = 0
     _auto_render: bool
@@ -132,7 +192,7 @@ class FluidEnv(ABC, FluidEnvLike):
     _pressure_stats: Stats | None = None
 
     # DataFrame containing uncontrolled episode metrics
-    # for the currently loaded (non-randomized) initial domain.
+    # for the currently loaded (non-randomized) initial domain
     _uncontrolled_episode: pd.DataFrame | None = None
 
     def __init__(
@@ -152,6 +212,16 @@ class FluidEnv(ABC, FluidEnvLike):
         randomize_initial_state: bool = True,
         enable_actions: bool = True,
         differentiable: bool = False,
+        advection_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol_intermediate: (
+            float | SolverTolerance | Mapping[str, float] | None
+        ) = None,
+        pressure_warm_start: bool = False,
+        linear_solve_max_iter: int | None = None,
+        exclude_advection_solve_gradients: bool | None = None,
+        exclude_pressure_solve_gradients: bool | None = None,
+        exclude_pressure_gradient_adjoint: bool | None = None,
     ):
         """Initialize the FluidEnv.
 
@@ -206,8 +276,63 @@ class FluidEnv(ABC, FluidEnvLike):
 
         differentiable: bool
             Whether to enable differentiable simulation. Defaults to False.
+
+        advection_tol: float | SolverTolerance | Mapping[str, float] | None
+            Tolerance for the momentum and passive-scalar advection solves; same
+            forms as ``pressure_tol``. None (the default) keeps the tolerance the
+            concrete environment picked for itself, see
+            :meth:`_resolve_advection_tol`.
+
+        pressure_tol: float | SolverTolerance | Mapping[str, float] | None
+            Tolerance for the pressure solve. A float is an absolute tolerance on
+            ``||r||_2/sqrt(n)``, a
+            :class:`~fluidgym.simulation.solver_tolerance.SolverTolerance` (or a
+            mapping with ``rtol``/``atol``) specifies it relative to the RHS. None
+            (the default) keeps the tolerance the concrete environment picked for
+            itself, see :meth:`_resolve_pressure_tol`.
+
+        pressure_tol_intermediate: float | SolverTolerance | Mapping | None
+            Tolerance for every pressure solve that is not the final corrector.
+            Only the final corrector's pressure survives into the solution, so the
+            earlier ones can be solved loosely. None (the default) applies
+            ``pressure_tol`` everywhere.
+
+        pressure_warm_start: bool
+            Seed each pressure solve with the previous sub-step's result for the
+            same corrector index instead of with zero. An initial guess cannot
+            change the converged answer, only the iteration count. Defaults to
+            False.
+
+        linear_solve_max_iter: int | None
+            Iteration limit for the advection and pressure solves. None (the
+            default) leaves the simulation's own limit in place. A differentiable
+            run may need more than an evaluation run does: the adjoint solve is
+            held to the forward's *relative* accuracy, which on an adjoint RHS far
+            below the forward's is a tighter absolute target than the forward ever
+            had to meet.
+
+        exclude_advection_solve_gradients: bool | None
+            Drop the gradient of the advection solve, i.e. treat its result as a
+            constant in the backward. Diagnostic only -- it removes a real term of
+            the adjoint. None (the default) leaves the simulation's own setting.
+
+        exclude_pressure_solve_gradients: bool | None
+            The same for the pressure solve. Diagnostic only. None (the default)
+            leaves the simulation's own setting.
+
+        exclude_pressure_gradient_adjoint: bool | None
+            Cut the pressure path out of the PISO velocity-correction backward.
+            The corrector closes with ``u = hbyA - 1/A * grad(p)`` on a ``+-1``
+            stencil that skips the centre cell, so the adjoint reinjects on the
+            same odd/even decoupled stencil. A null-hypothesis probe, not a valid
+            gradient: it removes the whole pressure contribution of the corrector,
+            not just its odd/even part. None (the default) leaves the simulation's
+            own setting.
         """
         super().__init__()
+
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA is not available. FluidGym requires a CUDA GPU.")
 
         if ndims not in [2, 3]:
             raise ValueError("ndims must be 2 or 3.")
@@ -222,6 +347,9 @@ class FluidEnv(ABC, FluidEnvLike):
         if self._use_marl and not self._supports_marl:
             raise ValueError("This env does not support multi-agent mode.")
 
+        # Needs ``_dt`` / ``_step_length``, which fix the PISO steps of an env step
+        self._bptt_segment_size = self._resolve_bptt_segment_size(None)
+
         self._cuda_device = torch.device("cuda") if cuda_device is None else cuda_device
         self._cpu_device = torch.device("cpu") if cpu_device is None else cpu_device
         self._dtype = dtype
@@ -230,6 +358,19 @@ class FluidEnv(ABC, FluidEnvLike):
         self._randomize_initial_state = randomize_initial_state
         self._enable_actions = enable_actions
         self._differentiable = differentiable
+        self.__diff_resamplers = {}
+
+        self._advection_tol = parse_tolerance(advection_tol)
+        self._pressure_tol = parse_tolerance(pressure_tol)
+        self._pressure_tol_intermediate = parse_tolerance(pressure_tol_intermediate)
+        self._pressure_warm_start = bool(pressure_warm_start)
+
+        self._linear_solve_max_iter = (
+            None if linear_solve_max_iter is None else int(linear_solve_max_iter)
+        )
+        self._exclude_advection_solve_gradients = exclude_advection_solve_gradients
+        self._exclude_pressure_solve_gradients = exclude_pressure_solve_gradients
+        self._exclude_pressure_gradient_adjoint = exclude_pressure_gradient_adjoint
 
         if load_initial_domain or load_domain_statistics:
             prepare_initial_domains(initial_domain_id=self.initial_domain_id)
@@ -270,7 +411,7 @@ class FluidEnv(ABC, FluidEnvLike):
     @property
     def _logger(self) -> logging.Logger:
         """Logger for the environment."""
-        return logging.getLogger(self.__class__.__name__)
+        return get_logger(f"envs.{self.__class__.__name__}")
 
     @property
     def use_marl(self) -> bool:
@@ -305,9 +446,49 @@ class FluidEnv(ABC, FluidEnvLike):
 
     @property
     @abstractmethod
-    def render_shape(self) -> tuple[int, ...]:
-        """The shape of the rendered domain."""
+    def obs_resampling_shape(self) -> tuple[int, ...]:
+        """The shape of the uniform grid the observations are resampled onto.
+
+        This is a property of the environment and does not change: the
+        observations, and the sensor and mask indices that go with them, are
+        defined on this grid. To render at a higher resolution, set
+        :attr:`render_resolution`.
+        """
         raise NotImplementedError
+
+    @property
+    def render_resolution(self) -> int:
+        """How much finer the render grid is than ``obs_resampling_shape``.
+
+        A multiplier of 1, the default, renders on the observation grid. Raising
+        it only affects rendering, never the observations.
+        """
+        return self._render_resolution
+
+    @render_resolution.setter
+    def render_resolution(self, render_resolution: int) -> None:
+        if not isinstance(render_resolution, (int, np.integer)):
+            raise TypeError(
+                f"render_resolution must be an int, got {type(render_resolution)}"
+            )
+        if render_resolution < 1:
+            raise ValueError(
+                f"render_resolution must be at least 1, got {render_resolution}"
+            )
+
+        if render_resolution != self._render_resolution:
+            self._render_resolution = int(render_resolution)
+            # The resampler is built for a fixed render grid
+            self.__resampler = None
+
+    @property
+    def render_shape(self) -> tuple[int, ...]:
+        """The shape of the rendered domain.
+
+        This is ``obs_resampling_shape`` scaled by :attr:`render_resolution`, and
+        is used for rendering only.
+        """
+        return tuple(n * self.render_resolution for n in self.obs_resampling_shape)
 
     @property
     def metrics(self) -> list[str]:
@@ -344,6 +525,338 @@ class FluidEnv(ABC, FluidEnvLike):
     def differentiable(self) -> bool:
         """Whether the environment is differentiable."""
         return self._differentiable
+
+    @property
+    def bptt_checkpoint(self) -> bool:
+        """Run each env step as an activation checkpoint (differentiable BPTT).
+
+        The step is run under ``no_grad`` during the rollout and replayed under
+        ``enable_grad`` in backward, so only one step's activations are ever live.
+        This is what makes GPU peak independent of the rollout length; offloading
+        the tape alone leaves a residue per PISO step that caps the horizon.
+
+        Costs one extra forward per step, plus one carry per step (see
+        ``bptt_offload_device`` / ``bptt_carry_spill_dir``). Only meaningful on a
+        differentiable environment.
+        """
+        return self._bptt_checkpoint
+
+    @bptt_checkpoint.setter
+    def bptt_checkpoint(self, value: bool) -> None:
+        value = bool(value)
+        if value and not self._differentiable:
+            raise RuntimeError(
+                "Activation checkpointing only applies to a differentiable "
+                "environment (construct with differentiable=True)."
+            )
+        self._bptt_checkpoint = value
+
+    @property
+    def adjoint_lambda(self) -> float:
+        """TD(lambda)-style damping of the adjoint at every env-step boundary.
+
+        The state a step hands on -- its checkpoint carry and its observation --
+        is passed on unchanged, and its gradient is multiplied by ``lambda`` in
+        backward. Reward ``k`` then reaches the state and the action of step ``t``
+        weighted by ``lambda^(k - t)``, while the reward of a step stays undamped
+        with respect to that step's own action. This is the geometric mixture of
+        truncated BPTT gradients, without a value bootstrap; ``1.0`` is the exact
+        gradient and ``0.0`` the one-step one.
+
+        Unlike weighting the return by ``lambda^k`` and dividing the gradient of
+        step ``t`` by ``lambda^t`` afterwards, the adjoint never has to survive
+        being ``lambda^k`` small inside the absolute-tolerance adjoint solves, and
+        the damped gradient can be propagated further, into a policy.
+        """
+        return self._adjoint_lambda
+
+    @adjoint_lambda.setter
+    def adjoint_lambda(self, value: float) -> None:
+        value = float(value)
+        if not 0.0 <= value <= 1.0:
+            raise ValueError(f"adjoint_lambda must be in [0, 1], got {value}.")
+        if value < 1.0 and not self._differentiable:
+            raise RuntimeError(
+                "adjoint_lambda only applies to a differentiable environment "
+                "(construct with differentiable=True)."
+            )
+        self._adjoint_lambda = value
+
+    @property
+    def default_bptt_segment_size(self) -> int:
+        """The ``bptt_segment_size`` this env starts at, as it resolves it.
+
+        ``0`` for an env that leaves its step whole; otherwise a divisor of
+        ``n_sim_steps``.
+        """
+        return self._resolve_bptt_segment_size(None)
+
+    def _resolve_bptt_segment_size(self, value: int | None) -> int:
+        """Turn a requested checkpoint segment into PISO steps of one env step.
+
+        ``None`` asks for this env's own :attr:`default_bptt_segment_size`; ``0``,
+        or anything at or above ``n_sim_steps``, is one segment per env step.
+        Anything else is snapped down to the nearest divisor of ``n_sim_steps``,
+        so that every segment of a step is the same length -- a trailing short
+        segment would carry the same state as a full one for a fraction of the
+        replay it saves, which is the worst of both.
+
+        Parameters
+        ----------
+        value: int | None
+            The requested number of PISO steps per segment, or None for this
+            env's default.
+
+        Returns
+        -------
+        int
+            PISO steps per segment: 0, or a divisor of ``n_sim_steps``.
+        """
+        if value is None:
+            value = self._default_bptt_segment_size or 0
+
+        size = max(0, int(value))
+        total = self._n_sim_steps
+        if size == 0 or size >= total:
+            return 0
+
+        snapped = next(n for n in range(size, 0, -1) if total % n == 0)
+        if snapped != size:
+            self._logger.warning(
+                "bptt_segment_size %d does not divide the %d PISO steps of an env "
+                "step; using %d instead.",
+                size,
+                total,
+                snapped,
+            )
+        return snapped
+
+    @property
+    def bptt_segment_size(self) -> int:
+        """PISO steps per checkpoint segment (0 = one segment per env step).
+
+        GPU peak under ``bptt_checkpoint`` is one segment's replay tape, so with a
+        segment of one env step it is set by ``step_length``: at the registered
+        0.25 (50 PISO steps) a segment does not fit on an 80 GB card, which caps
+        the control interval a differentiable run can use rather than anything
+        physical. Cutting the segment below one env step decouples the two -- the
+        rollout keeps its step length, and memory follows this number instead.
+
+        Costs one carry per segment rather than per env step, so disk grows by
+        ``n_sim_steps / bptt_segment_size``. Values at or above the env step are
+        the same as 0.
+
+        Every env can be cut this way -- a step is :meth:`_advance_impl` followed by
+        :meth:`_finish_step` -- so this is a memory/carry trade-off, not a
+        capability. It starts at :attr:`default_bptt_segment_size`, which each env
+        picks for its own resolution; assigning ``None`` asks for that default
+        back, and a value that does not divide ``n_sim_steps`` is snapped down to
+        one that does.
+        """
+        return self._bptt_segment_size
+
+    @bptt_segment_size.setter
+    def bptt_segment_size(self, value: int | None) -> None:
+        self._bptt_segment_size = self._resolve_bptt_segment_size(value)
+
+    @property
+    def bptt_offload_device(self) -> torch.device | None:
+        """Where checkpoint carries are parked (``None`` = keep on the GPU)."""
+        return self._bptt_offload_device
+
+    @bptt_offload_device.setter
+    def bptt_offload_device(self, value: torch.device | str | None) -> None:
+        self._bptt_offload_device = None if value is None else torch.device(value)
+
+    @property
+    def bptt_carry_spill_dir(self) -> str | None:
+        """Directory to write checkpoint carries into, instead of host RAM.
+
+        At a long horizon the carry is what host memory runs out of: it is one
+        state snapshot per step. Note ``/tmp`` and ``/dev/shm`` are usually
+        tmpfs, i.e. RAM.
+        """
+        return self._bptt_carry_spill_dir
+
+    @bptt_carry_spill_dir.setter
+    def bptt_carry_spill_dir(self, value: str | None) -> None:
+        self._bptt_carry_spill_dir = None if value is None else str(value)
+        # The next checkpointed step allocates a root under the new directory; the
+        # old one is finished with
+        self._release_spill_root()
+
+    def _attr_accessor(self, name: str) -> Any:
+        """Accessor for an env attribute that is carried across steps.
+
+        ``name`` is the real attribute name, so a private one has to be given
+        name-mangled (``"_MyEnv__last_control"``).
+        """
+        return (lambda: getattr(self, name), lambda t: setattr(self, name, t))
+
+    def _checkpoint_accessors(self) -> list[Any]:
+        """``(getter, setter)`` pairs defining the BPTT checkpoint carry.
+
+        Covers the generic domain solver state. An env whose step reads and
+        writes state outside the ``Domain`` (a lagged term, a smoothed control)
+        must extend this as ``super()._checkpoint_accessors() + [...]``, or the
+        checkpoint replay will not reproduce the rollout.
+        """
+        from fluidgym.envs.checkpointing import default_domain_accessors
+
+        sim, domain = self._sim, self._sim.domain
+        assert domain is not None
+
+        return default_domain_accessors(domain) + [
+            # Warm-start state: cross-step, and not part of the Domain
+            (lambda: domain.velocityResult, domain.setVelocityResult),
+            (lambda: domain.pressureResult, domain.setPressureResult),
+            (
+                lambda: sim.pressure_guess_state,
+                lambda t: setattr(sim, "pressure_guess_state", t),
+            ),
+        ]
+
+    def _damp_adjoint(self, obs: Any) -> Any:
+        """Damp the adjoint of everything a finished step hands to the next one.
+
+        The carry is exactly the state the next step reads, so rebinding it covers
+        the solver path; the observation covers the path through the policy. Only
+        tensors already in the graph are touched, so the first step after
+        ``reset`` or ``detach`` passes through as is.
+        """
+        from fluidgym.envs.grad_scaling import scale_carry_grad, scale_grad
+
+        domain = self._sim.domain
+        assert domain is not None
+
+        if scale_carry_grad(self._checkpoint_accessors(), self._adjoint_lambda):
+            domain.UpdateDomainData()
+
+        return scale_grad(obs, self._adjoint_lambda)
+
+    def _release_spill_root(self) -> None:
+        """Delete this env's carry spill directory, if it has one."""
+        if self._bptt_spill_finalizer is not None:
+            self._bptt_spill_finalizer()  # idempotent: a no-op once it has run
+            self._bptt_spill_finalizer = None
+        self._bptt_spill_root = None
+
+    def close(self) -> None:
+        """Release what this env holds outside Python: the carry spill directory.
+
+        Also runs on garbage collection and at interpreter exit via the finalizer,
+        so a run that never calls this still cleans up after itself; only a killed
+        process leaves files behind, and the next run sweeps those.
+        """
+        self._release_spill_root()
+
+    def _checkpointed_step(self, action: torch.Tensor, step_fn: Any) -> Any:
+        """Run one env step as an activation checkpoint."""
+        from fluidgym.envs.checkpointing import (
+            checkpointed_step,
+            cleanup_carry_spill_dir,
+            make_carry_spill_dir,
+        )
+
+        if self._bptt_carry_spill_dir is not None and self._bptt_spill_root is None:
+            self._bptt_spill_root = make_carry_spill_dir(self._bptt_carry_spill_dir)
+            self._bptt_spill_finalizer = weakref.finalize(
+                self, cleanup_carry_spill_dir, self._bptt_spill_root
+            )
+
+        domain = self._sim.domain
+        assert domain is not None
+
+        # Bind the segment to the simulation it is recorded on, not to whatever
+        # ``self._sim`` happens to be when backward replays it
+        bind = self._episode_binding()
+        accessors = [
+            (bind(getter), bind(setter))
+            for getter, setter in self._checkpoint_accessors()
+        ]
+
+        return checkpointed_step(
+            accessors,
+            bind(step_fn),
+            grad_inputs=(action,),
+            on_restored=domain.UpdateDomainData,
+            release_fn=domain.DetachFwd,
+            offload_device=self._bptt_offload_device,
+            spill_dir=self._bptt_spill_root,
+        )
+
+    def _episode_binding(self) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        """Wrap callables so they run against *this* episode's simulation."""
+        episode = dict(self.__dict__)
+
+        def holds_this_episode() -> bool:
+            """Whether the env is still on the simulation this was bound to."""
+            live = self.__dict__
+            return live is episode or (
+                live.get("_sim") is episode.get("_sim")
+                and live.get("_domain") is episode.get("_domain")
+            )
+
+        def bind(fn: Callable[..., Any]) -> Callable[..., Any]:
+            # Deliberately not ``functools.wraps``: several setters are pybind11
+            # bound methods, which have no ``__dict__`` to copy
+            def bound(*args: Any, **kwargs: Any) -> Any:
+                # Also the re-entrant case: a bound accessor called from inside a
+                # bound step already runs on ``episode``
+                if holds_this_episode():
+                    return fn(*args, **kwargs)
+
+                live = self.__dict__
+                self.__dict__ = episode
+                try:
+                    return fn(*args, **kwargs)
+                finally:
+                    self.__dict__ = live
+
+            return bound
+
+        return bind
+
+    def _segment_sizes(self) -> list[int]:
+        """PISO-step counts of the checkpoint segments of one env step."""
+        total = self._n_sim_steps
+        size = self._bptt_segment_size or total
+        if size >= total:
+            return [total]
+        sizes = [size] * (total // size)
+        if total % size:
+            sizes.append(total % size)
+        return sizes
+
+    def _segmented_step(
+        self, action: torch.Tensor
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
+        """Run one env step as several checkpoint segments of PISO steps.
+
+        Each segment advances the simulation and hands back the metrics of the
+        substeps it ran; the observation and the reward are computed once, from the
+        concatenation of all of them and from the state the last segment leaves
+        behind. That is what keeps the split exact: no per-segment quantity is
+        averaged twice, and nothing in the reward has to be linear in the substeps.
+        """
+        parts = [
+            self._checkpointed_step(action, lambda a, n=n: self._advance_impl(a, n))
+            for n in self._segment_sizes()
+        ]
+        # Concatenated along the substep axis only: a metric measured per cell keeps
+        # its own shape, so ``_finish_step`` sees exactly what an unsplit step's
+        # ``_advance_impl`` would have handed it
+        metrics = {
+            key: torch.cat(
+                [
+                    part[key] if part[key].dim() else part[key].reshape(1)
+                    for part in parts
+                ]
+            )
+            for key in parts[0]
+        }
+        finish = self._finish_marl_step if self._use_marl else self._finish_step
+        return finish(metrics)
 
     def train(self) -> None:
         """Set the environment to training mode."""
@@ -430,6 +943,79 @@ class FluidEnv(ABC, FluidEnvLike):
         """
         raise NotImplementedError
 
+    def _resolve_pressure_tol(
+        self, default: float | SolverTolerance | None
+    ) -> float | SolverTolerance | None:
+        """The configured pressure tolerance, or ``default`` if none was given.
+
+        Concrete environments call this in ``_get_simulation`` with the tolerance
+        they were tuned at, so that constructing them without ``pressure_tol``
+        keeps exactly the accuracy they had before the kwarg existed.
+        """
+        return default if self._pressure_tol is None else self._pressure_tol
+
+    def _resolve_advection_tol(
+        self, default: float | SolverTolerance | None
+    ) -> float | SolverTolerance | None:
+        """The configured advection tolerance, or ``default`` if none was given.
+
+        The counterpart of :meth:`_resolve_pressure_tol` for the momentum and
+        passive-scalar solves. ``default`` is what the concrete environment was
+        tuned at, so constructing it without ``advection_tol`` keeps exactly the
+        accuracy it had before the kwarg existed -- including ``None``, which
+        leaves the solver on its dtype default.
+        """
+        return default if self._advection_tol is None else self._advection_tol
+
+    def _resolve_linear_solve_max_iter(self, default: int) -> int:
+        """The configured iteration limit, or ``default`` if none was given.
+
+        Only for an environment that needs the number itself in
+        ``_get_simulation`` -- the limit is applied to the simulation by
+        :meth:`_apply_solver_overrides` either way.
+        """
+        if self._linear_solve_max_iter is None:
+            return default
+        return self._linear_solve_max_iter
+
+    def _build_simulation(
+        self,
+        domain: PISOtorch.Domain,
+        prep_fn: dict[str, Any],
+    ) -> Simulation:
+        """Build the simulation and apply the env-level solver overrides to it.
+
+        The single place a simulation is created, so an override given to the
+        constructor reaches every simulation this env builds -- the one from
+        ``init``, the one a loaded domain gets, and the one ``set_state``
+        rebuilds.
+        """
+        sim = self._get_simulation(domain, prep_fn)
+        self._apply_solver_overrides(sim)
+        return sim
+
+    def _apply_solver_overrides(self, sim: Simulation) -> None:
+        """Apply the constructor's solver overrides to a freshly built simulation.
+
+        Every override is ``None`` by default and is then left alone, so an
+        environment that sets one of these itself in ``_get_simulation`` keeps
+        exactly what it set.
+        """
+        if self._linear_solve_max_iter is not None:
+            sim.linear_solve_max_iterations = self._linear_solve_max_iter
+        if self._exclude_advection_solve_gradients is not None:
+            sim.exclude_advection_solve_gradients = (
+                self._exclude_advection_solve_gradients
+            )
+        if self._exclude_pressure_solve_gradients is not None:
+            sim.exclude_pressure_solve_gradients = (
+                self._exclude_pressure_solve_gradients
+            )
+        if self._exclude_pressure_gradient_adjoint is not None:
+            sim.exclude_pressure_gradient_adjoint = (
+                self._exclude_pressure_gradient_adjoint
+            )
+
     def _additional_initialization(self) -> None:
         """Perform any additional initialization after the domain and simulation are
         created.
@@ -504,7 +1090,9 @@ class FluidEnv(ABC, FluidEnvLike):
         except FileNotFoundError:
             return False
 
-    def _set_initial_state(self, randomize: bool | None = None) -> None:
+    def _set_initial_state(
+        self, randomize: bool | None = None, domain_idx: int | None = None
+    ) -> None:
         """Set the initial state of the environment.
 
         Parameters
@@ -512,15 +1100,31 @@ class FluidEnv(ABC, FluidEnvLike):
         randomize: bool | None
             Whether to randomize the initial state. If None, the default behavior is
             used.
+
+        domain_idx: int | None
+            Index of the initial domain to load. Takes precedence over the random
+            draw, so a randomized initial state can still start from a fixed domain.
+            If None, a random index is used when randomizing and the first initial
+            domain otherwise. Defaults to None.
         """
+        self._sim = None  # type: ignore
+        self._domain = None  # type: ignore
+        gc.collect()
+        torch.cuda.empty_cache()
+
         if randomize is None:
             randomize = self._randomize_initial_state
 
         if self.__load_domain_on_reset:
             try:
-                idx = (
-                    int(self._np_rng.integers(0, N_INITIAL_DOMAINS)) if randomize else 0
-                )
+                if domain_idx is not None:
+                    idx = int(domain_idx)
+                else:
+                    idx = (
+                        int(self._np_rng.integers(0, N_INITIAL_DOMAINS))
+                        if randomize
+                        else 0
+                    )
                 self._domain = self._load_initial_domain(mode=self.mode, idx=idx)
                 try:
                     self._uncontrolled_episode = self._load_uncontrolled_episode(
@@ -541,7 +1145,7 @@ class FluidEnv(ABC, FluidEnvLike):
             self._domain = self._get_domain()
 
         prep_fn = self._get_prep_fn(self._domain)
-        self._sim = self._get_simulation(self._domain, prep_fn)
+        self._sim = self._build_simulation(self._domain, prep_fn)
 
         # Some envs may need additional initialization
         self._additional_initialization()
@@ -574,71 +1178,259 @@ class FluidEnv(ABC, FluidEnvLike):
         """
         raise NotImplementedError
 
-    def __get_vorticity_2d(self) -> torch.Tensor:
-        vorticity_blocks = []
-        self._domain.UpdateDomainData()
-        gradients = PISOtorch.ComputeSpatialVelocityGradients(self._domain)
+    @property
+    def _resampler(self) -> MultiblockResampler:
+        """Interpolating resampler for the blocks of this domain.
 
-        for block_id in range(len(gradients)):
-            d_dx, d_dy = gradients[block_id]
-
-            du_dy = d_dy[:, 0, :, :]
-            dv_dx = d_dx[:, 1, :, :]
-
-            vorticity_block = dv_dx - du_dy
-            vorticity_block = vorticity_block[None, ...]
-
-            vorticity_blocks += [vorticity_block]
-
-        global_vorticity = _resample_block_data(
-            data_list=vorticity_blocks,
-            vertex_coord_list=self._sim.output_resampling_coords,
-            resampling_out_shape=self._sim.output_resampling_shape,
-            ndims=self._ndims,
-            fill_max_steps=self._sim.output_resampling_fill_max_steps,
-        )
-
-        return global_vorticity
-
-    def __get_vorticity_3d(self) -> torch.Tensor:
-        vorticity_blocks = []
-        self._domain.UpdateDomainData()
-        gradients = PISOtorch.ComputeSpatialVelocityGradients(self._domain)
-
-        for block_id in range(len(gradients)):
-            d_dx, d_dy, d_dz = gradients[block_id]
-
-            du_dy = d_dy[:, 0, :, :]
-            dv_dx = d_dx[:, 1, :, :]
-
-            dw_dx = d_dx[:, 2, :, :]
-            du_dz = d_dz[:, 0, :, :]
-
-            dv_dz = d_dz[:, 1, :, :]
-            dw_dy = d_dy[:, 2, :, :]
-
-            vorticity_block = torch.stack(
-                [
-                    dw_dy - dv_dz,
-                    du_dz - dw_dx,
-                    dv_dx - du_dy,
-                ],
-                dim=0,
+        Built lazily and cached: it only depends on the grid, which does not
+        change over the lifetime of the environment.
+        """
+        if self.__resampler is None:
+            self.__resampler = MultiblockResampler(
+                vertex_coord_list=self._domain.getVertexCoordinates(),
+                render_shape=self.render_shape[: self._ndims],
+                fill_value=0.0,
             )
 
-            vorticity_block = vorticity_block.squeeze(1).unsqueeze(0)
+        return self.__resampler
 
-            vorticity_blocks += [vorticity_block]
+    def _resample_is_differentiated(self) -> bool:
+        """Whether a resample issued right now should record a graph.
 
-        global_vorticity = _resample_block_data(
-            data_list=vorticity_blocks,
+        Mirrors ``Simulation._solve_is_differentiated``. Rendering and
+        ``collect_statistics`` run under ``no_grad``, so they keep the compiled
+        kernel and pay nothing for this.
+        """
+        return self._differentiable and torch.is_grad_enabled()
+
+    def _diff_resampler(self, out_indices: torch.Tensor | None = None):
+        """Cached differentiable resampler, optionally restricted to some cells.
+
+        The compiled kernel has no autograd support, so everything downstream of
+        it is detached; this is the pure-torch equivalent, which is not.
+        """
+        from fluidgym.simulation.pict.data.resample import DiffMultiblockResampler
+
+        coords = self._sim.output_resampling_coords
+        out_shape = self._sim.output_resampling_shape
+        fill_max_steps = self._sim.output_resampling_fill_max_steps
+        dtype = self._domain.getBlocks()[0].velocity.dtype
+
+        grid_key = (
+            None
+            if coords is None
+            else tuple((t.data_ptr(), tuple(t.shape), t.dtype) for t in coords)
+        )
+        out_key = (
+            None
+            if out_indices is None
+            else (out_indices.data_ptr(), tuple(out_indices.shape), out_indices.dtype)
+        )
+        shape_key = None if out_shape is None else tuple(out_shape)
+        key = (grid_key, out_key, shape_key, fill_max_steps, dtype)
+
+        cached = self.__diff_resamplers.get(key)
+        if cached is not None:
+            return cached[1]
+
+        resampler = DiffMultiblockResampler(
+            coords_list=coords,
+            out_shape=out_shape,
+            dtype=dtype,
+            fill_max_steps=fill_max_steps,
+            out_indices=out_indices,
+        )
+        # Keep only the operators for the current grid, so `set_state` cannot
+        # accumulate one hierarchy per rebuild. This also releases the previous
+        # grid's coordinates, which the dropped entries were keeping alive
+        self.__diff_resamplers = {
+            k: v for k, v in self.__diff_resamplers.items() if k[0] == grid_key
+        }
+        keep_alive = (
+            list(coords or ())
+            if out_indices is None
+            else [*(coords or ()), out_indices]
+        )
+        self.__diff_resamplers[key] = (keep_alive, resampler)
+        return resampler
+
+    def _resample_blocks(self, data_list: list[torch.Tensor]) -> torch.Tensor:
+        """Resample per-block cell data onto the uniform output grid.
+
+        This is the sampler behind :meth:`get_velocity`, :meth:`get_pressure` and
+        :meth:`get_vorticity`, and hence behind the observations. For rendering,
+        prefer :meth:`_render_plane`, which interpolates and is free of the block
+        artifacts of this sampler.
+
+        Parameters
+        ----------
+        data_list: list[torch.Tensor]
+            Per-block cell data, one entry per block of the domain.
+
+        Returns
+        -------
+        torch.Tensor
+            The resampled data of shape [1, C, Y, X] for 2D or [1, C, Z, Y, X] for 3D.
+        """
+        if self._resample_is_differentiated():
+            return self._diff_resampler()(data_list)
+
+        return _resample_block_data(
+            data_list=data_list,
             vertex_coord_list=self._sim.output_resampling_coords,
             resampling_out_shape=self._sim.output_resampling_shape,
             ndims=self._ndims,
             fill_max_steps=self._sim.output_resampling_fill_max_steps,
         )
 
-        return global_vorticity
+    def _resample_blocks_at(
+        self, data_list: list[torch.Tensor], out_indices: torch.Tensor
+    ) -> torch.Tensor:
+        """Resample per-block data straight to selected output cells."""
+        if self._resample_is_differentiated():
+            return self._diff_resampler(out_indices)(data_list)
+
+        full = self._resample_blocks(data_list)[0]
+        if out_indices.dim() == 2:
+            idx = [out_indices[d].long() for d in range(out_indices.size(0))]
+            # out_indices rows are (x, y[, z]); the grid is [..., z, y, x]
+            return full[(slice(None), *reversed(idx))].unsqueeze(0)
+        return full.reshape(full.size(0), -1)[:, out_indices.long()].unsqueeze(0)
+
+    def _render_plane(
+        self,
+        data_list: list[torch.Tensor],
+        axis: str | None = None,
+        index: int | None = None,
+        mirror: Sequence[str] | None = None,
+    ) -> np.ndarray:
+        """Resample per-block cell data onto a uniform 2D plane, for rendering.
+
+        The blocks are interpolated over the cell centers of all blocks at once,
+        which is continuous across block interfaces and avoids the artifacts the
+        PICT sampler introduces there. A 2D domain is resampled as a whole; of a
+        3D domain a single plane is resampled, which costs no more than a 2D
+        domain and avoids resampling the full volume.
+
+        This detaches the data from the graph, so it is for rendering only. Use
+        :meth:`_resample_blocks` for anything that feeds observations or needs to
+        stay differentiable.
+
+        Parameters
+        ----------
+        data_list: list[torch.Tensor]
+            Per-block cell data, one entry per block of the domain.
+
+        axis: str | None
+            The axis to slice a 3D domain along, "x", "y" or "z". Must be None
+            for a 2D domain. Defaults to None.
+
+        index: int | None
+            The index of the plane along ``axis`` of the render grid. If None,
+            the middle of that axis is used. Defaults to None.
+
+        mirror: Sequence[str] | None
+            The axes ("x", "y", "z") to mirror the plane along. Axes that do not
+            span the plane are ignored, so the same set of axes can be passed for
+            every slice. If None, :attr:`_render_mirror_axes` is used. Defaults
+            to None.
+
+        Returns
+        -------
+        np.ndarray
+            The plane of shape (H, W) for single-channel data, else (C, H, W).
+        """
+        if self._ndims == 2:
+            if axis is not None:
+                raise ValueError("A 2D domain has no slice axis")
+
+            plane = self._resampler(data_list)
+        elif axis is None:
+            raise ValueError("Slicing a 3D domain needs an axis: 'x', 'y' or 'z'")
+        else:
+            plane = self._resampler.extract_slice(data_list, axis=axis, index=index)
+
+        return self._mirror_plane(plane, axis=axis, mirror=mirror)
+
+    def _mirror_plane(
+        self,
+        plane: np.ndarray,
+        axis: str | None,
+        mirror: Sequence[str] | None,
+    ) -> np.ndarray:
+        """Mirror a rendered plane along the requested axes.
+
+        See :meth:`_render_plane`.
+        """
+        mirror_axes = self._render_mirror_axes if mirror is None else tuple(mirror)
+        if not mirror_axes:
+            return plane
+
+        invalid = set(mirror_axes) - {"x", "y", "z"}
+        if invalid:
+            raise ValueError(
+                f"Invalid mirror axes {sorted(invalid)}, expected 'x', 'y' or 'z'"
+            )
+
+        # The plane is (vertical, horizontal), possibly with a leading channel
+        # axis, so its axes are the last two either way
+        plane_axes = slice_plane_axes(axis)
+        flip_axes = tuple(
+            plane_axes.index(name) - 2 for name in mirror_axes if name in plane_axes
+        )
+        if not flip_axes:
+            return plane
+
+        return np.flip(plane, axis=flip_axes)
+
+    def _vorticity_blocks(self) -> list[torch.Tensor]:
+        """Return the per-block vorticity, before any resampling.
+
+        Returns
+        -------
+        list[torch.Tensor]
+            One entry per block, of shape [1, 1, Y, X] in 2D or [1, 3, Z, Y, X]
+            in 3D.
+        """
+        self._domain.UpdateDomainData()
+        gradients = PISOtorch.ComputeSpatialVelocityGradients(self._domain)
+
+        # gradients[block][k] is the gradient of the k'th velocity component,
+        # with the channel axis holding the spatial direction: grad_u[:, i] = du/dx_i
+        vorticity_blocks = []
+        for block_id in range(len(gradients)):
+            if self._ndims == 2:
+                grad_u, grad_v = gradients[block_id]
+
+                du_dy = grad_u[:, 1, :, :]
+                dv_dx = grad_v[:, 0, :, :]
+
+                vorticity_block = (dv_dx - du_dy)[None, ...]
+            else:
+                grad_u, grad_v, grad_w = gradients[block_id]
+
+                du_dy = grad_u[:, 1, :, :]
+                dv_dx = grad_v[:, 0, :, :]
+
+                dw_dx = grad_w[:, 0, :, :]
+                du_dz = grad_u[:, 2, :, :]
+
+                dv_dz = grad_v[:, 2, :, :]
+                dw_dy = grad_w[:, 1, :, :]
+
+                vorticity_block = torch.stack(
+                    [
+                        dw_dy - dv_dz,
+                        du_dz - dw_dx,
+                        dv_dx - du_dy,
+                    ],
+                    dim=0,
+                )
+                vorticity_block = vorticity_block.squeeze(1).unsqueeze(0)
+
+            vorticity_blocks += [vorticity_block]
+
+        return vorticity_blocks
 
     def get_vorticity(
         self,
@@ -650,10 +1442,7 @@ class FluidEnv(ABC, FluidEnvLike):
         torch.Tensor
             The vorticity field as a tensor.
         """
-        if self._ndims == 2:
-            return self.__get_vorticity_2d().squeeze()
-        else:
-            return self.__get_vorticity_3d().squeeze()
+        return self._resample_blocks(self._vorticity_blocks()).squeeze()
 
     def get_velocity(
         self,
@@ -665,18 +1454,10 @@ class FluidEnv(ABC, FluidEnvLike):
         torch.Tensor
             The velocity field as a tensor.
         """
-        ndims = self._domain.getSpatialDims()
         blocks = self._domain.getBlocks()
 
         u_list = [block.velocity for block in blocks]
-        u = _resample_block_data(
-            data_list=u_list,
-            vertex_coord_list=self._sim.output_resampling_coords,
-            resampling_out_shape=self._sim.output_resampling_shape,
-            ndims=ndims,
-            fill_max_steps=self._sim.output_resampling_fill_max_steps,
-            differentiable=self._differentiable,
-        )
+        u = self._resample_blocks(u_list)
 
         return u.squeeze()
 
@@ -691,19 +1472,11 @@ class FluidEnv(ABC, FluidEnvLike):
             The pressure field as a tensor of shape (1, NDIM, H, W) for 2D or (1, NDIM,
             H, W, D) for 3D.
         """
-        ndims = self._domain.getSpatialDims()
         blocks = self._domain.getBlocks()
 
         u_list = [block.pressure for block in blocks]
 
-        u = _resample_block_data(
-            data_list=u_list,
-            vertex_coord_list=self._sim.output_resampling_coords,
-            resampling_out_shape=self._sim.output_resampling_shape,
-            ndims=ndims,
-            fill_max_steps=self._sim.output_resampling_fill_max_steps,
-            differentiable=self._differentiable,
-        )
+        u = self._resample_blocks(u_list)
 
         return u.squeeze()
 
@@ -781,13 +1554,26 @@ class FluidEnv(ABC, FluidEnvLike):
                 f"{self._zero_action.shape}."
             )
 
-        if self._n_steps >= self._episode_length:
-            raise RuntimeError("Episode has already terminated. Call 'reset()' first.")
+        # Policies usually act in float32; the boundary setters require the
+        # domain dtype. The cast is differentiable, so the gradient reaches the
+        # policy in its own dtype
+        action = action.to(dtype=self._dtype)
 
-        if self._use_marl:
-            obs, reward, terminated, info = self._step_marl_impl(action)
+        step_fn =self._step_marl_impl if self._use_marl else self._step_impl
+        if self._bptt_checkpoint and self._differentiable:
+            if self._bptt_segment_size:
+                obs, reward, terminated, info = self._segmented_step(action)
+            else:
+                obs, reward, terminated, info = self._checkpointed_step(action, step_fn)
         else:
-            obs, reward, terminated, info = self._step_impl(action)
+            obs, reward, terminated, info = step_fn(action)
+
+        if (
+            self._adjoint_lambda < 1.0
+            and self._differentiable
+            and torch.is_grad_enabled()
+        ):
+            obs = self._damp_adjoint(obs)
 
         self._n_steps += 1
         truncated = self._n_steps >= self._episode_length
@@ -799,11 +1585,16 @@ class FluidEnv(ABC, FluidEnvLike):
 
         return obs, reward, terminated, truncated, info
 
-    @abstractmethod
     def _step_impl(
         self, action: torch.Tensor
     ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
-        """Implementation of the step logic specific to the environment.
+        """One environment step: advance the simulation, then close the step off.
+
+        The step is split at the seam checkpointing needs it split at, so an env
+        only implements the two halves -- :meth:`_advance_impl` and
+        :meth:`_finish_step` -- and every env is cuttable into sub-step checkpoint
+        segments by construction. Whether it is actually cut is
+        ``bptt_segment_size``, which each env defaults for itself.
 
         Parameters
         ----------
@@ -816,17 +1607,77 @@ class FluidEnv(ABC, FluidEnvLike):
             A tuple containing the observation, reward, terminated flag, and info
             dictionary.
         """
+        return self._finish_step(self._advance_impl(action, self._n_sim_steps))
+
+    @abstractmethod
+    def _advance_impl(
+        self, action: torch.Tensor, n_sim_steps: int
+    ) -> dict[str, torch.Tensor]:
+        """Advance the simulation by ``n_sim_steps`` PISO steps.
+
+                Parameters
+        ----------
+        action: torch.Tensor
+            The action to take.
+        n_sim_steps: int
+            Number of PISO steps to run, which is a segment of an env step rather
+            than necessarily the whole of one.
+
+        Returns
+        -------
+        dict[str, torch.Tensor]
+            Per-substep metrics, each with ``n_sim_steps`` entries along dim 0.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _finish_step(
+        self, metrics: dict[str, torch.Tensor]
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
+        """Close one env step off the per-substep metrics of all of its segments.
+
+        Parameters
+        ----------
+        metrics: dict[str, torch.Tensor]
+            Per-substep metrics of the whole env step, as returned by
+            :meth:`_advance_impl` and concatenated over its segments.
+
+        Returns
+        -------
+        tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]
+            A tuple containing the observation, reward, terminated flag, and info
+            dictionary.
+        """
         raise NotImplementedError
 
     def _step_marl_impl(
         self, action: torch.Tensor
     ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
-        """Implementation of the multi-agent step logic specific to the environment.
+        """One multi-agent environment step, split like the single-agent one.
 
         Parameters
         ----------
         action: torch.Tensor
             The individual agent actions.
+
+        Returns
+        -------
+        tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]
+            A tuple containing the local observations, local rewards, a global
+            terminated flag, and a global info dictionary.
+        """
+        return self._finish_marl_step(self._advance_impl(action, self._n_sim_steps))
+
+    def _finish_marl_step(
+        self, metrics: dict[str, torch.Tensor]
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
+        """Close one env step off per agent, the multi-agent :meth:`_finish_step`.
+
+        Parameters
+        ----------
+        metrics: dict[str, torch.Tensor]
+            Per-substep metrics of the whole env step, as returned by
+            :meth:`_advance_impl` and concatenated over its segments.
 
         Returns
         -------
@@ -863,6 +1714,7 @@ class FluidEnv(ABC, FluidEnvLike):
         self,
         seed: int | None = None,
         randomize: bool | None = None,
+        domain_idx: int | None = None,
     ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         """Resets the environment to an initial internal state, returning an initial
         observation and info.
@@ -877,14 +1729,17 @@ class FluidEnv(ABC, FluidEnvLike):
             Whether to randomize the initial state. If None, the default behavior is
             used.
 
+        domain_idx: int | None
+            Index of the initial domain to load. Takes precedence over the random
+            draw, so a randomized initial state can still start from a fixed domain.
+            If None, a random index is used when randomizing and the first initial
+            domain otherwise. Defaults to None.
+
         Returns
         -------
         tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]
             A tuple containing the initial observation and an info dictionary.
         """
-        if not torch.cuda.is_available():
-            raise RuntimeError("CUDA is not available. FluidGym requires CUDA.")
-
         if self._auto_render and len(self.__frames) > 0:
             self.save_gif(filename=f"episode_{self._n_episodes}")
 
@@ -900,7 +1755,13 @@ class FluidEnv(ABC, FluidEnvLike):
             self.seed(seed)
 
         # Then, we re-initialize the environment
-        self._set_initial_state(randomize=randomize)
+        self._set_initial_state(randomize=randomize, domain_idx=domain_idx)
+
+        # Drop the pressure warm-start guesses. They cannot change a converged
+        # answer, but they change iteration counts and therefore round-off, so
+        # carrying them across an episode boundary would make two episodes from
+        # the same initial state depend on whatever ran before them
+        self._sim.clear_pressure_guess()
 
         self._reset_called = True
         self._n_steps = 0
@@ -1062,9 +1923,31 @@ class FluidEnv(ABC, FluidEnvLike):
             path=str(out_dir / mode.value),
         )
 
+    def load_domain(self, path: Path) -> None:
+        """Load a domain from disk given a path and set it as the environment's current
+        domain.
+
+        Parameters
+        ----------
+        path: Path
+            Path to the domain.
+        """
+        self._domain = load_domain(
+            path=str(path),
+            dtype=self._dtype,
+            device=self._cuda_device,
+            with_scalar=True,
+        )
+        self._domain.PrepareSolve()
+        prep_fn = self._get_prep_fn(self._domain)
+        self._sim = self._build_simulation(self._domain, prep_fn)
+
+        # Some envs may need additional initialization
+        self._additional_initialization()
+
     def load_initial_domain(self, idx: int, mode: EnvMode | None = None) -> None:
-        """Public method to load the initial domain from disk
-        using the current mode.
+        """Load an initial domain from disk and set it as the environments current
+        domain.
 
         Parameters
         ----------
@@ -1078,15 +1961,11 @@ class FluidEnv(ABC, FluidEnvLike):
         if mode is None:
             mode = self._mode
 
-        self._domain = self._load_initial_domain(mode=mode, idx=idx)
-        prep_fn = self._get_prep_fn(self._domain)
-        self._sim = self._get_simulation(self._domain, prep_fn)
-
-        # Some envs may need additional initialization
-        self._additional_initialization()
+        out_dir = self._get_domain_dir(idx)
+        self.load_domain(out_dir / mode.value)
 
     def _load_initial_domain(self, mode: EnvMode, idx: int) -> PISOtorch.Domain:
-        """Load the initial domain from disk.
+        """Load an initial domain from disk.
 
         Parameters
         ----------
@@ -1164,6 +2043,10 @@ class FluidEnv(ABC, FluidEnvLike):
 
                 for _ in range(n_steps):
                     self.step(self._zero_action)
+
+                    # DEBUG
+                    self.render(save=True)
+
                 self._save_initial_domain(mode=mode, idx=i)
                 save_render(mode=mode, idx=i)
                 self._logger.info(f"Finished simulating {mode} domain.")
@@ -1216,7 +2099,21 @@ class FluidEnv(ABC, FluidEnvLike):
 
         self._velocity_stats = Stats(**stats["velocity_magnitude"])
         self._pressure_stats = Stats(**stats["pressure"])
-        self._metrics_stats = {key: Stats(**stats[key]) for key in self._metrics}
+
+        # A metric added since the statistics on disk were last written is simply
+        # absent, and an env that normalises by it is expected to fall back rather
+        # than fail to construct, otherwise the statistics could never be
+        # regenerated for it
+        self._metrics_stats = {
+            key: Stats(**stats[key]) for key in self._metrics if key in stats
+        }
+        missing = [key for key in self._metrics if key not in stats]
+        if missing:
+            self._logger.warning(
+                f"Domain statistics carry no entry for {missing}; re-run "
+                f"collect_statistics.py to add them. Anything normalising by "
+                f"these metrics falls back to its default until then."
+            )
 
         return stats
 
@@ -1299,7 +2196,7 @@ class FluidEnv(ABC, FluidEnvLike):
 
         fig, ax = plot_grids(
             grids,
-            color=fluidgym_config.palette[: len(grids)],  # type: ignore
+            color=DEFAULT_PALETTE[: len(grids)],  # type: ignore
             type="pdf",
             linewidth=0.5,
             fig_scale=2,
@@ -1353,7 +2250,7 @@ class FluidEnv(ABC, FluidEnvLike):
 
         self._domain = state.domain.Clone()
         self._domain.PrepareSolve()
-        self._sim = self._get_simulation(
+        self._sim = self._build_simulation(
             domain=self._domain,
             prep_fn=self._get_prep_fn(self._domain),
         )

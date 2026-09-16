@@ -413,10 +413,12 @@ solverReturn_t cgSolveGPU(const scalar_t *aVal, const index_t *aIndex, const ind
 			
 			if(returnBestResult && (i==(maxit-1) || criterionRisingSteps>=criterionRisingStepsCutoff)){ // last iteration done and did not converge
 				CUDA_CHECK_RETURN(cublasTcopy<scalar_t>(cublasHandle, n, best_x, 1, x, 1));
-				if(criterionRisingSteps>=criterionRisingStepsCutoff){
-					printf("CG residual rising for %d iterations, using best result from iteration %d with residual=%.03e.\n", criterionRisingSteps, bestCriterionIt, bestCriterion);
-				}else{
-					printf("CG did not converge after %d iterations, using best result from iteration %d with residual=%.03e.\n", maxit, bestCriterionIt, bestCriterion);
+				if (printResidual){
+					if(criterionRisingSteps>=criterionRisingStepsCutoff){
+						printf("CG residual rising for %d iterations, using best result from iteration %d with residual=%.03e.\n", criterionRisingSteps, bestCriterionIt, bestCriterion);
+					}else{
+						printf("CG did not converge after %d iterations, using best result from iteration %d with residual=%.03e.\n", maxit, bestCriterionIt, bestCriterion);
+					}
 				}
 
 				resultInfo.converged = false;

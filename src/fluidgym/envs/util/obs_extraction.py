@@ -4,7 +4,6 @@ import torch
 import torch.nn.functional as F
 
 from fluidgym.envs import FluidEnv
-from fluidgym.simulation.pict.util.output import _resample_block_data
 
 
 def extract_global_2d_obs(
@@ -28,28 +27,10 @@ def extract_global_2d_obs(
     u_list = [block.velocity for block in env._domain.getBlocks()]
     p_list = [block.pressure for block in env._domain.getBlocks()]
 
-    u = _resample_block_data(
-        u_list,
-        env._sim.output_resampling_coords,
-        env._sim.output_resampling_shape,
-        env._ndims,
-        fill_max_steps=env._sim.output_resampling_fill_max_steps,
-        differentiable=env._differentiable,
-    )
-    u = u.squeeze()
-    u = u.permute(1, 2, 0)
-    u = u[sensor_locations[1], sensor_locations[0], :]
-
-    p = _resample_block_data(
-        p_list,
-        env._sim.output_resampling_coords,
-        env._sim.output_resampling_shape,
-        env._ndims,
-        fill_max_steps=env._sim.output_resampling_fill_max_steps,
-        differentiable=env._differentiable,
-    )
-    p = p.squeeze()
-    p = p[sensor_locations[1], sensor_locations[0]]
+    # Straight to the sensor cells: never materialises the full grid, and stays
+    # differentiable where the compiled kernel would detach
+    u = env._resample_blocks_at(u_list, sensor_locations)[0].transpose(0, 1)
+    p = env._resample_blocks_at(p_list, sensor_locations)[0, 0]
 
     return {
         "velocity": u,
@@ -95,41 +76,20 @@ def extract_global_3d_obs(
     u_list = [block.velocity for block in env._domain.getBlocks()]
     p_list = [block.pressure for block in env._domain.getBlocks()]
 
-    u: torch.Tensor = _resample_block_data(
-        u_list,
-        env._sim.output_resampling_coords,
-        env._sim.output_resampling_shape,
-        env._ndims,
-        fill_max_steps=env._sim.output_resampling_fill_max_steps,
-        differentiable=env._differentiable,
-    )
-    u = u.squeeze()
-    u = u.permute(1, 2, 3, 0)
-
-    p: torch.Tensor = _resample_block_data(
-        p_list,
-        env._sim.output_resampling_coords,
-        env._sim.output_resampling_shape,
-        env._ndims,
-        fill_max_steps=env._sim.output_resampling_fill_max_steps,
-        differentiable=env._differentiable,
-    )
-    p = p.squeeze()
-
     sensor_locations = sensor_locations.flatten(start_dim=1)
 
+    # See extract_global_2d_obs
+    u: torch.Tensor = env._resample_blocks_at(u_list, sensor_locations)[0]
+    p: torch.Tensor = env._resample_blocks_at(p_list, sensor_locations)[0, 0]
+
     if local_2d_obs:
-        u = u[:, :, :, :2]
+        u = u[:2]
         velocity_dims = 2
     else:
         velocity_dims = 3
 
-    u = u[
-        sensor_locations[2],
-        sensor_locations[1],
-        sensor_locations[0],
-        :,
-    ]
+    # [C, R] -> [R, C], the layout the reshapes below expect
+    u = u.transpose(0, 1).contiguous()
 
     u = u.view(n_sensors_z, velocity_dims, -1)
     u = u.view(n_agents, n_sensors_per_agent, velocity_dims, -1)
@@ -137,11 +97,6 @@ def extract_global_3d_obs(
     if local_2d_obs:
         u = u.permute(0, 1, 3, 2)
 
-    p = p[
-        sensor_locations[2],
-        sensor_locations[1],
-        sensor_locations[0],
-    ]
     p = p.view(n_sensors_z, -1)
     p = p.view(n_agents, n_sensors_per_agent, -1)
 

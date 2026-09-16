@@ -1,6 +1,7 @@
 """Abstract base class for airfoil flow environments."""
 
 from abc import abstractmethod
+from collections.abc import Mapping
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,7 @@ import numpy as np
 import torch
 from matplotlib.colors import ListedColormap, to_rgb
 
-from fluidgym.config import config as global_config
+from fluidgym._palette import DEFAULT_PALETTE
 from fluidgym.envs.airfoil.grid import (
     get_jet_locations,
     make_airfoil_domain,
@@ -34,6 +35,7 @@ from fluidgym.simulation.pict.PISOtorch_simulation import (
     update_advective_boundaries,
 )
 from fluidgym.simulation.simulation import Simulation
+from fluidgym.simulation.solver_tolerance import SolverTolerance
 
 VORTICITY_RENDER_RANGE = {
     1000: (-10, 10),
@@ -109,6 +111,16 @@ class AirfoilEnvBase(FluidEnv):
         randomize_initial_state: bool = True,
         enable_actions: bool = True,
         differentiable: bool = False,
+        advection_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol_intermediate: (
+            float | SolverTolerance | Mapping[str, float] | None
+        ) = None,
+        pressure_warm_start: bool = False,
+        linear_solve_max_iter: int | None = None,
+        exclude_advection_solve_gradients: bool | None = None,
+        exclude_pressure_solve_gradients: bool | None = None,
+        exclude_pressure_gradient_adjoint: bool | None = None,
     ):
         if attack_angle_deg < 0.0 or attack_angle_deg > 20.0:
             raise ValueError("Attack angle must be between 0 and 20 degrees.")
@@ -145,6 +157,14 @@ class AirfoilEnvBase(FluidEnv):
             randomize_initial_state=randomize_initial_state,
             enable_actions=enable_actions,
             differentiable=differentiable,
+            advection_tol=advection_tol,
+            pressure_tol=pressure_tol,
+            pressure_tol_intermediate=pressure_tol_intermediate,
+            pressure_warm_start=pressure_warm_start,
+            linear_solve_max_iter=linear_solve_max_iter,
+            exclude_advection_solve_gradients=exclude_advection_solve_gradients,
+            exclude_pressure_solve_gradients=exclude_pressure_solve_gradients,
+            exclude_pressure_gradient_adjoint=exclude_pressure_gradient_adjoint,
         )
         (
             self._left_block_idx,
@@ -159,8 +179,8 @@ class AirfoilEnvBase(FluidEnv):
         self._viscosity = self._viscosity.to(self._cuda_device)
 
     @property
-    def render_shape(self) -> tuple[int, ...]:
-        """The shape of the rendered domain."""
+    def obs_resampling_shape(self) -> tuple[int, ...]:
+        """The shape of the observation resampling grid."""
         return (600, 150, 150)
 
     @property
@@ -189,9 +209,9 @@ class AirfoilEnvBase(FluidEnv):
 
         polygon = np.vstack((xs, ys)).T  # shape (N, 2)
 
-        nx, ny = self.render_shape[0], self.render_shape[1]
-        x_min, x_max = 0, self.render_shape[0] - 1
-        y_min, y_max = 0, self.render_shape[1] - 1
+        nx, ny = self.obs_resampling_shape[0], self.obs_resampling_shape[1]
+        x_min, x_max = 0, self.obs_resampling_shape[0] - 1
+        y_min, y_max = 0, self.obs_resampling_shape[1] - 1
 
         xx, yy = np.meshgrid(
             np.linspace(x_min, x_max, nx),
@@ -204,7 +224,7 @@ class AirfoilEnvBase(FluidEnv):
         mask = mask.copy()
 
         if self._ndims == 3:
-            mask = np.repeat(mask[None, :, :], self.render_shape[2], axis=0)
+            mask = np.repeat(mask[None, :, :], self.obs_resampling_shape[2], axis=0)
         return mask
 
     def _get_domain(self) -> PISOtorch.Domain:
@@ -253,6 +273,7 @@ class AirfoilEnvBase(FluidEnv):
                 bounds=out_bounds,
                 velms=char_vel,
                 dt=time_step.cuda(),
+                differentiable=self._differentiable,
             )
 
         return {"PRE": update_outflow}
@@ -268,18 +289,23 @@ class AirfoilEnvBase(FluidEnv):
             substeps="ADAPTIVE",
             dt=self._dt,
             corrector_steps=2,
-            advection_tol=1e-6,
-            pressure_tol=1e-7 if self._ndims == 2 else 1e-8,
+            advection_tol=self._resolve_advection_tol(SolverTolerance(atol=1e-6)),
+            pressure_tol=self._resolve_pressure_tol(
+                SolverTolerance(atol=1e-7 if self._ndims == 2 else 1e-8)
+            ),
+            pressure_tol_intermediate=self._pressure_tol_intermediate,
+            pressure_warm_start=self._pressure_warm_start,
             advect_non_ortho_steps=2,
             pressure_non_ortho_steps=4,
             pressure_return_best_result=True,
             velocity_corrector="FD",
             non_orthogonal=True,
-            output_resampling_shape=self.render_shape[: self._ndims],
+            output_resampling_shape=self.obs_resampling_shape[: self._ndims],
             output_resampling_fill_max_steps=128,
             differentiable=self._differentiable,
         )
 
+        # Retry a failed single-precision solve in double precision
         sim.solver_double_fallback = True
         sim.preconditionBiCG = False
         sim.BiCG_precondition_fallback = True
@@ -303,7 +329,7 @@ class AirfoilEnvBase(FluidEnv):
         velocity_noise = 0.01
         pressure_noise = 0.01
 
-        max_n_steps = int(0.05 * self._episode_length)
+        max_n_steps = max(int(0.05 * self._episode_length), 1)
         n_steps = self._np_rng.integers(int(0.5 * max_n_steps), max_n_steps) + 1
 
         blocks = self._domain.getBlocks()
@@ -418,7 +444,7 @@ class AirfoilEnvBase(FluidEnv):
 
         # For 3D we only consider a single slice in z-direction,
         # and expand the final tensors to 3D afterwards. Thus,
-        # we can share the logic with the 2D case.
+        # we can share the logic with the 2D case
         if self._ndims == 3:
             cell_coords = cell_coords[:2, 0, :]
             cell_centers = cell_centers[:2, 0, :]
@@ -574,13 +600,13 @@ class AirfoilEnvBase(FluidEnv):
 
         # Now we need to convert the physical locations to grid indices
         physical_coords[0, :] += 1.5
-        physical_coords[0, :] *= (self.render_shape[0]) / (self.L + 1.5)
+        physical_coords[0, :] *= (self.obs_resampling_shape[0]) / (self.L + 1.5)
         physical_coords[1, :] += self.H / 2
-        physical_coords[1, :] *= (self.render_shape[1]) / self.H
+        physical_coords[1, :] *= (self.obs_resampling_shape[1]) / self.H
 
         if physical_coords.shape[0] == 3:
             physical_coords[2, :] += self.D / 2
-            physical_coords[2, :] *= (self.render_shape[1]) / self.D
+            physical_coords[2, :] *= (self.obs_resampling_shape[1]) / self.D
 
         return torch.round(physical_coords).to(torch.int32)
 
@@ -666,9 +692,6 @@ class AirfoilEnvBase(FluidEnv):
         render_3d: bool,
         output_path: Path | None = None,
     ) -> dict[str, np.ndarray]:
-        vorticity = self.get_vorticity().squeeze()
-        vorticity = torch.flip(vorticity, dims=[-2, -1])
-
         vort_min, vort_max = VORTICITY_RENDER_RANGE[int(self._reynolds_number)]
 
         format_vorticity = partial(
@@ -678,25 +701,33 @@ class AirfoilEnvBase(FluidEnv):
             cmap="icefire",
         )
 
+        vorticity_blocks = self._vorticity_blocks()
         render_data = {}
+
         if self._ndims == 2:
-            x_y_vorticity = format_vorticity(
-                data=vorticity.detach().cpu().numpy(),
+            vorticity = self._render_plane(vorticity_blocks)  # (ny, nx)
+
+            render_data["vorticity"] = format_vorticity(
+                data=np.flip(vorticity, axis=(-2, -1))
             )
-            render_data["vorticity"] = x_y_vorticity
         else:  # ndims == 3
-            vort_xy = vorticity[2, vorticity.shape[0] // 2, :, :]
-            vort_xz = vorticity[1, :, vorticity.shape[1] // 2, :]
-            vort_yz = vorticity[0, :, :, int(vorticity.shape[2] * 0.8)]
+            # The y-z plane is placed in the wake, the other two are centered
+            wake_index = int(0.8 * self.render_shape[0])
+
+            # Of the vorticity vector, take the component normal to each plane
+            vort_xy = self._render_plane(vorticity_blocks, axis="z")[2]  # (ny, nx)
+            vort_xz = self._render_plane(vorticity_blocks, axis="y")[1]  # (nz, nx)
+            vort_yz = self._render_plane(vorticity_blocks, axis="x", index=wake_index)
+            vort_yz = vort_yz[0]  # (nz, ny)
 
             render_data["x-y-vorticity"] = format_vorticity(
-                data=vort_xy.detach().cpu().numpy()
+                data=np.flip(vort_xy, axis=(-2, -1))
             )
             render_data["x-z-vorticity"] = format_vorticity(
-                data=vort_xz.detach().cpu().numpy()
+                data=np.flip(vort_xz, axis=(-2, -1))
             )
             render_data["y-z-vorticity"] = format_vorticity(
-                data=vort_yz.detach().cpu().numpy().T
+                data=np.flip(vort_yz.T, axis=(-2, -1))
             )
 
         return render_data
@@ -715,14 +746,17 @@ class AirfoilEnvBase(FluidEnv):
             self._domain.getBlock(self._tail_upper_block_idx).getBoundary("+x"),
             self._airfoil_top_boundary,
         ]
-        balance_boundary_fluxes(self._domain, out_bounds)
+        balance_boundary_fluxes(
+            self._domain, out_bounds, differentiable=self._differentiable
+        )
 
-    def _step_impl(
-        self, action: torch.Tensor
-    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
+    def _advance_impl(
+        self, action: torch.Tensor, n_sim_steps: int
+    ) -> dict[str, torch.Tensor]:
+        """Run ``n_sim_steps`` PISO steps, returning what was measured per substep."""
         all_cds = []
         all_cls = []
-        for _ in range(self._n_sim_steps):
+        for _ in range(n_sim_steps):
             # We apply the action smoothing as proposed by Rabault et al. (2020)
             control = self.__last_control + self._action_smoothing_alpha * (
                 action - self.__last_control
@@ -736,10 +770,17 @@ class AirfoilEnvBase(FluidEnv):
             all_cds += [_cd]
             all_cls += [_cl]
 
+        # [n_sim_steps] in 2D, [n_sim_steps, nz] in 3D
+        return {"drag": torch.stack(all_cds), "lift": torch.stack(all_cls)}
+
+    def _finish_step(
+        self, metrics: dict[str, torch.Tensor]
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
+        """Average the substeps of the env step and read the state they left."""
         obs = self._get_global_obs()
 
-        all_cds_tensor = torch.stack(all_cds).mean(dim=0)
-        all_cls_tensor = torch.stack(all_cls).mean(dim=0)
+        all_cds_tensor = metrics["drag"].mean(dim=0)
+        all_cls_tensor = metrics["lift"].mean(dim=0)
 
         # For 3D, we sum over the z-direction
         cd = torch.sum(all_cds_tensor)
@@ -770,12 +811,12 @@ class AirfoilEnvBase(FluidEnv):
         plt.figure(figsize=(10, 2.5))
         ax = plt.gca()
 
-        plt.xlim(0, self.render_shape[0] - 1)
-        plt.ylim(0, self.render_shape[1] - 1)
+        plt.xlim(0, self.obs_resampling_shape[0] - 1)
+        plt.ylim(0, self.obs_resampling_shape[1] - 1)
 
         plt.grid()
 
-        colors = global_config.palette
+        colors = DEFAULT_PALETTE
 
         rgb = to_rgb(colors[0])
         cmap = ListedColormap(
@@ -787,7 +828,7 @@ class AirfoilEnvBase(FluidEnv):
 
         plt.imshow(
             self._airfoil_mask,
-            extent=(0, self.render_shape[0], 0, self.render_shape[1]),
+            extent=(0, self.obs_resampling_shape[0], 0, self.obs_resampling_shape[1]),
             origin="lower",
             cmap=cmap,
         )
@@ -803,8 +844,8 @@ class AirfoilEnvBase(FluidEnv):
         ax.set_yticks(
             [
                 0,
-                int(self.render_shape[1] / 2),
-                self.render_shape[1] - 1,
+                int(self.obs_resampling_shape[1] / 2),
+                self.obs_resampling_shape[1] - 1,
             ]
         )
         ax.set_yticklabels([f"-{self.H / 2:.1f}", "0.0", f"{self.H / 2:.1f}"])
@@ -813,9 +854,9 @@ class AirfoilEnvBase(FluidEnv):
         ax.set_xticks(
             [
                 0,
-                int(self.render_shape[0] / total_length) * 1.5,
-                int(self.render_shape[0] / total_length) * 2.5,
-                self.render_shape[0],
+                int(self.obs_resampling_shape[0] / total_length) * 1.5,
+                int(self.obs_resampling_shape[0] / total_length) * 2.5,
+                self.obs_resampling_shape[0],
             ]
         )
         ax.set_xticklabels(["-1.5", "0.0", "1.0", f"{self.L}"])
@@ -839,6 +880,12 @@ class AirfoilEnvBase(FluidEnv):
         stats = super()._load_domain_statistics()
         self._vorticity_stats = Stats(**stats["vorticity_magnitude"])
         return stats
+
+    def _checkpoint_accessors(self) -> list[Any]:
+        """Carry the smoothed control, which lives outside the ``Domain``."""
+        return super()._checkpoint_accessors() + [
+            self._attr_accessor("_AirfoilEnvBase__last_control")
+        ]
 
     def detach(self) -> None:
         """Detach all tensors from the current computation graph."""

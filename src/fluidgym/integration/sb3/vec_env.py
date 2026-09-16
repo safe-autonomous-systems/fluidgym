@@ -43,7 +43,10 @@ class VecFluidEnv(SB3VecEnv):
         return {key: value.detach().cpu().numpy() for key, value in data.items()}
 
     def reset(
-        self, seed: int | None = None, randomize: bool | None = None
+        self,
+        seed: int | None = None,
+        randomize: bool | None = None,
+        domain_idx: int | None = None,
     ) -> np.ndarray | dict[str, np.ndarray]:
         """Reset the environment and return initial observations for all agents.
 
@@ -56,12 +59,18 @@ class VecFluidEnv(SB3VecEnv):
             Whether to randomize the initial state. If None, the default behavior is
             used. Defaults to None.
 
+        domain_idx: int | None
+            Index of the initial domain to load. If None, the default behavior is
+            used. Defaults to None.
+
         Returns
         -------
         np.ndarray | dict[str, np.ndarray]:
             The initial observations for all agents.
         """
-        local_obs, _ = self.__env.reset(seed=seed, randomize=randomize)
+        local_obs, _ = self.__env.reset(
+            seed=seed, randomize=randomize, domain_idx=domain_idx
+        )
         if isinstance(local_obs, dict):
             return self.__to_np_dict(local_obs)
         else:

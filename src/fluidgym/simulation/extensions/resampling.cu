@@ -48,8 +48,15 @@ void k_SampleTransformedGridGlobalToLocal(const scalar_t *d_globalData, const Ma
 		for(index_t channel=0; channel<channels; ++channel){
 			scalar_t data = 0;
 			
-			// 2^DIMS sample positions (neighbor cells around sampling location)
-			for(index_t idx=0; idx<(DIMS<<1); ++idx){ // (-x,-y,-z) 000, (+x,-y,-z) 001, (-x,+y,-z) 010, ...
+			// 2^DIMS sample positions (neighbor cells around sampling location).
+			// `1<<DIMS`, NOT `DIMS<<1`: the latter is DIMS*2, which is 4 in 2D
+			// (accidentally correct) but 6 in 3D, silently dropping the two
+			// corners 110 and 111 from every trilinear (de)interpolation. The
+			// missing corners carry expected weight 0.125 each, so a 3D splat
+			// accumulated exactly 0.75 of the weight it should -- measured on the
+			// MHD duct as 3.594402e+06 against 4.792537e+06 for 5038080 source
+			// cells, and a 6-corner reference reproduces the old kernel to 4e-13.
+			for(index_t idx=0; idx<(1<<DIMS); ++idx){ // (-x,-y,-z) 000, (+x,-y,-z) 001, (-x,+y,-z) 010, ...
 				I4 samplePos = {.a={0}};
 				scalar_t weight = 1;
 				bool isOOB = false;
@@ -316,8 +323,15 @@ void k_SampleTransformedGridLocalToGlobal(const scalar_t *d_localData, const sca
 		for(index_t channel=0; channel<channels; ++channel){
 			scalar_t data = d_localData[flatIdx + localGrid.stride.w*channel];
 			
-			// 2^DIMS sample positions (neighbor cells around sampling location)
-			for(index_t idx=0; idx<(DIMS<<1); ++idx){ // (-x,-y,-z) 000, (+x,-y,-z) 001, (-x,+y,-z) 010, ...
+			// 2^DIMS sample positions (neighbor cells around sampling location).
+			// `1<<DIMS`, NOT `DIMS<<1`: the latter is DIMS*2, which is 4 in 2D
+			// (accidentally correct) but 6 in 3D, silently dropping the two
+			// corners 110 and 111 from every trilinear (de)interpolation. The
+			// missing corners carry expected weight 0.125 each, so a 3D splat
+			// accumulated exactly 0.75 of the weight it should -- measured on the
+			// MHD duct as 3.594402e+06 against 4.792537e+06 for 5038080 source
+			// cells, and a 6-corner reference reproduces the old kernel to 4e-13.
+			for(index_t idx=0; idx<(1<<DIMS); ++idx){ // (-x,-y,-z) 000, (+x,-y,-z) 001, (-x,+y,-z) 010, ...
 				I4 samplePos = {.a={0}};
 				scalar_t weight = 1;
 				bool isOOB = false;

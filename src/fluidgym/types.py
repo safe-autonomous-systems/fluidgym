@@ -90,7 +90,10 @@ class FluidEnvLike(Protocol):
         ...
 
     def reset(
-        self, seed: int | None = None, randomize: bool | None = None
+        self,
+        seed: int | None = None,
+        randomize: bool | None = None,
+        domain_idx: int | None = None,
     ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         """Resets the environment to an initial internal state, returning an initial
         observation and info.
@@ -104,6 +107,10 @@ class FluidEnvLike(Protocol):
         randomize: bool | None
             Whether to randomize the initial state. If None, the default behavior is
             used.
+
+        domain_idx: int | None
+            Index of the initial domain to load. If None, the default behavior is
+            used. Defaults to None.
 
         Returns
         -------

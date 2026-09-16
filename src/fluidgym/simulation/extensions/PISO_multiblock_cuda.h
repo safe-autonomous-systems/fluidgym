@@ -135,6 +135,41 @@ void CorrectVelocity(std::shared_ptr<Domain> domain, const torch::Tensor &timeSt
 torch::Tensor ComputeVelocityDivergence(std::shared_ptr<Domain> domain);
 torch::Tensor ComputePressureGradient(std::shared_ptr<Domain> domain, const bool useFVM, const index_t gradientInterpolation);
 
+/** Build the Laplacian matrix (no 1/A weighting) into domain->Epot.
+ *  For thin-wall FIXED boundaries (epotCw > 0), the Robin BC
+ *  dphi/dn = Cw * nabla^2_tau(phi) is incorporated directly as tangential
+ *  surface Laplacian corrections — no augmented system is needed.
+ *  Requires domain->Epot to be allocated via domain->CreateEpotMatrix(). */
+void SetupEpotMatrix(std::shared_ptr<Domain> domain, const int8_t nonOrthoFlags, const bool useFaceTransform);
+
+/** Compute the electric-potential Poisson RHS, div(u×B), for the inductionless MHD solve.
+ *  vectorField: flat u×B field [totalSize * spatialDims], same layout as domain.pressureRHS.
+ *  At a solid wall the normal flux is dropped (insulating, j_n=0); at an open boundary it is
+ *  the cell-centre (u×B)_n (∂φ/∂n=0, current exits and closes virtually outside). Walls and
+ *  open bounds are both BoundaryType::FIXED and are told apart by their velocity BC, see
+ *  isInsulatingWallBound. Either way this matches the reconstruction in
+ *  ComputeCurrentDensityFaceBased so that div(j)=0 holds discretely at boundary cells.
+ *  Returns a new tensor of shape [totalSize]. */
+torch::Tensor ComputeEpotRHS(std::shared_ptr<Domain> domain, const torch::Tensor &vectorField);
+
+/** Compute the gradient of an arbitrary flat scalar field with Neumann (zero-gradient) BCs.
+ *  scalarField: flat tensor of shape [totalSize], same layout as domain.pressureResult.
+ *  Returns a new tensor of shape [totalSize * spatialDims]. */
+torch::Tensor ComputeFieldGradient(std::shared_ptr<Domain> domain, const torch::Tensor &scalarField);
+
+/** Compute FVM (Green-Gauss) gradient of an arbitrary flat scalar field.
+ *  Uses face-based interpolation consistent with the Laplacian stencil.
+ *  scalarField: flat tensor of shape [totalSize].
+ *  Returns a new tensor of shape [totalSize * spatialDims]. */
+torch::Tensor ComputeFieldGradientFVM(std::shared_ptr<Domain> domain, const torch::Tensor &scalarField);
+
+/** Compute Lorentz force using face-based current density reconstruction.
+ *  Guarantees discrete div(j)=0 by using the same stencil as the Poisson solve.
+ *  epotField: flat [totalSize], uCrossBField: flat [totalSize * spatialDims or totalSize*3 for 2D].
+ *  Returns current density tensor of shape [totalSize * 3]. */
+torch::Tensor ComputeCurrentDensityFaceBased(std::shared_ptr<Domain> domain,
+		const torch::Tensor &epotField, const torch::Tensor &uCrossBField);
+
 std::vector<std::vector<torch::Tensor>> ComputeSpatialVelocityGradients(std::shared_ptr<Domain> domain);
 
 /** Compute dot(transform.T, vector), or dot(transform.T_inv, vector) if inverse.
@@ -151,6 +186,12 @@ void CopyScalarResultFromBlocks(std::shared_ptr<Domain> domain);
 /** Copy from domain.pressureResult to block.pressure. */
 void CopyPressureResultToBlocks(std::shared_ptr<Domain> domain);
 
+/** Copy from domain.epotResult to block.epot. */
+void CopyEpotResultToBlocks(std::shared_ptr<Domain> domain);
+
+/** Copy from block.epot to domain.epotResult. */
+void CopyEpotResultFromBlocks(std::shared_ptr<Domain> domain);
+
 /** Copy from block.pressure to domain.pressureResult. */
 void CopyPressureResultFromBlocks(std::shared_ptr<Domain> domain);
 
@@ -160,7 +201,16 @@ void CopyVelocityResultToBlocks(std::shared_ptr<Domain> domain);
 /** Copy from block.velocity to domain.velocityResult. */
 void CopyVelocityResultFromBlocks(std::shared_ptr<Domain> domain);
 
+/** Compute the additive Smagorinsky SGS viscosities.
+ *  NOTE: 'coefficient' is already C_s^2, and the filter width is the max cell edge length
+ *  rather than cellVolume^(1/dims). SGSviscosityIncompressibleWALE does neither. */
 std::vector<torch::Tensor> SGSviscosityIncompressibleSmagorinsky(std::shared_ptr<Domain> domain, const torch::Tensor coefficient);
+
+/** Compute the additive WALE (Nicoud & Ducros 1999) SGS viscosities.
+ *  'coefficient' is the textbook Cw (typ. 0.325-0.5) and is SQUARED internally; this differs from
+ *  SGSviscosityIncompressibleSmagorinsky, whose coefficient is already C_s^2.
+ *  Only meaningful for 3D domains: for dims<3 the WALE operator vanishes identically. */
+std::vector<torch::Tensor> SGSviscosityIncompressibleWALE(std::shared_ptr<Domain> domain, const torch::Tensor coefficient);
 
 solverReturn_t SolveLinear(std::shared_ptr<CSRmatrix> A, torch::Tensor RHS, torch::Tensor x, torch::Tensor maxit, torch::Tensor tol, const ConvergenceCriterion conv,
 	const bool useBiCG, const bool matrixRankDeficient, const index_t residualResetSteps, const bool transposeA, const bool printResidual, const bool returnBestResult,
@@ -302,6 +352,16 @@ void CopyScalarResultGradToBlocks(std::shared_ptr<Domain> domain);
 void CopyPressureResultGradFromBlocks(std::shared_ptr<Domain> domain);
 void CopyVelocityResultGradFromBlocks(std::shared_ptr<Domain> domain);
 void CopyVelocityResultGradToBlocks(std::shared_ptr<Domain> domain);
+void CopyEpotResultGradFromBlocks(std::shared_ptr<Domain> domain);
+
+torch::Tensor ComputeEpotRHSGrad(std::shared_ptr<Domain> domain,
+		const torch::Tensor &gradDivergence);
+
+std::pair<torch::Tensor, torch::Tensor> ComputeCurrentDensityFaceBasedGrad(
+		std::shared_ptr<Domain> domain,
+		const torch::Tensor &epotField,
+		const torch::Tensor &uCrossBField,
+		const torch::Tensor &gradJ);
 #endif //WITH_GRAD
 
 #endif //_INCLUDE_PISO_MULTIBLOCK_CUDA

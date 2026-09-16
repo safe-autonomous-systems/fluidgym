@@ -14,8 +14,8 @@ from fluidgym.simulation.pict.PISOtorch_simulation import (
 from fluidgym.simulation.pict.PISOtorch_simulation import (
     get_max_time_step,
 )
-from fluidgym.simulation.pict.util.logging import get_logger
 from fluidgym.simulation.pict.util.output import numerical_to_numpy as ntonp
+from fluidgym.simulation.solver_tolerance import SolverTolerance
 
 
 class Simulation(PISOtorchSimulation):
@@ -28,9 +28,6 @@ class Simulation(PISOtorchSimulation):
 
     dt: float
         The simulation time step.
-
-    verbose: bool
-        If True, enable verbose logging. Defaults to False.
 
     substeps: int | Literal["ADAPTIVE"]
         Number of substeps per simulation step or "ADAPTIVE" for adaptive substepping.
@@ -66,11 +63,28 @@ class Simulation(PISOtorchSimulation):
     BiCG_precondition_fallback: bool
         Whether to fallback if preconditioning fails. Defaults to True.
 
-    advection_tol: float | None
-        Tolerance for advection solver. If None, uses default. Defaults to None.
+    advection_tol: float | SolverTolerance | None
+        Tolerance for the advection solves (momentum *and* passive scalar). A
+        float is an absolute tolerance on ``||r||_2/sqrt(n)``; a
+        :class:`~fluidgym.simulation.solver_tolerance.SolverTolerance` specifies
+        it relative to the RHS instead, which keeps its meaning across domain
+        sizes. If None, uses the dtype default. Defaults to None.
 
-    pressure_tol: float | None
-        Tolerance for pressure solver. If None, uses default. Defaults to None.
+    pressure_tol: float | SolverTolerance | None
+        Tolerance for the pressure solve; same forms as ``advection_tol``. The
+        residual of this solve is the mass-conservation error of the projection.
+        If None, uses the dtype default. Defaults to None.
+
+    pressure_tol_intermediate: float | SolverTolerance | None
+        Tolerance for every pressure solve that is *not* the final corrector.
+        Only the final corrector's pressure survives into the solution, so the
+        earlier ones can be solved loosely. None (the default) applies
+        ``pressure_tol`` everywhere, i.e. the historical behaviour.
+
+    pressure_warm_start: bool
+        Seed each pressure solve with the previous sub-step's result for the same
+        corrector index instead of with zero. An initial guess cannot change the
+        converged answer, only the iteration count. Defaults to False.
 
     flux_balance_tol: float
         Tolerance for flux balance check before each step. Defaults to 1e-5.
@@ -126,7 +140,6 @@ class Simulation(PISOtorchSimulation):
         self,
         domain: PISOtorch.Domain,
         dt: float,
-        verbose: bool = False,
         substeps: int | Literal["ADAPTIVE"] = 1,
         corrector_steps: int = 2,
         density_viscosity: float | None = None,
@@ -138,8 +151,10 @@ class Simulation(PISOtorchSimulation):
         scipy_solve_pressure: bool = False,
         preconditionBiCG: bool = False,
         BiCG_precondition_fallback: bool = True,
-        advection_tol: float | None = None,
-        pressure_tol: float | None = None,
+        advection_tol: float | SolverTolerance | None = None,
+        pressure_tol: float | SolverTolerance | None = None,
+        pressure_tol_intermediate: float | SolverTolerance | None = None,
+        pressure_warm_start: bool = False,
         flux_balance_tol: float = 1e-5,
         convergence_tol: float | None = None,
         solver_double_fallback: bool = False,
@@ -173,6 +188,8 @@ class Simulation(PISOtorchSimulation):
             BiCG_precondition_fallback=BiCG_precondition_fallback,
             advection_tol=advection_tol,  # type: ignore
             pressure_tol=pressure_tol,  # type: ignore
+            pressure_tol_intermediate=pressure_tol_intermediate,  # type: ignore
+            pressure_warm_start=pressure_warm_start,
             convergence_tol=convergence_tol,  # type: ignore
             solver_double_fallback=solver_double_fallback,
             advect_non_ortho_steps=advect_non_ortho_steps,
@@ -199,10 +216,6 @@ class Simulation(PISOtorchSimulation):
             save_domain_name=None,  # type: ignore
             stop_fn=lambda: False,
         )
-
-        if not verbose:
-            # We don't want extensive logging
-            get_logger("PISOsim").setLevel("ERROR")
 
         self.flux_balance_tol = flux_balance_tol
         self._cpu_device = torch.device("cpu")
@@ -236,20 +249,20 @@ class Simulation(PISOtorchSimulation):
         time_step = None
 
         if isinstance(substeps, int) and substeps > 0:
-            # just fixed substeps.
-            # 1 iteration with have physical time = time_step*substeps.
+            # just fixed substeps
+            # 1 iteration with have physical time = time_step*substeps
             pass
         elif substeps == -1:
             # compute max time step for each iteration/substep based on current
-            # velocity. 1 iteration with have physical time = time_step.
+            # velocity. 1 iteration with have physical time = time_step
             adaptive_step = True
         elif substeps == -2:
-            # compute max time step based on initial conditions, then keep it constant.
-            # 1 iteration with have physical time = time_step.
+            # compute max time step based on initial conditions, then keep it constant
+            # 1 iteration with have physical time = time_step
             time_step, substeps = get_max_time_step(
                 self.domain, time_step_target, CFL_cond, with_transformations=True
             )
-            self.__LOG.info(
+            self.__LOG.debug(
                 "Setting time step to %.02e,"
                 "substeps to %d based on initial conditions.",
                 time_step,

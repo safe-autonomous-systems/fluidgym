@@ -102,6 +102,9 @@ def save_domain(domain, path):
         if block.hasPassiveScalar():
             add_data(block.passiveScalar, block_dict, "scalar")
 
+        if block.hasEpot():
+            add_data(block.epot, block_dict, "epot")
+
         if block.hasVelocitySource():
             add_data(block.velocitySource, block_dict, "velocitySource")
 
@@ -111,8 +114,6 @@ def save_domain(domain, path):
             add_data(block.transform, block_dict, "transform")
             if block.hasFaceTransform():
                 add_data(block.faceTransform, block_dict, "faceTransform")
-        # else:
-        #    block_dict["transform"] = None
 
         block_dict["boundaries"] = []
 
@@ -140,13 +141,22 @@ def save_domain(domain, path):
                 bound_dict["velocityType"] = boundary_condition_type_to_string(
                     bound.velocityType
                 )
-                add_data(bound.velocity, bound_dict, "velocity")
+                if bound.velocity is not None:
+                    add_data(bound.velocity, bound_dict, "velocity")
                 if bound.hasPassiveScalar():
                     bound_dict["passiveScalarType"] = [
                         boundary_condition_type_to_string(_)
                         for _ in bound.passiveScalarTypes
                     ]
                     add_data(bound.passiveScalar, bound_dict, "scalar")
+                if bound.hasEpotCw():
+                    bound_dict["epotCw"] = bound.getEpotCw()
+                if not bound.isEpotInsulating():
+                    # Only written when non-default, so a domain saved before this flag
+                    # existed loads back as all-insulating, which is what it was run as.
+                    bound_dict["epotInsulating"] = False
+                if bound.hasEpotDirichlet():
+                    bound_dict["epotDirichlet"] = True
                 if bound.hasTransform():
                     add_data(bound.transform, bound_dict, "transform")
                 # else:
@@ -189,12 +199,12 @@ def load_domain(path, dtype=None, device=None, with_scalar=True):
         data_info = domain_dict["data_info"]
         data = []
         for i in range(len(data_dict)):
-            data.append(
-                torch.tensor(data_dict[str(i)], device=data_info[str(i)]["device"]).to(
-                    dtype
+                data.append(
+                    torch.tensor(data_dict[str(i)], device=data_info[str(i)]["device"]).to(
+                        dtype
+                    )
                 )
-            )
-
+                
     def get_data(dict, name):
         return data[int(dict[name])] if name in dict else None
 
@@ -239,6 +249,9 @@ def load_domain(path, dtype=None, device=None, with_scalar=True):
         if "velocitySource" in block_dict:
             block.setVelocitySource(get_data(block_dict, "velocitySource"))
 
+        if "epot" in block_dict:
+            block.setEpot(get_data(block_dict, "epot"))
+
         if vertexCoordinates is None and "transform" in block_dict:
             ft = (
                 get_data(block_dict, "faceTransform")
@@ -247,61 +260,62 @@ def load_domain(path, dtype=None, device=None, with_scalar=True):
             )
             block.setTransform(get_data(block_dict, "transform"), ft)
 
-        # blocks.append(block)
     blocks = domain.getBlocks()
 
     # create all blocks first to handle connected blocks via indices
     for block_idx, (block_dict, block) in enumerate(zip(domain_dict["blocks"], blocks)):
-        # print("block", block_idx)
         for bound_idx, bound_dict in enumerate(block_dict["boundaries"]):
             bound_type = bound_dict["type"]
-            # print("bound", bound_idx, "type", bound_type)
             bound = None
-            if bound_type == "DIRICHLET":
-                warnings.warn(
-                    "StaticDirichletBoundary is deprecated, creating FixedBoundary instead."
-                )
-                block.CloseBoundary(
-                    bound_idx,
-                    get_data(bound_dict, "velocity"),
-                    get_data(bound_dict, "scalar"),
-                )
-                # bound = PISOtorch.StaticDirichletBoundary(get_data(bound_dict, "slip"), get_data(bound_dict, "velocity"), get_data(bound_dict, "scalar"))
-            elif bound_type == "DIRICHLET_VARYING":
-                warnings.warn(
-                    "VaryingDirichletBoundary is deprecated, creating FixedBoundary instead."
-                )
-                block.CloseBoundary(
-                    bound_idx,
-                    get_data(bound_dict, "velocity"),
-                    get_data(bound_dict, "scalar"),
-                )
-                # bound = PISOtorch.VaryingDirichletBoundary(get_data(bound_dict, "slip"), get_data(bound_dict, "velocity"), get_data(bound_dict, "scalar"))
-                # if bound_dict["transform"] is not None:
-                #    bound.setTransform(get_data(bound_dict, "transform"))
-            elif bound_type == "FIXED":
-                # TODO load BoundaryConditionType when multiple are supportet
+            if bound_type == "FIXED":
+                velocity_type = bound_dict.get("velocityType", "DIRICHLET")
                 has_scalar = with_scalar and ("scalar" in bound_dict)
-                block.CloseBoundary(
-                    bound_idx,
-                    get_data(bound_dict, "velocity"),
-                    get_data(bound_dict, "scalar") if has_scalar else None,
-                )
-                if has_scalar:
-                    if isinstance(bound_dict["passiveScalarType"], list):
-                        block.getBoundary(bound_idx).setPassiveScalarType(
-                            [
-                                boundary_condition_string_to_type(_)
-                                for _ in bound_dict["passiveScalarType"]
-                            ]
+                if velocity_type == "NEUMANN":
+                    # OpenBoundary: Neumann velocity BC (zero-gradient, free-slip outflow).
+                    # Pass scalar only if it is Dirichlet; Neumann scalar means pass None.
+                    scalar_type = bound_dict.get("passiveScalarType", "NEUMANN")
+                    # scalar_type may be a list (one entry per channel)
+                    if isinstance(scalar_type, list):
+                        is_scalar_dirichlet = any(
+                            t == "DIRICHLET" for t in scalar_type
                         )
                     else:
-                        block.getBoundary(bound_idx).setPassiveScalarType(
-                            boundary_condition_string_to_type(
-                                bound_dict["passiveScalarType"]
+                        is_scalar_dirichlet = scalar_type == "DIRICHLET"
+                    scalar_tensor = (
+                        get_data(bound_dict, "scalar")
+                        if (has_scalar and is_scalar_dirichlet)
+                        else None
+                    )
+                    block.OpenBoundary(bound_idx, scalar_tensor)
+                else:
+                    block.CloseBoundary(
+                        bound_idx,
+                        get_data(bound_dict, "velocity"),
+                        get_data(bound_dict, "scalar") if has_scalar else None,
+                    )
+                    if has_scalar:
+                        if isinstance(bound_dict["passiveScalarType"], list):
+                            block.getBoundary(bound_idx).setPassiveScalarType(
+                                [
+                                    boundary_condition_string_to_type(_)
+                                    for _ in bound_dict["passiveScalarType"]
+                                ]
                             )
-                        )
+                        else:
+                            block.getBoundary(bound_idx).setPassiveScalarType(
+                                boundary_condition_string_to_type(
+                                    bound_dict["passiveScalarType"]
+                                )
+                            )
                 del has_scalar
+                if "epotCw" in bound_dict:
+                    block.getBoundary(bound_idx).setEpotCw(bound_dict["epotCw"])
+                if "epotInsulating" in bound_dict:
+                    block.getBoundary(bound_idx).setEpotInsulating(
+                        bound_dict["epotInsulating"]
+                    )
+                if bound_dict.get("epotDirichlet", False):
+                    block.getBoundary(bound_idx).setEpotDirichlet(True)
             elif bound_type == "NEUMANN":
                 raise NotImplementedError
             elif bound_type == "CONNECTED":
@@ -310,18 +324,12 @@ def load_domain(path, dtype=None, device=None, with_scalar=True):
                     blocks[bound_dict["connectedBlock"]],
                     *[bound_idx_to_str(x) for x in bound_dict["axes"]],
                 )
-                # bound = PISOtorch.ConnectedBoundary(blocks[bound_dict["connectedBlock"]], bound_dict["axes"])
             elif bound_type == "PERIODIC":
-                # bound = PISOtorch.PeriodicBoundary()
                 block.MakePeriodic(bound_idx // 2)
             else:
                 raise TypeError("Unknown boundary type: " + bound_type)
 
             if bound is not None:
                 block.setBoundary(bound_idx, bound)
-
-        # domain.AddBlock(block)
-
-    # domain.PrepareSolve() this allocates lots of secondary tensors (matrix, RHS, results), so leave it to the user if needed
 
     return domain
