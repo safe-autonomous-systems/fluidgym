@@ -10,13 +10,16 @@ MAX_GIF_FRAMES = 500
 GIF_FRAME_STRIDE = 5
 
 
-def save_gif(frames: Sequence[np.ndarray], path: Path | str, fps: int = 24) -> Path:
+def save_gif(
+    frames: Sequence[np.ndarray] | np.ndarray, path: Path | str, fps: int = 24
+) -> Path:
     """Save a sequence of rendered frames as a looping GIF file.
 
     Parameters
     ----------
-    frames: Sequence[np.ndarray]
-        The rendered frames ``[H, W, 3]``, e.g. as returned by :meth:`render`.
+    frames: Sequence[np.ndarray] | np.ndarray
+        The rendered frames ``[H, W, 3]``, e.g. as returned by :meth:`render`, or
+        a stacked array of shape ``[T, H, W, 3]``.
 
     path: Path | str
         The path of the GIF file. The ``.gif`` suffix is appended if missing, and

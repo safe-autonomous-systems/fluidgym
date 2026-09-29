@@ -26,7 +26,7 @@ class _SpilledTensor:
     exactly the same schedule host memory would have been: autograd drops its
     reference to the saved tensor, the handle dies, the file goes.
 
-    Bytes are written through a ``uint8`` view rather than via ``numpy`` dtypes for 
+    Bytes are written through a ``uint8`` view rather than via ``numpy`` dtypes for
     better compatibility.
     """
 
