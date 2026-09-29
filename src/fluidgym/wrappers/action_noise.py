@@ -33,11 +33,7 @@ class ActionNoise(FluidWrapper):
     def step(
         self, action: torch.Tensor
     ) -> tuple[
-        dict[str, torch.Tensor],
-        torch.Tensor,
-        bool | torch.Tensor,
-        bool | torch.Tensor,
-        dict[str, torch.Tensor],
+        dict[str, torch.Tensor], torch.Tensor, bool, bool, dict[str, torch.Tensor]
     ]:
         """Run one timestep of the environment's dynamics using the agent actions.
 

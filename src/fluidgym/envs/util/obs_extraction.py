@@ -1,13 +1,10 @@
-"""Utility functions for extracting observation windows for agents.
-
-Every function works per environment: the global observations come back with the
-env dim first, and the window extractors accept any number of leading batch dims
-(e.g. the env dim of a batched environment) and keep them in front.
-"""
+"""Utility functions for extracting observation windows for agents."""
 
 import torch
+import torch.nn.functional as F
 
 from fluidgym.envs import FluidEnv
+from fluidgym.simulation.pict.util.output import _resample_block_data
 
 
 def extract_global_2d_obs(
@@ -26,17 +23,33 @@ def extract_global_2d_obs(
 
     Returns
     -------
-        Global observations per environment with shape
-        [E, n_agents * n_sensors_per_agent, ...].
-
+        Global observations with shape [n_agents * n_sensors_per_agent, ...].
     """
     u_list = [block.velocity for block in env._domain.getBlocks()]
     p_list = [block.pressure for block in env._domain.getBlocks()]
 
-    # Straight to the sensor cells: never materialises the full grid, and stays
-    # differentiable where the compiled kernel would detach. Readings are [E, C, R]
-    u = env._resample_blocks_at(u_list, sensor_locations).transpose(1, 2)
-    p = env._resample_blocks_at(p_list, sensor_locations)[:, 0]
+    u = _resample_block_data(
+        u_list,
+        env._sim.output_resampling_coords,
+        env._sim.output_resampling_shape,
+        env._ndims,
+        fill_max_steps=env._sim.output_resampling_fill_max_steps,
+        differentiable=env._differentiable,
+    )
+    u = u.squeeze()
+    u = u.permute(1, 2, 0)
+    u = u[sensor_locations[1], sensor_locations[0], :]
+
+    p = _resample_block_data(
+        p_list,
+        env._sim.output_resampling_coords,
+        env._sim.output_resampling_shape,
+        env._ndims,
+        fill_max_steps=env._sim.output_resampling_fill_max_steps,
+        differentiable=env._differentiable,
+    )
+    p = p.squeeze()
+    p = p[sensor_locations[1], sensor_locations[0]]
 
     return {
         "velocity": u,
@@ -77,37 +90,60 @@ def extract_global_3d_obs(
 
     Returns
     -------
-        Global observations per environment with shape
-        [E, n_agents, n_sensors_per_agent, ...].
-
+        Global observations with shape [n_agents * n_sensors_per_agent, ...].
     """
     u_list = [block.velocity for block in env._domain.getBlocks()]
     p_list = [block.pressure for block in env._domain.getBlocks()]
 
+    u: torch.Tensor = _resample_block_data(
+        u_list,
+        env._sim.output_resampling_coords,
+        env._sim.output_resampling_shape,
+        env._ndims,
+        fill_max_steps=env._sim.output_resampling_fill_max_steps,
+        differentiable=env._differentiable,
+    )
+    u = u.squeeze()
+    u = u.permute(1, 2, 3, 0)
+
+    p: torch.Tensor = _resample_block_data(
+        p_list,
+        env._sim.output_resampling_coords,
+        env._sim.output_resampling_shape,
+        env._ndims,
+        fill_max_steps=env._sim.output_resampling_fill_max_steps,
+        differentiable=env._differentiable,
+    )
+    p = p.squeeze()
+
     sensor_locations = sensor_locations.flatten(start_dim=1)
 
-    # See extract_global_2d_obs. [E, C, R] and [E, R]
-    u: torch.Tensor = env._resample_blocks_at(u_list, sensor_locations)
-    p: torch.Tensor = env._resample_blocks_at(p_list, sensor_locations)[:, 0]
-    n_envs = u.size(0)
-
     if local_2d_obs:
-        u = u[:, :2]
+        u = u[:, :, :, :2]
         velocity_dims = 2
     else:
         velocity_dims = 3
 
-    # [E, C, R] -> [E, R, C], the layout the reshapes below expect
-    u = u.transpose(1, 2).contiguous()
+    u = u[
+        sensor_locations[2],
+        sensor_locations[1],
+        sensor_locations[0],
+        :,
+    ]
 
-    u = u.view(n_envs, n_sensors_z, velocity_dims, -1)
-    u = u.view(n_envs, n_agents, n_sensors_per_agent, velocity_dims, -1)
+    u = u.view(n_sensors_z, velocity_dims, -1)
+    u = u.view(n_agents, n_sensors_per_agent, velocity_dims, -1)
 
     if local_2d_obs:
-        u = u.permute(0, 1, 2, 4, 3)
+        u = u.permute(0, 1, 3, 2)
 
-    p = p.view(n_envs, n_sensors_z, -1)
-    p = p.view(n_envs, n_agents, n_sensors_per_agent, -1)
+    p = p[
+        sensor_locations[2],
+        sensor_locations[1],
+        sensor_locations[0],
+    ]
+    p = p.view(n_sensors_z, -1)
+    p = p.view(n_agents, n_sensors_per_agent, -1)
 
     return {
         "velocity": u,
@@ -120,7 +156,6 @@ def transform_global_to_local_obs_3d(
     local_obs_window: int,
     n_agents: int,
     local_2d_obs: bool = False,
-    batch_dims: int = 0,
 ) -> dict[str, torch.Tensor]:
     """Transforms global observations into local observations for agents arranged
     in a 3D domain.
@@ -128,7 +163,7 @@ def transform_global_to_local_obs_3d(
     Parameters
     ----------
     global_obs: dict[str, torch.Tensor]
-        Global observations with shape [*batch, n_agents * n_sensors_per_agent, ...].
+        Global observations with shape [n_agents * n_sensors_per_agent, ...].
 
     local_obs_window: int
         Size of the local observation window (in number of agents).
@@ -139,38 +174,31 @@ def transform_global_to_local_obs_3d(
     local_2d_obs: bool
         Whether the local observations are 2D (True) or 3D (False).
 
-    batch_dims: int
-        Number of leading batch dims, e.g. 1 for the env dim of a batched
-        environment; the agent dim follows them. Defaults to 0.
-
     Returns
     -------
-        Local observations with shape [*batch, n_agents, local_obs_window, ...].
+        Local observations with shape [n_agents, local_obs_window, ...].
 
     """
     offset = local_obs_window // 2
-    agent_dim = batch_dims
 
     local_obs = {}
     for k, v in global_obs.items():
         # First, shift the global obs to start with the first agents sensor
         # window at zero
-        shifted_obs = torch.roll(v, shifts=offset, dims=agent_dim)
+        shifted_obs = torch.roll(v, shifts=offset, dims=0)
 
         local_obs_list = []
         for _ in range(n_agents):
-            window = shifted_obs.narrow(agent_dim, 0, local_obs_window)
+            window = shifted_obs[:local_obs_window]
 
             if local_2d_obs:
-                # Drop the singleton dims of the window itself, never a batch dim
-                batch, rest = window.shape[:batch_dims], window.shape[batch_dims:]
-                window = window.reshape(*batch, *[n for n in rest if n != 1])
+                window = window.squeeze()
 
             local_obs_list += [window]
 
-            shifted_obs = torch.roll(shifted_obs, shifts=-1, dims=agent_dim)
+            shifted_obs = torch.roll(shifted_obs, shifts=-1, dims=0)
 
-        local_obs[k] = torch.stack(local_obs_list, dim=agent_dim)
+        local_obs[k] = torch.stack(local_obs_list, dim=0)
 
     return local_obs
 
@@ -183,7 +211,7 @@ def extract_moving_window_2d(
     Parameters
     ----------
     field: torch.Tensor
-        [*batch, Y, X] tensor, with any number of leading batch dims.
+        [Y, X] tensor.
 
     n_agents: int
         Number of agents along X.
@@ -196,38 +224,32 @@ def extract_moving_window_2d(
 
     Returns
     -------
-        Tensor of shape [*batch, n_agents, Y, window_size_x].
+        Tensor of shape [n_agents, Y, window_size_x].
     """
-    if field.ndim < 2:
-        raise ValueError("field must be a tensor with shape (*batch, Y, X)")
+    if field.ndim != 2:
+        raise ValueError("field must be a 2D tensor with shape (Y, X)")
 
-    *batch, Y, X = field.shape
+    Y, X = field.shape
     assert X == n_agents * agent_width, "X must equal n_agents * agent_width"
 
-    # Reshape into per-agent blocks: [*batch, Y, n_agents, agent_width]
-    field_agents = field.reshape(*batch, Y, n_agents, agent_width)
+    # Reshape into per-agent blocks: [Y, n_agents, agent_width]
+    field_agents = field.view(Y, n_agents, agent_width)
 
     # Pad along the agent dimension (circularly)
     pad = n_agents_per_window // 2
-    if pad > 0:
-        field_padded = torch.cat(
-            [field_agents[..., -pad:, :], field_agents, field_agents[..., :pad, :]],
-            dim=-2,
-        )
-    else:
-        field_padded = field_agents
+    field_padded = F.pad(field_agents, (0, 0, pad, pad), mode="circular")
 
     window_list = []
     for i in range(n_agents):
         start = i
         end = i + n_agents_per_window
-        window = field_padded[..., start:end, :]  # [*batch, Y, window_agents, width]
+        window = field_padded[:, start:end, :]  # [Y, window_agents, agent_width]
 
         # Flatten the local agent window along the X dimension
-        local_obs = window.reshape(*batch, Y, n_agents_per_window * agent_width)
+        local_obs = window.reshape(Y, n_agents_per_window * agent_width)
         window_list.append(local_obs)
 
-    return torch.stack(window_list, dim=-3)  # [*batch, n_agents, Y, window_size_x]
+    return torch.stack(window_list, dim=0)  # [n_agents, Y, window_size_x]
 
 
 def extract_moving_window_2d_x_z(
@@ -246,7 +268,7 @@ def extract_moving_window_2d_x_z(
     Parameters
     ----------
     field: torch.Tensor
-        [*batch, Z, X] tensor, with any number of leading batch dims.
+        [Z, X] tensor.
 
     n_agents_x: int
         Number of agents along X.
@@ -271,13 +293,12 @@ def extract_moving_window_2d_x_z(
 
     Returns
     -------
-        Tensor of shape [*batch, n_agents_z * n_agents_x, Z_local, X_local].
+        Tensor of shape [n_agents_z * n_agents_x, Z_local, X_local].
     """
-    if field.ndim < 2:
-        raise ValueError("field must be a tensor with shape (*batch, Z, X)")
+    if field.ndim != 2:
+        raise ValueError("field must be a 3D tensor with shape (Z, Y, X)")
 
-    *batch, Z, X = field.shape
-    nb = len(batch)
+    Z, X = field.shape
     assert X == n_agents_x * agent_width, "X must equal n_agents_x * agent_width"
     assert Z == n_agents_z * agent_width, "Z must equal n_agents_z * agent_width"
 
@@ -288,33 +309,38 @@ def extract_moving_window_2d_x_z(
         raise ValueError("pad_z must be in range [0, n_agents_per_window_z]")
 
     # Split field into per-agent spatial blocks
-    field_agents = field.reshape(
-        *batch, n_agents_z, agent_width, n_agents_x, agent_width
-    )  # [*batch, n_agents_z, agent_width_z, n_agents_x, agent_width_x]
-    field_agents = field_agents.permute(
-        *range(nb), nb, nb + 2, nb + 1, nb + 3
-    ).contiguous()
+    field_agents = field.view(
+        n_agents_z, agent_width, n_agents_x, agent_width
+    )  # [n_agents_z, agent_width_z, n_agents_x, agent_width_x]
+    field_agents = field_agents.permute(0, 2, 1, 3).contiguous()
+    # field_agents: [n_agents_z, n_agents_x, agent_width_z, agent_width_x]
 
-    # First, we pad s.t. the first agent has a full window
-    field_agents = torch.roll(field_agents, shifts=(pad_z, pad_x), dims=(nb, nb + 1))
+    # mean(dim=(2,3)) is independent per agent block, so compute it once
+    # instead of recomputing inside the loop on each window slice
+    agent_means = field_agents.mean(dim=(2, 3))  # [n_agents_z, n_agents_x]
 
-    windows = []
-    # Then, we start to extract windows and roll again
-    for _ in range(n_agents_x):
-        for _ in range(n_agents_z):
-            local_window = field_agents[
-                ..., :n_agents_per_window_z, :n_agents_per_window_x, :, :
-            ]
+    # Apply the initial centering shift on the reduced 2D grid
+    agent_means = torch.roll(agent_means, shifts=(pad_z, pad_x), dims=(0, 1))
 
-            # Bring back to [Z, X] shape
-            local_window = local_window.mean(dim=(-2, -1))
+    # Circular padding: roll is circular, so windows wrap around.
+    # Extend the grid so that unfold can reach all circular windows.
+    Wz = n_agents_per_window_z
+    Wx = n_agents_per_window_x
+    if Wz > 1:
+        agent_means = torch.cat([agent_means, agent_means[: Wz - 1]], dim=0)
+    if Wx > 1:
+        agent_means = torch.cat([agent_means, agent_means[:, : Wx - 1]], dim=1)
+    # agent_means: [n_agents_z + Wz - 1, n_agents_x + Wx - 1]
 
-            windows += [local_window]
+    # Extract all circular sliding windows in two unfold calls
+    windows = agent_means.unfold(0, Wz, 1).unfold(1, Wx, 1)
+    # windows: [n_agents_z, n_agents_x, Wz, Wx]
 
-            field_agents = torch.roll(field_agents, shifts=-1, dims=nb)
-        field_agents = torch.roll(field_agents, shifts=-1, dims=nb + 1)
+    # Match original output order: outer loop over x, inner over z
+    windows = windows.permute(1, 0, 2, 3).contiguous()
+    windows = windows.reshape(n_agents_x * n_agents_z, Wz, Wx)
 
-    return torch.stack(windows, dim=nb)
+    return windows
 
 
 def extract_moving_window_3d(
@@ -330,7 +356,7 @@ def extract_moving_window_3d(
     Parameters
     ----------
     field: torch.Tensor
-        [*batch, Z, Y, X] tensor, with any number of leading batch dims.
+        [Z, Y, X] tensor.
 
     n_agents: int
         Number of agents along X and Z.
@@ -343,13 +369,12 @@ def extract_moving_window_3d(
 
     Returns
     -------
-        Tensor of shape [*batch, n_agents_z * n_agents_x, Z_local, Y, X_local]
+        Tensor of shape [n_agents_z * n_agents_x, Z_local, Y, X_local]
     """
-    if field.ndim < 3:
-        raise ValueError("field must be a tensor with shape (*batch, Z, Y, X)")
+    if field.ndim != 3:
+        raise ValueError("field must be a 3D tensor with shape (Z, Y, X)")
 
-    *batch, Z, Y, X = field.shape
-    nb = len(batch)
+    Z, Y, X = field.shape
     if X != n_agents * agent_width:
         raise ValueError("X must equal n_agents_x * agent_width")
 
@@ -357,39 +382,30 @@ def extract_moving_window_3d(
         raise ValueError("Z must equal n_agents_z * agent_width")
 
     # Split field into per-agent spatial blocks
-    field_agents = field.reshape(
-        *batch, n_agents, agent_width, Y, n_agents, agent_width
-    )  # [*batch, n_agents_z, agent_width_z, Y, n_agents_x, agent_width_x]
-    field_agents = field_agents.permute(
-        *range(nb), nb, nb + 2, nb + 3, nb + 1, nb + 4
-    ).contiguous()
+    field_agents = field.view(
+        n_agents, agent_width, Y, n_agents, agent_width
+    )  # [n_agents_z, agent_width_z, Y, n_agents_x, agent_width_x]
+    field_agents = field_agents.permute(0, 2, 3, 1, 4).contiguous()
 
     pad = n_agents_per_window // 2
 
     # First, we pad s.t. the first agent has a full window
-    field_agents = torch.roll(field_agents, shifts=(pad, pad), dims=(nb, nb + 2))
+    field_agents = torch.roll(field_agents, shifts=(pad, pad), dims=(0, 2))
 
     windows = []
     # Then, we start to extract windows and roll again
     for _ in range(n_agents):
         for _ in range(n_agents):
-            local_window = field_agents[
-                ..., :n_agents_per_window, :, :n_agents_per_window, :, :
-            ]
+            local_window = field_agents[:n_agents_per_window, :, :n_agents_per_window]
 
             # Bring back to [Z, Y, X] shape
-            local_window = local_window.permute(
-                *range(nb), nb, nb + 3, nb + 1, nb + 2, nb + 4
-            ).contiguous()
+            local_window = local_window.permute(0, 3, 1, 2, 4).contiguous()
             local_window = local_window.view(
-                *batch,
-                n_agents_per_window * agent_width,
-                Y,
-                n_agents_per_window * agent_width,
+                n_agents_per_window * agent_width, Y, n_agents_per_window * agent_width
             )
             windows += [local_window]
 
-            field_agents = torch.roll(field_agents, shifts=-1, dims=nb + 2)
-        field_agents = torch.roll(field_agents, shifts=-1, dims=nb)
+            field_agents = torch.roll(field_agents, shifts=-1, dims=2)
+        field_agents = torch.roll(field_agents, shifts=-1, dims=0)
 
-    return torch.stack(windows, dim=nb)
+    return torch.stack(windows, dim=0)

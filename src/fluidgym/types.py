@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from enum import Enum
+from pathlib import Path
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
 import numpy as np
@@ -64,37 +64,10 @@ class FluidEnvLike(Protocol):
         """The CUDA device used by the environment."""
         ...
 
-    @property
-    def n_envs(self) -> int:
-        """The number of environments simulated together (1 for a single one)."""
-        ...
-
-    @property
-    def num_envs(self) -> int:
-        """Alias of :attr:`n_envs`, the name vectorized-env libraries use."""
-        ...
-
-    @property
-    def vectorized(self) -> bool:
-        """Whether the API carries a leading env dim.
-
-        Then actions, observations, rewards, flags and infos are batched over
-        :attr:`n_envs` environments: ``[n_envs, ...]`` (``[n_envs, n_agents, ...]``
-        in MARL mode), and the flags are bool tensors ``[n_envs]``. All
-        environments share the episode: they are reset together and truncated at
-        the same step. :attr:`action_space` and :attr:`observation_space` are those
-        of a single environment (and agent).
-        """
-        ...
-
     def step(
         self, action: torch.Tensor
     ) -> tuple[
-        dict[str, torch.Tensor],
-        torch.Tensor,
-        bool | torch.Tensor,
-        bool | torch.Tensor,
-        dict[str, torch.Tensor],
+        dict[str, torch.Tensor], torch.Tensor, bool, bool, dict[str, torch.Tensor]
     ]:
         """Run one timestep of the environment's dynamics using the agent actions.
 
@@ -117,10 +90,7 @@ class FluidEnvLike(Protocol):
         ...
 
     def reset(
-        self,
-        seed: int | None = None,
-        randomize: bool | None = None,
-        domain_idx: int | Sequence[int] | None = None,
+        self, seed: int | None = None, randomize: bool | None = None
     ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         """Resets the environment to an initial internal state, returning an initial
         observation and info.
@@ -134,11 +104,6 @@ class FluidEnvLike(Protocol):
         randomize: bool | None
             Whether to randomize the initial state. If None, the default behavior is
             used.
-
-        domain_idx: int | Sequence[int] | None
-            Index of the initial domain to load, one for all environments or one per
-            environment of a vectorized environment. If None, the default behavior
-            is used. Defaults to None.
 
         Returns
         -------
@@ -163,7 +128,6 @@ class FluidEnvLike(Protocol):
         render_3d: bool = False,
         filename: str | None = None,
         output_path: Any | None = None,
-        env_ids: int | Sequence[int] | None = None,
     ) -> np.ndarray:
         """Render the current state of the environment.
 
@@ -176,23 +140,17 @@ class FluidEnvLike(Protocol):
             Whether to enable 3d rendering. Defaults to False.
 
         filename: str | None
-            The filename of the saved PNG files. If None, a default name is used.
+            The filename to save the GIF file. If None, a default name is used.
             Defaults to None.
 
         output_path: Path | None
             The output path to save the rendered files. If None, saves to the current
             directory. Defaults to None.
 
-        env_ids: int | Sequence[int] | None
-            The environments of a vectorized environment to render: one index for a
-            single frame, a sequence for a stack of frames, None for all. Defaults
-            to None.
-
         Returns
         -------
         np.ndarray
-            The rendered frame ``[H, W, 3]``, or the frames ``[N, H, W, 3]`` of
-            several environments of a vectorized environment.
+            The rendered frame as a numpy array.
         """
         ...
 
@@ -238,6 +196,20 @@ class FluidEnvLike(Protocol):
         """Set the environment to test mode."""
         ...
 
+    def save_gif(self, filename: str, output_path: Path | None = None) -> None:
+        """Save the rendered frames as a GIF file.
+
+        Parameters
+        ----------
+        filename: str
+            The filename for the GIF file.
+
+        output_path: Path | None
+            The output path to save the GIF file. If None, saves to the current
+            directory. Defaults to None.
+        """
+        ...
+
     def load_initial_domain(self, idx: int, mode: EnvMode | None = None) -> None:
         """Public method to load the initial domain from disk
         using the current mode.
@@ -253,9 +225,7 @@ class FluidEnvLike(Protocol):
         """
         ...
 
-    def get_uncontrolled_episode_metrics(
-        self,
-    ) -> pd.DataFrame | list[pd.DataFrame | None] | None:
+    def get_uncontrolled_episode_metrics(self) -> pd.DataFrame | None:
         """Get the uncontrolled episode metrics for the current domain.
 
         Note: This method returns the metrics for the currently loaded
@@ -264,18 +234,13 @@ class FluidEnvLike(Protocol):
 
         Returns
         -------
-        pd.DataFrame | list[pd.DataFrame | None] | None
-            The uncontrolled episode metrics, or None if not available. One entry
-            per environment for a vectorized environment.
+        pd.DataFrame | None
+            The uncontrolled episode metrics, or None if not available.
         """
         ...
 
     def detach(self) -> None:
         """Detach all tensors in the simulation from the computation graph."""
-        ...
-
-    def close(self) -> None:
-        """Release the resources held by the environment."""
         ...
 
 

@@ -1,35 +1,34 @@
 """Abstract base class for cylinder flow environments (van Karman vortex street)."""
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
 from functools import partial
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from gymnasium import spaces
-from phipict import _C, Hook, Hooks
-from phipict.core.piso_simulation import (
-    update_advective_boundaries,
-)
-from phipict.simulation.simulation import Simulation
-from phipict.solvers.tolerance import SolverTolerance
 
-from fluidgym._palette import DEFAULT_PALETTE
+from fluidgym import config as fluidgym_config
 from fluidgym.envs.cylinder.grid import make_vortex_street_domain
 from fluidgym.envs.fluid_env import EnvState, FluidEnv, Stats
 from fluidgym.envs.util.forces import (
     collect_boundary_coords,
     collect_boundary_fields,
-    compute_env_forces,
     compute_forces_2d,
     compute_forces_3d,
     wall_distance_from_vertices,
 )
 from fluidgym.envs.util.obs_extraction import extract_global_2d_obs
+from fluidgym.simulation.extensions import (
+    PISOtorch,  # type: ignore[import-untyped,import-not-found]
+)
+from fluidgym.simulation.pict.PISOtorch_simulation import (
+    update_advective_boundaries,
+)
+from fluidgym.simulation.simulation import Simulation
 
 VORTICITY_RENDER_RANGE = (-10, 10)
 
@@ -89,38 +88,6 @@ class CylinderEnvBase(FluidEnv, ABC):
     differentiable: bool, optional
         Whether to enable differentiable simulation. Defaults to False.
 
-    advection_tol: float | SolverTolerance | Mapping | None, optional
-        Tolerance for the momentum and passive-scalar advection solves. None (the
-        default) keeps the tolerance this environment is tuned at.
-
-    pressure_tol: float | SolverTolerance | Mapping | None, optional
-        Tolerance for the pressure solve. None (the default) keeps the tolerance
-        this environment is tuned at.
-
-    pressure_tol_intermediate: float | SolverTolerance | Mapping | None, optional
-        Tolerance for the pressure solves before the final corrector. None (the
-        default) applies ``pressure_tol`` everywhere.
-
-    pressure_warm_start: bool, optional
-        Whether to seed each pressure solve with the previous sub-step's result.
-        Defaults to False.
-
-    linear_solve_max_iter: int | None, optional
-        Iteration limit for the advection and pressure solves. None (the default)
-        leaves the solver's own limit in place.
-
-    exclude_advection_solve_gradients: bool | None, optional
-        Drop the gradient of the advection solve. Diagnostic only; None (the
-        default) keeps it.
-
-    exclude_pressure_solve_gradients: bool | None, optional
-        Drop the gradient of the pressure solve. Diagnostic only; None (the
-        default) keeps it.
-
-    exclude_pressure_gradient_adjoint: bool | None, optional
-        Drop the pressure path of the PISO velocity-correction backward.
-        Diagnostic only; None (the default) keeps it.
-
     Notes
     -----
     The environment simulates the flow around a cylinder in a 2D or 3D domain.
@@ -152,7 +119,6 @@ class CylinderEnvBase(FluidEnv, ABC):
     """
 
     _default_render_key: str = "vorticity"
-    _render_resolution: int = 2
     _action_smoothing_alpha: float = 0.1
 
     H: float = 4.1
@@ -195,17 +161,6 @@ class CylinderEnvBase(FluidEnv, ABC):
         randomize_initial_state: bool = True,
         enable_actions: bool = True,
         differentiable: bool = False,
-        advection_tol: float | SolverTolerance | Mapping[str, float] | None = None,
-        pressure_tol: float | SolverTolerance | Mapping[str, float] | None = None,
-        pressure_tol_intermediate: (
-            float | SolverTolerance | Mapping[str, float] | None
-        ) = None,
-        pressure_warm_start: bool = False,
-        linear_solve_max_iter: int | None = None,
-        exclude_advection_solve_gradients: bool | None = None,
-        exclude_pressure_solve_gradients: bool | None = None,
-        exclude_pressure_gradient_adjoint: bool | None = None,
-        n_envs: int | None = None,
     ):
         self._reynolds_number = reynolds_number
         self._circle_resolution_angular = resolution
@@ -225,15 +180,6 @@ class CylinderEnvBase(FluidEnv, ABC):
             randomize_initial_state=randomize_initial_state,
             enable_actions=enable_actions,
             differentiable=differentiable,
-            advection_tol=advection_tol,
-            pressure_tol=pressure_tol,
-            pressure_tol_intermediate=pressure_tol_intermediate,
-            pressure_warm_start=pressure_warm_start,
-            linear_solve_max_iter=linear_solve_max_iter,
-            exclude_advection_solve_gradients=exclude_advection_solve_gradients,
-            exclude_pressure_solve_gradients=exclude_pressure_solve_gradients,
-            exclude_pressure_gradient_adjoint=exclude_pressure_gradient_adjoint,
-            n_envs=n_envs,
         )
 
         self._debug = debug
@@ -248,7 +194,9 @@ class CylinderEnvBase(FluidEnv, ABC):
             self._bottom_block_idx,
             self._vortex_street_block_idx,
         ) = range(5)
-        self.__last_control = torch.zeros_like(self._batched_zero_action)
+        self.__last_control = torch.zeros(
+            (1,), device=self._cuda_device, requires_grad=False
+        )
         self._sensor_locations = self._get_sensor_locations()
         self._cylinder_mask = self._get_cylinder_mask()
 
@@ -284,8 +232,8 @@ class CylinderEnvBase(FluidEnv, ABC):
         )
 
     @property
-    def obs_resampling_shape(self) -> tuple[int, int, int]:
-        """The shape of the observation resampling grid."""
+    def render_shape(self) -> tuple[int, int, int]:
+        """The shape of the rendered domain."""
         z_res = self._circle_resolution_angular * 4
         y_res = z_res
         x_res = int(z_res / self.H * self.L)
@@ -296,7 +244,7 @@ class CylinderEnvBase(FluidEnv, ABC):
         """The number of agents in the environment."""
         return 1
 
-    def _get_domain(self) -> _C.Domain:
+    def _get_domain(self) -> PISOtorch.Domain:
         domain = make_vortex_street_domain(
             ndims=self._ndims,
             viscosity=self._viscosity.to(self._cpu_device),
@@ -326,7 +274,7 @@ class CylinderEnvBase(FluidEnv, ABC):
         else:
             return 0.0
 
-    def _get_hooks(self, domain: _C.Domain) -> Hooks:
+    def _get_prep_fn(self, domain: PISOtorch.Domain) -> dict[str, Any]:
         if self._ndims == 2:
             char_vel = torch.tensor(
                 [[self._U_mean, 0.0]], device=self._cuda_device, dtype=self._dtype
@@ -343,47 +291,38 @@ class CylinderEnvBase(FluidEnv, ABC):
             boundary.setTransform(bound.transform.to(self._cuda_device))
             out_bounds = [bound]
             update_advective_boundaries(
-                domain,
-                out_bounds,
-                char_vel,
-                time_step.to(self._cuda_device),
-                tol=5e-6,
-                differentiable=self._differentiable,
+                domain, out_bounds, char_vel, time_step.to(self._cuda_device), tol=5e-6
             )
 
-        return Hooks().append(Hook.PRE, pre_fn)
+        prep_fn = {
+            "PRE": pre_fn,
+        }
+
+        return prep_fn
 
     def _get_simulation(
         self,
-        domain: _C.Domain,
-        hooks: Hooks,
+        domain: PISOtorch.Domain,
+        prep_fn: dict[str, Any],
     ) -> Simulation:
         sim = Simulation(
             domain=domain,
-            hooks=hooks,
+            prep_fn=prep_fn,
             substeps="ADAPTIVE",
             adaptive_CFL=self._adaptive_cfl,
             dt=self._dt,
             corrector_steps=2,
-            # None leaves the advection solve on the solver's dtype default,
-            # which is what this env was tuned with
-            advection_tol=self._resolve_advection_tol(None),
-            pressure_tol=self._resolve_pressure_tol(
-                SolverTolerance(atol=1e-5 if self._ndims == 2 else 5e-7)
-            ),
-            pressure_tol_intermediate=self._pressure_tol_intermediate,
-            pressure_warm_start=self._pressure_warm_start,
+            pressure_tol=1e-5 if self._ndims == 2 else 5e-7,
             advect_non_ortho_steps=1,
             pressure_non_ortho_steps=1 if self._ndims == 2 else 4,
             pressure_return_best_result=True,
             velocity_corrector="FD",
             non_orthogonal=True,
-            output_resampling_shape=self.obs_resampling_shape[: self._ndims],
+            output_resampling_shape=self.render_shape[: self._ndims],
             output_resampling_fill_max_steps=16,
             differentiable=self._differentiable,
         )
 
-        # Retry a failed single-precision solve in double precision
         sim.solver_double_fallback = True
         sim.preconditionBiCG = False
         sim.BiCG_precondition_fallback = True
@@ -396,22 +335,18 @@ class CylinderEnvBase(FluidEnv, ABC):
         """Perform any additional initialization after the domain and simulation are
         created.
         """
-        self._left_boundary = cast(
-            _C.FixedBoundary,
-            self._domain.getBlock(self._left_block_idx).getBoundary("+x"),
+        self._left_boundary = self._domain.getBlock(self._left_block_idx).getBoundary(
+            "+x"
         )
-        self._top_boundary = cast(
-            _C.FixedBoundary,
-            self._domain.getBlock(self._top_block_idx).getBoundary("-y"),
+        self._top_boundary = self._domain.getBlock(self._top_block_idx).getBoundary(
+            "-y"
         )
-        self._right_boundary = cast(
-            _C.FixedBoundary,
-            self._domain.getBlock(self._right_block_idx).getBoundary("-x"),
+        self._right_boundary = self._domain.getBlock(self._right_block_idx).getBoundary(
+            "-x"
         )
-        self._bottom_boundary = cast(
-            _C.FixedBoundary,
-            self._domain.getBlock(self._bottom_block_idx).getBoundary("+y"),
-        )
+        self._bottom_boundary = self._domain.getBlock(
+            self._bottom_block_idx
+        ).getBoundary("+y")
 
         self.__prepare_drag_and_lift_computation()
 
@@ -422,7 +357,9 @@ class CylinderEnvBase(FluidEnv, ABC):
         assert self.__wall_distances.grad_fn is None
         assert self.__wall_face_lengths.grad_fn is None
 
-        self.__last_control = torch.zeros_like(self._batched_zero_action)
+        self.__last_control = torch.zeros(
+            (1,), device=self._cuda_device, requires_grad=False
+        )
 
     def _randomize_domain(self) -> None:
         strouhal_number = 0.3
@@ -432,7 +369,7 @@ class CylinderEnvBase(FluidEnv, ABC):
         velocity_noise = 0.025
         pressure_noise = 0.025
 
-        max_n_steps = max(2 * int(vortex_shedding_period / self._step_length) - 1, 1)
+        max_n_steps = 2 * int(vortex_shedding_period / self._step_length) - 1
         n_steps = self._np_rng.integers(int(0.5 * max_n_steps), max_n_steps) + 1
 
         blocks = self._domain.getBlocks()
@@ -466,16 +403,34 @@ class CylinderEnvBase(FluidEnv, ABC):
         for _ in range(n_steps):
             self._sim.single_step()
 
-    def _vorticity_fields(self) -> torch.Tensor:
-        """The vorticity of every environment with the cylinder region masked."""
-        vorticity = super()._vorticity_fields()
-        vorticity[..., self._torch_cylinder_mask(vorticity.device)] = 0.0
+    def get_vorticity(self) -> torch.Tensor:
+        """Get the vorticity field of the fluid with the cylinder region masked.
+
+        Returns
+        -------
+        torch.Tensor
+            The vorticity field as a tensor.
+        """
+        vorticity = super().get_vorticity()
+
+        if self._ndims == 2:
+            vorticity[self._cylinder_mask] = 0.0
+        else:
+            vorticity[:, self._cylinder_mask] = 0.0
+
         return vorticity
 
-    def _velocity_fields(self) -> torch.Tensor:
-        """The velocity of every environment with the cylinder region masked."""
-        u = super()._velocity_fields()
-        u[..., self._torch_cylinder_mask(u.device)] = 0.0
+    def get_velocity(self) -> torch.Tensor:
+        """Get the velocity field of the fluid with the cylinder region masked.
+
+        Returns
+        -------
+        torch.Tensor
+            The velocity field as a tensor.
+        """
+        u = super().get_velocity()
+
+        u[:, self._cylinder_mask] = 0.0
         return u
 
     def _sensor_locations_to_grid_coords(
@@ -483,13 +438,13 @@ class CylinderEnvBase(FluidEnv, ABC):
     ) -> torch.Tensor:
         # Now we need to convert the physical locations to grid indices
         physical_coords[0, :] += 2.0
-        physical_coords[0, :] *= (self.obs_resampling_shape[0] - 1) / (self.L - 2.0)
+        physical_coords[0, :] *= (self.render_shape[0] - 1) / (self.L - 2.0)
         physical_coords[1, :] += self.H / 2
-        physical_coords[1, :] *= (self.obs_resampling_shape[1] - 1) / self.H
+        physical_coords[1, :] *= (self.render_shape[1] - 1) / self.H
 
         if self._ndims == 3:
             physical_coords[2, :] += self.H / 2
-            physical_coords[2, :] *= (self.obs_resampling_shape[1] - 1) / self.H
+            physical_coords[2, :] *= (self.render_shape[1] - 1) / self.H
 
         return torch.round(physical_coords).to(torch.int32)
 
@@ -560,26 +515,21 @@ class CylinderEnvBase(FluidEnv, ABC):
 
         return all_locations
 
-    def _torch_cylinder_mask(self, device: torch.device) -> torch.Tensor:
-        # Torch does not correctly handle multi-dimensional numpy boolean masks
-        # after an ellipsis, so we index with a torch tensor instead.
-        return torch.as_tensor(self._cylinder_mask, device=device)
-
     def _get_cylinder_mask(self) -> np.ndarray:
         cylinder_radius = (
-            self.cylinder_diameter / 2 * (self.obs_resampling_shape[1] - 1) / self.H
+            self.cylinder_diameter / 2 * (self.render_shape[1] - 1) / self.H
         )
 
-        center_x = round((self.obs_resampling_shape[0] - 1) / self.L * 2.0)
-        center_y = round((self.obs_resampling_shape[1] - 1) / self.H * (2.0))
+        center_x = round((self.render_shape[0] - 1) / self.L * 2.0)
+        center_y = round((self.render_shape[1] - 1) / self.H * (2.0))
 
-        Y, X = np.ogrid[: self.obs_resampling_shape[1], : self.obs_resampling_shape[0]]
+        Y, X = np.ogrid[: self.render_shape[1], : self.render_shape[0]]
         dist_from_center = np.sqrt((X - center_x) ** 2 + (Y - center_y) ** 2)
         cylinder_mask = dist_from_center <= cylinder_radius
 
         if self._ndims == 3:
             cylinder_mask = np.repeat(
-                cylinder_mask[None, :, :], self.obs_resampling_shape[2], axis=0
+                cylinder_mask[None, :, :], self.render_shape[2], axis=0
             )
 
         return cylinder_mask
@@ -682,7 +632,7 @@ class CylinderEnvBase(FluidEnv, ABC):
 
         # For 3D we only consider a single slice in z-direction,
         # and expand the final tensors to 3D afterwards. Thus,
-        # we can share the logic with the 2D case
+        # we can share the logic with the 2D case.
         if self._ndims == 3:
             cell_coords = cell_coords[:2, 0, :]
             cell_centers = cell_centers[:2, 0, :]
@@ -713,13 +663,11 @@ class CylinderEnvBase(FluidEnv, ABC):
 
         u_cell, u_cylinder, p_cell = self.__collect_boundary_fields()
 
-        # [E, 2] in 2D, [E, 2, nz] in 3D
         if self._ndims == 2:
-            forces = compute_env_forces(
-                compute_forces_2d,
-                u_cell,
-                u_cylinder,
-                p_cell,
+            forces = compute_forces_2d(
+                u_cell=u_cell,
+                u_boundary=u_cylinder,
+                p_cell=p_cell,
                 wall_normals=self.__wall_normals,
                 wall_distances=self.__wall_distances,
                 tangent_lengths=self.__tangent_lengths,
@@ -730,11 +678,10 @@ class CylinderEnvBase(FluidEnv, ABC):
             face_areas = self.__wall_face_lengths * (
                 self.D / self._circle_resolution_angular
             )
-            forces = compute_env_forces(
-                compute_forces_3d,
-                u_cell,
-                u_cylinder,
-                p_cell,
+            forces = compute_forces_3d(
+                u_cell=u_cell,
+                u_boundary=u_cylinder,
+                p_cell=p_cell,
                 wall_normals=self.__wall_normals,
                 wall_distances=self.__wall_distances,
                 tangent_lengths=self.__tangent_lengths,
@@ -742,8 +689,8 @@ class CylinderEnvBase(FluidEnv, ABC):
                 viscosity=self._viscosity,
             )
 
-        drag = forces[:, 0]
-        lift = forces[:, 1]
+        drag = forces[0]
+        lift = forces[1]
 
         cd = drag / (0.5 * self._U_mean**2 * self.cylinder_diameter)
         cl = lift / (0.5 * self._U_mean**2 * self.cylinder_diameter)
@@ -755,6 +702,9 @@ class CylinderEnvBase(FluidEnv, ABC):
         render_3d: bool,
         output_path: Path | None = None,
     ) -> dict[str, np.ndarray]:
+        vorticity = self.get_vorticity().squeeze()
+        vorticity = torch.flip(vorticity, dims=[-1])
+
         vort_min, vort_max = VORTICITY_RENDER_RANGE
 
         format_vorticity = partial(
@@ -764,46 +714,36 @@ class CylinderEnvBase(FluidEnv, ABC):
             cmap="icefire",
         )
 
-        vorticity_blocks = self._vorticity_blocks()
         render_data = {}
-
         if self._ndims == 2:
-            vorticity = self._render_plane(vorticity_blocks)  # (ny, nx)
-
-            x_y_vorticity = format_vorticity(data=np.flip(vorticity, axis=-1))
-            x_y_vorticity[self._resampler.uncovered_mask] = 0
+            x_y_vorticity = format_vorticity(
+                data=vorticity.detach().cpu().numpy(),
+            )
+            x_y_vorticity[self._cylinder_mask] = 0
             render_data["vorticity"] = x_y_vorticity
         else:  # ndims == 3
-            # The y-z plane is placed in the wake, the other two are centered
-            wake_index = int(0.8 * self.render_shape[0])
+            vort_xy = vorticity[2, vorticity.shape[0] // 2, :, :]
+            vort_xz = vorticity[1, :, vorticity.shape[1] // 2, :]
+            vort_yz = vorticity[0, :, :, int(vorticity.shape[2] * 0.8)]
 
-            # Of the vorticity vector, take the component normal to each plane
-            vort_xy = self._render_plane(vorticity_blocks, axis="z")[2]  # (ny, nx)
-            vort_xz = self._render_plane(vorticity_blocks, axis="y")[1]  # (nz, nx)
-            vort_yz = self._render_plane(vorticity_blocks, axis="x", index=wake_index)
-            vort_yz = vort_yz[0]  # (nz, ny)
-
-            x_y_vorticity = format_vorticity(data=np.flip(vort_xy, axis=-1))
-            x_y_vorticity[self._resampler.slice_uncovered_mask("z")] = 0
+            x_y_vorticity = format_vorticity(data=vort_xy.detach().cpu().numpy())
+            x_y_vorticity[self._cylinder_mask[0, :, :]] = 0
             render_data["x-y-vorticity"] = x_y_vorticity
-
-            x_z_vorticity = format_vorticity(data=np.flip(vort_xz, axis=-1))
-            x_z_vorticity[self._resampler.slice_uncovered_mask("y")] = 0
+            x_z_vorticity = format_vorticity(data=vort_xz.detach().cpu().numpy())
+            x_z_vorticity[self._cylinder_mask[:, 0, :]] = 0
             render_data["x-z-vorticity"] = x_z_vorticity
-
-            y_z_vorticity = format_vorticity(data=np.flip(vort_yz.T, axis=-1))
-            y_z_vorticity[self._resampler.slice_uncovered_mask("x", wake_index).T] = 0
+            y_z_vorticity = format_vorticity(data=vort_yz.detach().cpu().numpy().T)
+            y_z_vorticity[self._cylinder_mask[:, :, 0]] = 0
             render_data["y-z-vorticity"] = y_z_vorticity
 
         return render_data
 
-    def _advance_impl(
-        self, action: torch.Tensor, n_sim_steps: int
-    ) -> dict[str, torch.Tensor]:
-        """Run ``n_sim_steps`` PISO steps, returning what was measured per substep."""
+    def _step_impl(
+        self, action: torch.Tensor
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         all_cds = []
         all_cls = []
-        for _ in range(n_sim_steps):
+        for _ in range(self._n_sim_steps):
             # We apply the action smoothing as proposed by Rabault et al. (2020)
             control = self.__last_control + self._action_smoothing_alpha * (
                 action - self.__last_control
@@ -817,21 +757,14 @@ class CylinderEnvBase(FluidEnv, ABC):
             all_cds += [_cd]
             all_cls += [_cl]
 
-        # [n_sim_steps, E] in 2D, [n_sim_steps, E, nz] in 3D
-        return {"drag": torch.stack(all_cds), "lift": torch.stack(all_cls)}
-
-    def _finish_step(
-        self, metrics: dict[str, torch.Tensor]
-    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
-        """Average the substeps of the env step and read the state they left."""
         obs = self._get_global_obs()
 
-        all_cds_tensor = metrics["drag"].mean(dim=0)
-        all_cls_tensor = metrics["lift"].mean(dim=0)
+        all_cds_tensor = torch.stack(all_cds).mean(dim=0)
+        all_cls_tensor = torch.stack(all_cls).mean(dim=0)
 
-        # Per environment: for 3D, we sum over the z-direction
-        cd = self._per_env_sum(all_cds_tensor)
-        cl = self._per_env_sum(all_cls_tensor)
+        # For 3D, we sum over the z-direction, for 2D it's just a scalar
+        cd = torch.sum(all_cds_tensor)
+        cl = torch.sum(all_cls_tensor)
 
         reward = self._cd_ref - cd - self._lift_penalty * torch.abs(cl)
 
@@ -854,7 +787,7 @@ class CylinderEnvBase(FluidEnv, ABC):
         if output_path is None:
             output_path = Path(".")
 
-        colors = DEFAULT_PALETTE
+        colors = fluidgym_config.palette
 
         plt.figure(figsize=(10, 2.5))
 
@@ -905,12 +838,6 @@ class CylinderEnvBase(FluidEnv, ABC):
         stats = super()._load_domain_statistics()
         self._vorticity_stats = Stats(**stats["vorticity_magnitude"])
         return stats
-
-    def _checkpoint_accessors(self) -> list[Any]:
-        """Carry the smoothed control, which lives outside the ``Domain``."""
-        return super()._checkpoint_accessors() + [
-            self._attr_accessor("_CylinderEnvBase__last_control")
-        ]
 
     def detach(self) -> None:
         """Detach all tensors from the current computation graph."""

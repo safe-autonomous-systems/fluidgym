@@ -1,27 +1,27 @@
 """Utilities for creating the airfoil grid and domain."""
 
-from typing import cast
-
 import numpy as np
 import torch
-from phipict import _C
-from phipict.core.piso_simulation import balance_boundary_fluxes
-from phipict.grid import shapes
 
+import fluidgym.simulation.pict.data.shapes as shapes
 from fluidgym.envs.airfoil.coords import NACA12_SHARP_COORDS_LIST
 from fluidgym.envs.util.profiles import get_inflow_profile
+from fluidgym.simulation.extensions import (
+    PISOtorch,  # type: ignore[import-untyped,import-not-found]
+)
+from fluidgym.simulation.pict.PISOtorch_simulation import balance_boundary_fluxes
 
 JET_CENTERS = [0.2, 0.4, 0.6]
 JET_WIDTH = 0.08
 
 
-def get_jet_locations(domain: _C.Domain) -> list[list[int]]:
+def get_jet_locations(domain: PISOtorch.Domain) -> list[list[int]]:
     """Get the jet locations on the airfoil surface.
 
     Parameters
     ----------
-    domain: _C.Domain
-        The phipict Domain.
+    domain: PISOtorch.Domain
+        The PISOtorch Domain.
 
     Returns
     -------
@@ -257,8 +257,8 @@ def make_airfoil_domain(
     cpu_device: torch.device,
     cuda_device: torch.device,
     dtype: torch.dtype = torch.float32,
-) -> _C.Domain:
-    """Create the phipict Domain for the airfoil environment.
+) -> PISOtorch.Domain:
+    """Create the PISOtorch Domain for the airfoil environment.
 
     Parameters
     ----------
@@ -303,8 +303,8 @@ def make_airfoil_domain(
 
     Returns
     -------
-    _C.Domain
-        The created phipict Domain.
+    PISOtorch.Domain
+        The created PISOtorch Domain.
     """
     if resolution_div not in [1, 2, 4]:
         raise ValueError("resolution_div must be 1, 2, or 4.")
@@ -617,7 +617,7 @@ def make_airfoil_domain(
         ]
 
     ### MAKE DOMAIN AND BLOCKS ###
-    domain = _C.Domain(
+    domain = PISOtorch.Domain(
         n_dims,
         viscosity,
         name="AirfoilDomain",
@@ -675,9 +675,9 @@ def make_airfoil_domain(
         outflow_vel = torch.tensor([[vel_in, 0, 0]], device=cuda_device, dtype=dtype)
 
     block_tail_upper.CloseBoundary("+x", outflow_vel)
-    cast(_C.FixedBoundary, block_tail_upper.getBoundary("+x")).makeVelocityVarying()
+    block_tail_upper.getBoundary("+x").makeVelocityVarying()
     block_tail_lower.CloseBoundary("+x", outflow_vel)
-    cast(_C.FixedBoundary, block_tail_lower.getBoundary("+x")).makeVelocityVarying()
+    block_tail_lower.getBoundary("+x").makeVelocityVarying()
 
     if n_dims == 3:
         block_left.MakePeriodic("z")

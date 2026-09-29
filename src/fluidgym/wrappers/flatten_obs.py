@@ -1,7 +1,5 @@
 """A wrapper that flattens the observation space."""
 
-from collections.abc import Sequence
-
 import torch
 from gymnasium import spaces
 
@@ -37,10 +35,7 @@ class FlattenObservation(FluidWrapper):
             space=self._env.observation_space,
             keys=self.__keys,
         )
-        # keep the leading env (vectorized) and agent (MARL) dims
-        self.__flatten_start_dim = int(getattr(env, "vectorized", False)) + int(
-            env.use_marl
-        )
+        self.__flatten_start_dim = 1 if env.use_marl else 0
 
     @property
     def observation_space(self) -> spaces.Box:
@@ -57,7 +52,6 @@ class FlattenObservation(FluidWrapper):
         self,
         seed: int | None = None,
         randomize: bool | None = None,
-        domain_idx: int | Sequence[int] | None = None,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """Resets the environment to an initial internal state, returning an initial
         observation and info.
@@ -72,32 +66,19 @@ class FlattenObservation(FluidWrapper):
             Whether to randomize the initial state. If None, the default behavior is
             used.
 
-        domain_idx: int | Sequence[int] | None
-            Index of the initial domain to load, one for all environments or one per
-            environment of a vectorized environment. If None, the default behavior
-            is used. Defaults to None.
-
         Returns
         -------
         tuple[torch.Tensor, dict[str, torch.Tensor]]
             A tuple containing the initial observation and an info dictionary.
         """
-        obs, info = self._env.reset(
-            seed=seed, randomize=randomize, domain_idx=domain_idx
-        )
+        obs, info = self._env.reset(seed=seed, randomize=randomize)
         for k, v in obs.items():
             info["original_" + k] = v
         return self.__flatten_obs(obs), info
 
     def step(
         self, action: torch.Tensor
-    ) -> tuple[
-        torch.Tensor,
-        torch.Tensor,
-        bool | torch.Tensor,
-        bool | torch.Tensor,
-        dict[str, torch.Tensor],
-    ]:
+    ) -> tuple[torch.Tensor, torch.Tensor, bool, bool, dict[str, torch.Tensor]]:
         """Run one timestep of the environment's dynamics using the agent actions.
 
         When the end of an episode is reached (``terminated or truncated``), it is

@@ -1,22 +1,21 @@
 """Environment for 3D airfoil drag and lift reduction."""
 
-from collections.abc import Mapping
 from pathlib import Path
 
 import numpy as np
 import torch
 from gymnasium import spaces
-from phipict import _C
-from phipict.io.domain_io import load_domain
-from phipict.solvers.tolerance import SolverTolerance
 
 from fluidgym.envs.airfoil.airfoil_env_base import AirfoilEnvBase
 from fluidgym.envs.util.obs_extraction import (
     extract_global_3d_obs,
     transform_global_to_local_obs_3d,
 )
-from fluidgym.envs.util.smoothing import smooth_segment_profile
 from fluidgym.envs.util.visualization import render_3d_iso
+from fluidgym.simulation.extensions import (
+    PISOtorch,  # type: ignore[import-untyped,import-not-found]
+)
+from fluidgym.simulation.pict.util.domain_io import load_domain
 from fluidgym.types import EnvMode
 
 VORTICITY_RENDER_LEVELS = {
@@ -119,47 +118,6 @@ class AirfoilEnv3D(AirfoilEnvBase):
     differentiable: bool
         Whether to enable differentiable simulation mode. Defaults to False.
 
-    advection_tol: float | SolverTolerance | Mapping | None
-        Tolerance for the momentum and passive-scalar advection solves. None (the
-        default) keeps the tolerance this environment is tuned at.
-
-    pressure_tol: float | SolverTolerance | Mapping | None
-        Tolerance for the pressure solve. None (the default) keeps the tolerance
-        this environment is tuned at.
-
-    pressure_tol_intermediate: float | SolverTolerance | Mapping | None
-        Tolerance for the pressure solves before the final corrector. None (the
-        default) applies ``pressure_tol`` everywhere.
-
-    pressure_warm_start: bool
-        Whether to seed each pressure solve with the previous sub-step's result.
-        Defaults to False.
-
-    linear_solve_max_iter: int | None
-        Iteration limit for the advection and pressure solves. None (the default)
-        leaves the solver's own limit in place.
-
-    exclude_advection_solve_gradients: bool | None
-        Drop the gradient of the advection solve. Diagnostic only; None (the
-        default) keeps it.
-
-    exclude_pressure_solve_gradients: bool | None
-        Drop the gradient of the pressure solve. Diagnostic only; None (the
-        default) keeps it.
-
-    exclude_pressure_gradient_adjoint: bool | None
-        Drop the pressure path of the PISO velocity-correction backward.
-        Diagnostic only; None (the default) keeps it.
-
-
-    n_envs: int | None
-
-        Number of environments simulated together, see
-
-        :class:`~fluidgym.envs.fluid_env.FluidEnv`. None (the default) is a single
-
-        environment.
-
     References
     ----------
     [1] R. Montalà et al., “Discovering Flow Separation Control Strategies in 3D Wings
@@ -168,19 +126,9 @@ class AirfoilEnv3D(AirfoilEnvBase):
     """
 
     _default_render_key: str = "3d_vorticity"
-    _render_resolution: int = 1
 
     _n_sensors_per_agent: int = 1
     _supports_marl: bool = True
-
-    # Fraction of the per-agent z-extent over which neighbouring agents are blended,
-    # the steps between agents are a source of numerical instability
-    _z_smoothing_alpha: float = 0.25
-
-    # One PISO step per segment, the finest cut of the 5 a registered env step has:
-    # the 3D replay tape is what caps a differentiable rollout here (see
-    # ``FluidEnv.bptt_segment_size``)
-    _default_bptt_segment_size: int | None = 1
 
     def __init__(
         self,
@@ -204,17 +152,6 @@ class AirfoilEnv3D(AirfoilEnvBase):
         randomize_initial_state: bool = True,
         enable_actions: bool = True,
         differentiable: bool = False,
-        advection_tol: float | SolverTolerance | Mapping[str, float] | None = None,
-        pressure_tol: float | SolverTolerance | Mapping[str, float] | None = None,
-        pressure_tol_intermediate: (
-            float | SolverTolerance | Mapping[str, float] | None
-        ) = None,
-        pressure_warm_start: bool = False,
-        linear_solve_max_iter: int | None = None,
-        exclude_advection_solve_gradients: bool | None = None,
-        exclude_pressure_solve_gradients: bool | None = None,
-        exclude_pressure_gradient_adjoint: bool | None = None,
-        n_envs: int | None = None,
     ):
         if n_agents < 1 or self._res_z % n_agents != 0:
             raise ValueError(
@@ -263,15 +200,6 @@ class AirfoilEnv3D(AirfoilEnvBase):
             randomize_initial_state=randomize_initial_state,
             enable_actions=enable_actions,
             differentiable=differentiable,
-            advection_tol=advection_tol,
-            pressure_tol=pressure_tol,
-            pressure_tol_intermediate=pressure_tol_intermediate,
-            pressure_warm_start=pressure_warm_start,
-            linear_solve_max_iter=linear_solve_max_iter,
-            exclude_advection_solve_gradients=exclude_advection_solve_gradients,
-            exclude_pressure_solve_gradients=exclude_pressure_solve_gradients,
-            exclude_pressure_gradient_adjoint=exclude_pressure_gradient_adjoint,
-            n_envs=n_envs,
         )
 
     def _get_action_space(self) -> spaces.Box:
@@ -433,7 +361,6 @@ class AirfoilEnv3D(AirfoilEnvBase):
             local_obs_window=self._local_obs_window,
             n_agents=self._n_agents,
             local_2d_obs=self._local_2d_obs,
-            batch_dims=1,
         )
 
     def _get_base_jet_profiles(self) -> torch.Tensor:
@@ -456,49 +383,40 @@ class AirfoilEnv3D(AirfoilEnvBase):
     def _action_to_control(self, action: torch.Tensor) -> torch.Tensor:
         assert self._jet_locations_top is not None
 
-        # [E, n_agents, n_jets]
-        v_action = action - action.mean(dim=-1, keepdim=True)
+        v_action = action - action.mean(dim=1, keepdim=True)
 
         # Ensure max abs. value of 1.0
-        max_v = torch.max(torch.abs(v_action), dim=-1, keepdim=True).values
+        max_v = torch.max(torch.abs(v_action), dim=1, keepdim=True).values
         v_action = torch.where(max_v > 1.0, v_action / max_v, v_action)
 
-        # Expand action to full z-resolution, smoothly blending the agents into each
-        # other: [E, n_jets, n_agents] -> [E, n_jets, nz] -> [E, nz, n_jets]
-        smooth_v_action = smooth_segment_profile(
-            v_action.transpose(1, 2), self._nz_per_agent, self._z_smoothing_alpha
-        )
-
-        v_action = smooth_v_action.transpose(1, 2)
-
-        # one profile per environment
-        base = self._top_base_profile
-        top_profile = base.expand(v_action.size(0), *base.shape[1:]).clone()
+        # Expand action to full z-resolution
+        v_action = v_action.repeat_interleave(self._nz_per_agent, dim=0)
+        top_profile = self._top_base_profile.clone()
 
         for i in range(self._n_jets):
             start_idx_top, end_idx_top = self._jet_locations_top[i]
 
             top_profile[
-                :,
+                0,
                 :2,
                 :,
                 0,
                 start_idx_top : end_idx_top + 1,
-            ] *= v_action[:, None, :, i, None]
+            ] *= v_action[:, i, None]
 
         return top_profile
 
-    def _finish_step(
-        self, metrics: dict[str, torch.Tensor]
+    def _step_impl(
+        self, action: torch.Tensor
     ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
-        obs, reward, term, info = super()._finish_step(metrics)
+        obs, reward, term, info = super()._step_impl(action)
 
         all_cds = info.pop("drag")
         all_cls = info.pop("lift")
 
-        # Sum over all airfoil cells to get total drag and lift, per environment
-        cd = self._per_env_sum(all_cds) / self.D
-        cl = self._per_env_sum(all_cls) / self.D
+        # Sum over all cylinder cells to get total drag and lift
+        cd = torch.sum(all_cds) / self.D
+        cl = torch.sum(all_cls) / self.D
 
         reward = (cl / cd) - self._cl_cd_ref
 
@@ -510,22 +428,22 @@ class AirfoilEnv3D(AirfoilEnvBase):
 
         return obs, reward, term, info
 
-    def _finish_marl_step(
-        self, metrics: dict[str, torch.Tensor]
+    def _step_marl_impl(
+        self, actions: torch.Tensor
     ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         if self._local_reward_weight is None:
             raise ValueError("local_reward_weight must be set for multi-agent step.")
 
-        _, global_reward, terminated, info = self._finish_step(metrics)
+        _, global_reward, terminated, info = self._step_impl(actions)
 
         local_obs = self._get_local_obs()
 
         all_cds = info.pop("all_cds")
         lift = info.pop("all_cls")
 
-        # First mean over agents airfoil cells: [E, n_agents]
-        local_cd = all_cds.reshape(all_cds.size(0), self._n_agents, -1).sum(dim=-1)
-        local_cl = lift.reshape(lift.size(0), self._n_agents, -1).sum(dim=-1)
+        # First mean over agents cylinder cells
+        local_cd = all_cds.view(self._n_agents, -1).sum(dim=1)
+        local_cl = lift.view(self._n_agents, -1).sum(dim=1)
 
         local_cd = local_cd / (self.D / self._n_agents)
         local_cl = local_cl / (self.D / self._n_agents)
@@ -533,7 +451,7 @@ class AirfoilEnv3D(AirfoilEnvBase):
         local_rewards = (local_cl / local_cd) - self._cl_cd_ref
         agent_rewards = (
             self._local_reward_weight * local_rewards
-            + (1 - self._local_reward_weight) * global_reward[:, None]
+            + (1 - self._local_reward_weight) * global_reward
         )
         info["global_reward"] = global_reward
 
@@ -548,8 +466,8 @@ class AirfoilEnv3D(AirfoilEnvBase):
             render_3d=render_3d, output_path=output_path
         )
 
-        curl = self._render_env_field(self._vorticity_fields())
-        u = self._render_env_field(self._velocity_fields())
+        curl = self.get_vorticity().squeeze(0)
+        u = self.get_velocity().squeeze(0)
 
         u_magn: torch.Tensor = torch.linalg.norm(u, dim=0)
         u_arr = u_magn.detach().cpu().numpy()
@@ -580,7 +498,7 @@ class AirfoilEnv3D(AirfoilEnvBase):
 
             iso_val = VORTICITY_RENDER_LEVELS[int(self._reynolds_number)]
             render_data["3d_vorticity"] = render_3d_iso(
-                iso_field=np.abs(curl_arr),
+                iso_field=curl_arr,
                 iso=[iso_val],
                 output_path=output_path,
                 color_field=u_arr,
@@ -603,7 +521,7 @@ class AirfoilEnv3D(AirfoilEnvBase):
 
         return render_data
 
-    def _get_domain(self) -> _C.Domain:
+    def _get_domain(self) -> PISOtorch.Domain:
         domain_3d = super()._get_domain()
         if not self._init_from_2d:
             return domain_3d
@@ -644,7 +562,7 @@ class AirfoilEnv3D(AirfoilEnvBase):
 
         return domain_3d
 
-    def _load_2d_domain(self, mode: EnvMode, idx: int) -> _C.Domain:
+    def _load_2d_domain(self, mode: EnvMode, idx: int) -> PISOtorch.Domain:
         """Load the 2D initial domain from disk.
 
         Parameters
@@ -657,7 +575,7 @@ class AirfoilEnv3D(AirfoilEnvBase):
 
         Returns
         -------
-        _C.Domain
+        PISOtorch.Domain
             The loaded domain.
         """
         out_dir = self._get_domain_dir(idx)
@@ -667,7 +585,7 @@ class AirfoilEnv3D(AirfoilEnvBase):
 
         out_dir = Path(original_dir)
         domain = load_domain(
-            path=out_dir / mode.value,
+            path=str(out_dir / mode.value),
             dtype=self._dtype,
             device=self._cuda_device,
             with_scalar=True,

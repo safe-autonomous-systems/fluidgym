@@ -16,11 +16,11 @@ on:
 
 jobs:
   linters:
-    name: "Python 3.11"
+    name: "Python 3.10"
     runs-on: ubuntu-latest
 
     container:
-      image: python:3.11
+      image: python:3.10
 
     steps:
       - name: Checkout repository

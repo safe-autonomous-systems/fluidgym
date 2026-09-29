@@ -9,7 +9,7 @@ specify which keys to extract from the observation dictionary.
 FluidGym wrappers can be used by importing them from the ``fluidgym.wrappers`` module
 and wrapping the environment instance.
 
-Here is a simple example from ``examples/basic_usage/wrappers/obs_extraction.py``:
+Here is a simple example from ``examples/wrappers/obs_extraction.py``:
 
 .. code-block:: python
 

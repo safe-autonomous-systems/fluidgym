@@ -1,49 +1,60 @@
 Installation
 ============
 
-There are two main ways to install FluidGym: via PyPI or from the source code on
-GitHub. Regardless of the installation method, it is recommended to set up a
-dedicated Python virtual environment using tools like `venv` or `conda` to avoid
-dependency conflicts.
+There are two main ways to install FluidGym: via PyPI or by downloading the source code
+from GitHub. Regardless of the installation method, it is recommended to set up a dedicated
+Python virtual environment using tools like `venv` or `conda` to avoid dependency conflicts.
 
-FluidGym requires Linux, an NVIDIA GPU with a driver for CUDA 12.8 (≥ 570), and
-Python 3.11–3.13.
+Before installing FluidGym, ensure that you have Python 3.10 or higher installed on your system.
+To enable the GPU-accelerated solver, PyTorch with CUDA 12.8 is required. It can be 
+installed using the following command:
+
+.. code-block:: bash
+
+    pip install torch --index-url https://download.pytorch.org/whl/cu128
+
+Then, follow one of the methods below to install FluidGym.
 
 1. Using PyPI
 -------------
 
-This is the simplest way to install FluidGym:
+This is the simplest way to install FluidGym. After setting up the python environment,
+just run the following command:
 
 .. code-block:: bash
 
     pip install fluidgym
 
-This also installs the GPU-accelerated solver
-`phiPICT <https://github.com/safe-autonomous-systems/phiPICT>`_ together with
-the PyTorch version it was built for (PyTorch 2.10 with CUDA 12.8). There is no
-need to install PyTorch first: phiPICT's compiled extension only works with the
-PyTorch version it was built against, so pip replaces any other version.
+2. Downloading from GitHub
+--------------------------
 
-To use a different PyTorch or CUDA version, install a matching phiPICT build
-first and then FluidGym, see the
-`phiPICT installation docs <https://safe-autonomous-systems.github.io/phiPICT/installation.html>`_.
-
-2. From GitHub
---------------
-
-This is the best way to install the latest version of FluidGym. FluidGym itself
-is pure Python; the solver still comes with phiPICT from PyPI. Clone the
-repository and install the package:
+This is the best way to install the latest version of FluidGym. Additionally, this method allows
+you to compile FluidGym from source on architectures/operating systems that are not supported
+by the PyPI binaries.
+First, clone the FluidGym repository from GitHub:
 
 .. code-block:: bash
 
-    git clone https://github.com/safe-autonomous-systems/fluidgym.git
+    git clone https://github.com/safe-autonomous-systems/fluidgym.git 
     cd fluidgym
-    pip install .
 
-To develop FluidGym, install it in editable mode together with the development
-tools instead (needs pip ≥ 25.1):
+Then, install the package:
 
 .. code-block:: bash
 
-    make install-dev
+    make install
+
+Depending on whether you want to reproduce our experiments or develop new features, you can install
+FluidGym with different sets of dependencies:
+
+- To install FluidGym for development purposes, run:
+
+  .. code-block:: bash
+
+       make install-dev
+
+- To install FluidGym for reproducing experiments, run:
+
+  .. code-block:: bash
+
+       make install-exp

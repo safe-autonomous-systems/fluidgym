@@ -1,15 +1,11 @@
 """Utility functions for differentiating the full state of an environment."""
 
-from typing import TYPE_CHECKING
-
 import torch
 
-if TYPE_CHECKING:
-    # fluidgym.envs imports this package, so FluidEnv is only needed for typing
-    from fluidgym.envs import FluidEnv
+from fluidgym.envs import FluidEnv
 
 
-def _get_state_tensors(env: "FluidEnv") -> list[torch.Tensor]:
+def _get_state_tensors(env: FluidEnv) -> list[torch.Tensor]:
     """Collects the differentiable state tensors of every block.
 
     The state of a block is its velocity field, plus its passive scalar field if
@@ -26,7 +22,7 @@ def _get_state_tensors(env: "FluidEnv") -> list[torch.Tensor]:
     return tensors
 
 
-def get_flat_state(env: "FluidEnv") -> torch.Tensor:
+def get_flat_state(env: FluidEnv) -> torch.Tensor:
     """Returns the differentiable state of the environment as one flat vector.
 
     The state of a block is its velocity field, plus its passive scalar field if
@@ -45,7 +41,7 @@ def get_flat_state(env: "FluidEnv") -> torch.Tensor:
     return torch.cat([tensor.reshape(-1) for tensor in _get_state_tensors(env)])
 
 
-def mark_state_differentiable(env: "FluidEnv") -> list[torch.Tensor]:
+def mark_state_differentiable(env: FluidEnv) -> list[torch.Tensor]:
     """Marks the state tensors of the environment as gradient leaves.
 
     Call this before stepping the environment; the returned list is the `inputs`

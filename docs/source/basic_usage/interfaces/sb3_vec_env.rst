@@ -4,15 +4,15 @@ Stable-Baselines3
 In order to use Stable-Baselines3 in the MARL setting, we can leverage the VecEnv
 interface. FluidGym environments are compatible with the SB3 VecEnv interface, allowing
 seamless integration with various reinforcement learning libraries that support SB3.
-Here is a simple example from ``examples/basic_usage/interfaces/sb3_vec_env.py``:
+Here is a simple example from ``examples/interfaces/sb3_vec_env.py``:
 
 .. code-block:: python
 
     import numpy as np
 
     import fluidgym
+    from fluidgym.wrappers import FlattenObservation
     from fluidgym.integration.sb3 import VecFluidEnv
-    from fluidgym.wrappers import FlattenObservation, VideoRecorder
 
     fluid_env = fluidgym.make(
         "Airfoil3D-easy-v0",
@@ -21,9 +21,6 @@ Here is a simple example from ``examples/basic_usage/interfaces/sb3_vec_env.py``
 
     # We flatten the observation space to receive a 1D array of observations
     fluid_env = FlattenObservation(fluid_env)
-
-    # Record every episode as gif, this renders a frame after every step
-    fluid_env = VideoRecorder(fluid_env, filename="airfoil")
 
     # For the SB3 VecEnv interface, wrap the FluidGym environment. This will give us a
     # vectorized environment with a pseudo-enviroment for each agent
@@ -36,9 +33,10 @@ Here is a simple example from ``examples/basic_usage/interfaces/sb3_vec_env.py``
         obs, reward, done, info = env.step(actions)
         print(f"Step: {i}; Rewards:", reward.tolist())
 
+        env.render()
+
         if np.any(done):
             break
 
-    # Closing the environment saves the gif, e.g. as airfoil_ep1.gif
-    env.close()
+    env.save_gif("cylinder.gif")
 

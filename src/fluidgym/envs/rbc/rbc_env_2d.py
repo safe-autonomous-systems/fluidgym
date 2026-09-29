@@ -3,11 +3,10 @@
 import numpy as np
 import torch
 from gymnasium import spaces
-from phipict.grid.helpers import get_cell_size
 
 from fluidgym.envs.rbc.rbc_env_base import RBCEnvBase
 from fluidgym.envs.util.obs_extraction import extract_moving_window_2d
-from fluidgym.envs.util.smoothing import smooth_segment_profile
+from fluidgym.simulation.helpers import get_cell_size
 
 RBC_2D_DEFAULT_CONFIG = {
     "rayleigh_number": 8e4,
@@ -166,30 +165,27 @@ class RBCEnv2D(RBCEnvBase):
         )
 
     @property
-    def obs_resampling_shape(self) -> tuple[int, ...]:
-        """The shape of the observation resampling grid."""
+    def render_shape(self) -> tuple[int, ...]:
+        """The shape of the rendered domain."""
         nx = self._n_heaters * 20
         height = round(nx / self._aspect_ratio)
 
         return (nx, height, nx)
 
     def _get_global_obs(self) -> dict[str, torch.Tensor]:
-        # [E, C, Y, X] -> sensor readings [E, C, R]
-        at = (
-            slice(None),
-            slice(None),
-            self._sensor_locations[1],
-            self._sensor_locations[0],
-        )
-        T = self._temperature_fields()[at]
-        u = self._velocity_fields()[at]
-        p = self._pressure_fields()[at]
-        n_envs = T.size(0)
-        grid = (self._n_sensors_x, self._n_sensors_y)
+        T = self.get_temperature()
+        u = self.get_velocity()
+        p = self.get_pressure()
 
-        T = T.reshape(n_envs, *grid).transpose(1, 2)
-        u = u.reshape(n_envs, 2, *grid).transpose(2, 3)
-        p = p.reshape(n_envs, *grid).transpose(1, 2)
+        T = T[self._sensor_locations[1], self._sensor_locations[0]]
+        T = T.reshape(self._n_sensors_x, self._n_sensors_y).T
+
+        u = u.permute(1, 2, 0)
+        u = u[self._sensor_locations[1], self._sensor_locations[0], :]
+        u = u.reshape(self._n_sensors_x, self._n_sensors_y, 2).permute(2, 1, 0)
+
+        p = p[self._sensor_locations[1], self._sensor_locations[0]]
+        p = p.reshape(self._n_sensors_x, self._n_sensors_y).T
 
         return {
             "temperature": T,
@@ -211,47 +207,89 @@ class RBCEnv2D(RBCEnvBase):
         """
         return self._get_sensor_locations_2d()
 
+    def __smooth_action_profile_1d(self, T_action: torch.Tensor) -> torch.Tensor:
+        heater_width = self._heater_width
+        alpha = 0.1  # % of heater_width to smooth over
+        blended_heater_width = round(heater_width * alpha)
+
+        def cubic_blend(
+            t: torch.Tensor, A: torch.Tensor, B: torch.Tensor
+        ) -> torch.Tensor:
+            s = t * t * (3 - 2 * t)
+            return (1 - s) * A + s * B
+
+        # shift left/right
+        T_left = torch.roll(T_action, shifts=1, dims=0)
+        T_right = torch.roll(T_action, shifts=-1, dims=0)
+
+        # heater segment indexing
+        x_idx = torch.arange(self._x, device=T_action.device, dtype=torch.long)
+        seg_id = x_idx // heater_width
+        x_pos = x_idx % heater_width
+
+        # gather neighboring values
+        T0 = T_left[seg_id]
+        T1 = T_action[seg_id]
+        T2 = T_right[seg_id]
+
+        # zones
+        left_zone = x_pos < blended_heater_width
+        right_zone = x_pos >= heater_width - blended_heater_width
+
+        # blending parameters
+        tL = (x_pos.to(torch.float32) / blended_heater_width + 0.5).clamp(0.0, 1.0)
+        tR = 1 - torch.roll(tL, shifts=heater_width - blended_heater_width + 1, dims=0)
+
+        # cubic blends
+        TL = cubic_blend(tL, T0, T1)
+        TR = cubic_blend(tR, T1, T2)
+
+        # piecewise assembly
+        T_smooth = torch.where(left_zone, TL, torch.where(right_zone, TR, T1))
+
+        return T_smooth
+
     def __action_to_control(self, action: torch.Tensor) -> torch.Tensor:
         # scaled_action = action * self.heater_limit
 
-        # Cf. eq. (8) in https://doi.org/10.1063/5.0153181 (per environment)
-        T_shifted = action - action.mean(dim=-1, keepdim=True)
+        # Cf. eq. (8) in https://doi.org/10.1063/5.0153181
+        T_shifted = action - action.mean()
 
         # Cf. eq. (9) in https://doi.org/10.1063/5.0153181
         T_action = T_shifted / (
             torch.clamp(T_shifted.abs(), min=1.0) / self._heater_limit
         )
 
-        # So far, we have computed the derivation from the bottom temperature
-        # We need to shift it to the actual temperature range
+        # So far, we have computed the derivation from the bottom temperature.
+        # We need to shift it to the actual temperature range.
         T_action += self._T_hot
 
         # Smoothing according to https://doi.org/10.1063/5.0153181
-        T_smooth = smooth_segment_profile(
-            T_action, self._heater_width, self._heater_smoothing_alpha
-        )
+        T_smooth = self.__smooth_action_profile_1d(T_action=T_action)
 
-        # [E, nx]
-        return T_smooth
+        # broadcast along y and add leading channel dim: (1, nx, ny)
+        # (expand returns a view; use .clone() if you need a writable contiguous tensor)
+        control = T_smooth.expand(self._x)
+
+        return control
 
     def _apply_action(self, action: torch.Tensor) -> None:
         """Apply the given action to the simulation."""
-        # one heater profile per environment: [E, n_heaters] -> [E, 1, 1, nx]
-        flat_action = action.reshape(action.size(0), -1)
+        flat_action = action.squeeze()
         control = self.__action_to_control(flat_action)
-        control = control[:, None, None, :]
+        control = control[None, None, None, ...]
 
         self._bottom_plate.setPassiveScalar(control)
 
     def _get_local_obs(self) -> dict[str, torch.Tensor]:
         global_obs = self._get_global_obs()
 
-        T = global_obs["temperature"]  # [E, Y, X]
-        u = global_obs["velocity"]  # [E, 2, Y, X]
-        p = global_obs["pressure"]  # [E, Y, X]
+        T = global_obs["temperature"]  # [Y, X]
+        u = global_obs["velocity"]  # [Y, X, 2]
+        p = global_obs["pressure"]  # [Y, X]
 
-        u_x = u[:, 0]  # [E, Y, X]
-        u_y = u[:, 1]  # [E, Y, X]
+        u_x = u[0, ...]  # [Y, X]
+        u_y = u[1, ...]  # [Y, X]
 
         local_obs_T = extract_moving_window_2d(
             field=T,
@@ -272,7 +310,7 @@ class RBCEnv2D(RBCEnvBase):
             agent_width=self._n_sensors_per_heater,
             n_agents_per_window=self._local_obs_window,
         )
-        locla_obs_u = torch.stack([local_obs_u_x, local_obs_u_y], dim=2)
+        locla_obs_u = torch.stack([local_obs_u_x, local_obs_u_y], dim=1)
 
         local_obs_p = extract_moving_window_2d(
             field=p,
@@ -288,12 +326,10 @@ class RBCEnv2D(RBCEnvBase):
         }
 
     def _get_local_rewards(self) -> torch.Tensor:
-        assert isinstance(self._block.passiveScalar, torch.Tensor)
-
-        T: torch.Tensor = self._block.passiveScalar[:, 0]  # [E, Y, X]
+        T: torch.Tensor = self._block.passiveScalar[0, 0]  # [Y, X]
 
         u: torch.Tensor = self._block.getVelocity(False)
-        u_y = u[:, 1]  # [E, Y, X]
+        u_y = u[0, 1]  # [Y, X]
 
         cell_size = get_cell_size(self._block).squeeze()
         local_cell_size = cell_size[:, : self._local_obs_window * self._heater_width]
@@ -303,7 +339,7 @@ class RBCEnv2D(RBCEnvBase):
             n_agents=self.n_agents,
             agent_width=self._heater_width,
             n_agents_per_window=self._local_obs_window,
-        )  # [E, n_agents, Y, agent_window * n_obs_per_agent]
+        )  # [n_agents, Y, agent_window * n_obs_per_agent]
 
         local_u_y = extract_moving_window_2d(
             field=u_y,
@@ -316,7 +352,7 @@ class RBCEnv2D(RBCEnvBase):
             T=local_T,
             u_y=local_u_y,
             cell_size=local_cell_size,
-        )  # [E, n_agents]
+        )  # [n_agents,]
 
         return self.nu_ref - local_nu
 

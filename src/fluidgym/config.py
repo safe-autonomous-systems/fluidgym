@@ -1,5 +1,6 @@
 """Global configuration for FluidGym."""
 
+import logging
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -7,9 +8,19 @@ from typing import Any
 import torch
 from platformdirs import user_data_dir
 
-from fluidgym.logging import get_logger
+logger = logging.getLogger("fluidgym.config")
 
-logger = get_logger("config")
+DEFAULT_PALETTE = [
+    "#003a7d",
+    "#008dff",
+    "#ff73b6",
+    "#ff9d3a",
+    "#4ecb8d",
+    "#f9e858",
+    "#d83034",
+    "#c701ff",
+]
+
 
 FP32 = torch.float32
 FP64 = torch.float64
@@ -109,7 +120,7 @@ class Config:
         value = self.settings.get(_key)
 
         # Since we check the key in the get method,
-        # we can assume value is not None here
+        # we can assume value is not None here.
         assert value is not None
 
         return value
@@ -136,6 +147,11 @@ class Config:
     def dtype(self) -> torch.dtype:
         """The default data type for tensors in FluidGym."""
         return self.settings[ConfigKey.DTYPE]
+
+    @property
+    def palette(self) -> list[str]:
+        """The default color palette for visualizations in FluidGym."""
+        return DEFAULT_PALETTE
 
 
 config = Config()

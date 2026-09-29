@@ -6,7 +6,7 @@ integration with various RL libraries that support TorchRL. This is especially
 useful to leverage PyTorch's automatic differentiation capabilities for RL.
 
 Due to the complexity of the TorchRL interface, we provide only a minimal example here
-from ``examples/basic_usage/interfaces/torchrl_env.py``:
+from ``examples/interfaces/torchrl.py``:
 
 .. code-block:: python
 
