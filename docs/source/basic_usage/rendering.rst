@@ -13,17 +13,22 @@ parameter to `True`. We note that rendering 3D environments with detailed plots 
 computationally intensive and may slow down the simulation. Therefore, 3D rendering is
 disabled by default.
 
-Here is a simple example from `examples/rendering.py`:
+Here is a simple example from `examples/basic_usage/rendering.py`:
 
 .. code-block:: python
 
     from pathlib import Path
 
     import fluidgym
+    from fluidgym.integration.gymnasium import GymFluidEnv
+    from fluidgym.wrappers import VideoRecorder
 
-    env = fluidgym.make_gym(
-        "CylinderJet3D-easy-v0",
+    env = fluidgym.make(
+        "Airfoil2D-easy-v0",
     )
+    # Record the episode as gif before wrapping for gymnasium
+    env = VideoRecorder(env, filename="cylinder_3d", output_path=Path("./renders"))
+    env = GymFluidEnv(env)
 
     obs, info = env.reset(seed=42)
 
@@ -34,7 +39,7 @@ Here is a simple example from `examples/rendering.py`:
         obs, reward, term, trunc, info = env.step(action)
         done = term or trunc
 
-        # Now, we also want fancy 3d plots of the environment
+        # Additionally, we save fancy 3d plots of every step
         env.render(
             # Defines, whether to save individual rendered frames to plots/images
             save=True,
@@ -50,4 +55,5 @@ Here is a simple example from `examples/rendering.py`:
 
         i += 1
 
-    env.save_gif("cylinder_3d.gif")
+    # Closing the environment saves the gif, e.g. as renders/cylinder_3d_ep1.gif
+    env.close()

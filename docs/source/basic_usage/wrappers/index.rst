@@ -9,5 +9,7 @@ Wrappers
    obs_extraction
    action_noise
    sensor_noise
+   power_penalty
+   video_recorder
 
 

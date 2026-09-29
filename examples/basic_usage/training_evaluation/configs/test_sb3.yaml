@@ -1,0 +1,14 @@
+# @package _global_
+defaults:
+  - train_sb3
+  - _self_
+
+test_env_id: ${env_id}
+test_env_kwargs: ${env_kwargs}
+test_rl_mode: ${rl_mode}
+
+# Test 
+n_test_episodes: 10
+deterministic: true
+save_frames: true
+render_3d: true

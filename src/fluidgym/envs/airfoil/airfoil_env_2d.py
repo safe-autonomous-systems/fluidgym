@@ -1,8 +1,11 @@
 """Environment for 2D airfoil aerodynamic efficiency improvement."""
 
+from collections.abc import Mapping
+
 import numpy as np
 import torch
 from gymnasium import spaces
+from phipict.solvers.tolerance import SolverTolerance
 
 from fluidgym.envs.airfoil.airfoil_env_base import AirfoilEnvBase
 from fluidgym.envs.util.obs_extraction import extract_global_2d_obs
@@ -85,7 +88,50 @@ class AirfoilEnv2D(AirfoilEnvBase):
 
     differentiable: bool
         Whether to enable differentiable simulation mode. Defaults to False.
+
+    advection_tol: float | SolverTolerance | Mapping | None
+        Tolerance for the momentum and passive-scalar advection solves. None (the
+        default) keeps the tolerance this environment is tuned at.
+
+    pressure_tol: float | SolverTolerance | Mapping | None
+        Tolerance for the pressure solve. None (the default) keeps the tolerance
+        this environment is tuned at.
+
+    pressure_tol_intermediate: float | SolverTolerance | Mapping | None
+        Tolerance for the pressure solves before the final corrector. None (the
+        default) applies ``pressure_tol`` everywhere.
+
+    linear_solve_max_iter: int | None
+        Iteration limit for the advection and pressure solves. None (the default)
+        leaves the solver's own limit in place.
+
+    exclude_advection_solve_gradients: bool | None
+        Drop the gradient of the advection solve. Diagnostic only; None (the
+        default) keeps it.
+
+    exclude_pressure_solve_gradients: bool | None
+        Drop the gradient of the pressure solve. Diagnostic only; None (the
+        default) keeps it.
+
+    exclude_pressure_gradient_adjoint: bool | None
+        Drop the pressure path of the PISO velocity-correction backward.
+        Diagnostic only; None (the default) keeps it.
+
+
+    n_envs: int | None
+
+        Number of environments simulated together, see
+
+        :class:`~fluidgym.envs.fluid_env.FluidEnv`. None (the default) is a single
+
+        environment.
+
+    pressure_warm_start: bool
+        Whether to seed each pressure solve with the previous sub-step's result.
+        Defaults to False.
     """
+
+    _render_resolution: int = 2
 
     def __init__(
         self,
@@ -104,6 +150,17 @@ class AirfoilEnv2D(AirfoilEnvBase):
         randomize_initial_state: bool = True,
         enable_actions: bool = True,
         differentiable: bool = False,
+        advection_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol_intermediate: (
+            float | SolverTolerance | Mapping[str, float] | None
+        ) = None,
+        pressure_warm_start: bool = False,
+        linear_solve_max_iter: int | None = None,
+        exclude_advection_solve_gradients: bool | None = None,
+        exclude_pressure_solve_gradients: bool | None = None,
+        exclude_pressure_gradient_adjoint: bool | None = None,
+        n_envs: int | None = None,
     ):
         super().__init__(
             ndims=2,
@@ -122,6 +179,15 @@ class AirfoilEnv2D(AirfoilEnvBase):
             randomize_initial_state=randomize_initial_state,
             enable_actions=enable_actions,
             differentiable=differentiable,
+            advection_tol=advection_tol,
+            pressure_tol=pressure_tol,
+            pressure_tol_intermediate=pressure_tol_intermediate,
+            pressure_warm_start=pressure_warm_start,
+            linear_solve_max_iter=linear_solve_max_iter,
+            exclude_advection_solve_gradients=exclude_advection_solve_gradients,
+            exclude_pressure_solve_gradients=exclude_pressure_solve_gradients,
+            exclude_pressure_gradient_adjoint=exclude_pressure_gradient_adjoint,
+            n_envs=n_envs,
         )
 
     @property
@@ -169,23 +235,26 @@ class AirfoilEnv2D(AirfoilEnvBase):
     def _action_to_control(self, action: torch.Tensor) -> torch.Tensor:
         assert self._jet_locations_top is not None
 
-        v_action = action - action.mean()
+        # [E, n_jets]: zero-mean per environment
+        action = action.reshape(action.size(0), -1)
+        v_action = action - action.mean(dim=1, keepdim=True)
 
         # Ensure max abs. value of 1.0
-        max_v = torch.max(torch.abs(v_action))
-        if max_v > 1.0:
-            v_action = v_action / max_v
+        max_v = torch.max(torch.abs(v_action), dim=1, keepdim=True).values
+        v_action = torch.where(max_v > 1.0, v_action / max_v, v_action)
 
-        top_profile = self._top_base_profile.clone()
+        # one profile per environment
+        base = self._top_base_profile
+        top_profile = base.expand(v_action.size(0), *base.shape[1:]).clone()
 
         for i in range(self._n_jets):
             start_idx_top, end_idx_top = self._jet_locations_top[i]
 
             top_profile[
-                0,
+                :,
                 :,
                 0,
                 start_idx_top : end_idx_top + 1,
-            ] *= v_action[i]
+            ] *= v_action[:, i, None, None]
 
         return top_profile

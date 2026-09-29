@@ -12,3 +12,5 @@ observations, and more. Below is a list of available wrappers in FluidGym:
    fluidgym.wrappers.obs_extraction.ObsExtraction
    fluidgym.wrappers.action_noise.ActionNoise
    fluidgym.wrappers.sensor_noise.SensorNoise
+   fluidgym.wrappers.power_penalty.PowerPenalty
+   fluidgym.wrappers.video_recorder.VideoRecorder

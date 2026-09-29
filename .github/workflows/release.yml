@@ -1,0 +1,180 @@
+# Manual only (Actions -> Release -> Run workflow). Builds the sdist and wheel.
+#
+# To publish, run it on a tag vX.Y.Z (select the tag instead of a branch) with
+# target testpypi or pypi; the version comes from the tag (hatch-vcs). TestPyPI
+# and PyPI are separate registries, so the exact release version can be tested
+# on TestPyPI first. A file name can only be uploaded once; to retry on TestPyPI,
+# set build_number (fluidgym-0.2.0-1-py3-none-any.whl), never used for PyPI.
+# target pypi also creates the GitHub Release.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Upload the sdist and wheel to"
+        type: choice
+        options: [none, testpypi, pypi]
+        default: none
+      build_number:
+        description: "Wheel build number for TestPyPI retries (empty = none)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  # Fails before the build if the run cannot be published.
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check ref and inputs
+        env:
+          TARGET: ${{ inputs.target }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          if [[ -n $BUILD_NUMBER ]]; then
+            [[ $BUILD_NUMBER =~ ^[0-9]+$ ]] || { echo "::error::build_number must be a number"; exit 1; }
+            [[ $TARGET == testpypi ]] || { echo "::error::build_number is only for TestPyPI retries"; exit 1; }
+          fi
+          [[ $TARGET == none ]] && exit 0
+          [[ $GITHUB_REF == refs/tags/v* ]] || { echo "::error::publishing needs a vX.Y.Z tag; select it in Run workflow"; exit 1; }
+
+  build:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+      - run: uv build --no-sources
+      - run: uvx twine check --strict dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  # Installs the built wheel on every supported Python and imports it, so a
+  # broken wheel or an unsupported Python fails before anything is published.
+  # phipict comes from TestPyPI unless publishing to PyPI; everything else
+  # (torch with its CUDA wheels, several GB) from PyPI.
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]  # requires-python in pyproject.toml
+    env:
+      # the torch download would otherwise be kept a second time in the cache
+      PIP_NO_CACHE_DIR: "1"
+    steps:
+      # torch and its CUDA wheels do not fit into the default free disk space
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/lib/jvm \
+            /usr/local/share/powershell
+          sudo swapoff -a || true
+          sudo rm -f /mnt/swapfile /swapfile || true
+          sudo apt-get clean
+          sudo docker image prune --all --force
+          df -h /
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: dist
+          path: dist/
+
+      # Only phipict from TestPyPI (--no-deps): anyone can upload any package
+      # there, so its dependencies must still come from PyPI
+      - name: Install phipict from TestPyPI
+        if: inputs.target != 'pypi'
+        run: |
+          req=$(unzip -p dist/*.whl '*/METADATA' \
+            | sed -nE 's/^Requires-Dist: phipict(\[[^]]*\])?([^;]*).*/phipict\2/p')
+          echo "$req"
+          pip install --no-deps --index-url https://test.pypi.org/simple/ "$req"
+
+      - name: Install the wheel
+        run: |
+          pip install dist/*.whl
+          df -h /
+
+      - name: Import
+        working-directory: ${{ runner.temp }}
+        run: |
+          python -c "
+          import fluidgym
+          from fluidgym.registry import registry
+          n = len(registry.env_specs)
+          assert n > 0, 'no environments registered'
+          print('fluidgym', fluidgym.__version__, 'with', n, 'environments')
+          "
+
+  publish:
+    if: inputs.target != 'none'
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Trusted publishing: this repo/workflow/environment is registered as a
+    # publisher on test.pypi.org (environment testpypi) and pypi.org
+    # (environment pypi), see CI.md; no token needed.
+    environment:
+      name: ${{ inputs.target }}
+      url: https://${{ inputs.target == 'testpypi' && 'test.' || '' }}pypi.org/p/fluidgym
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: dist
+          path: dist/
+
+      - name: Set wheel build number
+        if: inputs.build_number != ''
+        run: pipx run wheel tags --remove --build "${{ inputs.build_number }}" dist/*.whl
+
+      - name: Check version against tag
+        run: |
+          for f in dist/*; do
+            case ${f#dist/} in
+              fluidgym-${GITHUB_REF_NAME#v}-*.whl | fluidgym-${GITHUB_REF_NAME#v}.tar.gz) ;;
+              *) echo "::error::$f does not match tag $GITHUB_REF_NAME"; exit 1 ;;
+            esac
+          done
+          ls dist
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ inputs.target == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+          # a file name can only be uploaded once; re-runs skip the uploaded ones
+          skip-existing: true
+
+  github-release:
+    if: inputs.target == 'pypi'
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: dist
+          path: dist/
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" dist/*
+          --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

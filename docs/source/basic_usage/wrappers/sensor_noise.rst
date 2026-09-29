@@ -9,7 +9,7 @@ sensors may not perform perfectly.
 FluidGym wrappers can be used by importing them from the ``fluidgym.wrappers`` module
 and wrapping the environment instance.
 
-Here is a simple example from ``examples/wrappers/sensor_noise.py``:
+Here is a simple example from ``examples/basic_usage/wrappers/sensor_noise.py``:
 
 .. code-block:: python
 

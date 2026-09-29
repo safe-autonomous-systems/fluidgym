@@ -1,12 +1,10 @@
 """Utility functions for computing forces on wall boundaries in FluidGym."""
 
-from typing import Any
+from collections.abc import Callable
+from typing import Any, cast
 
 import torch
-
-from fluidgym.simulation.extensions import (
-    PISOtorch,  # type: ignore[import-untyped,import-not-found]
-)
+from phipict import _C
 
 
 def wall_distance_from_vertices(
@@ -40,7 +38,7 @@ def wall_distance_from_vertices(
 
 
 def collect_boundary_coords(
-    domain: PISOtorch.Domain,
+    domain: _C.Domain,
     block_idxs: list[int],
     boundary_cell_slices: list[tuple[Any, ...]],
     flip_dims: list[list[int]],
@@ -52,7 +50,7 @@ def collect_boundary_coords(
 
     Parameters
     ----------
-    domain: PISOtorch.Domain
+    domain: _C.Domain
         The fluid domain containing the blocks.
 
     block_idxs: list[int]
@@ -108,7 +106,7 @@ def collect_boundary_coords(
 
 
 def collect_boundary_fields(
-    domain: PISOtorch.Domain,
+    domain: _C.Domain,
     block_idxs: list[int],
     boundary_faces: list[str],
     boundary_cell_slices: list[tuple[Any, ...]],
@@ -118,7 +116,7 @@ def collect_boundary_fields(
 
     Parameters
     ----------
-    domain: PISOtorch.Domain
+    domain: _C.Domain
         The fluid domain containing the blocks.
 
     block_idxs: list[int]
@@ -137,8 +135,10 @@ def collect_boundary_fields(
     -------
     tuple[torch.Tensor, torch.Tensor, torch.Tensor]
         A tuple containing concatenated cell velocities, boundary velocities, and
-        cell pressures from the specified boundary blocks.
+        cell pressures from the specified boundary blocks, each with a leading env
+        dim ``E`` (boundary data shared by all environments is broadcast).
     """
+    n_envs = domain.getBatchSize()
     all_u_cell_list = []
     all_u_boundary_list = []
     all_p_cell_list = []
@@ -148,28 +148,27 @@ def collect_boundary_fields(
     ):
         block = domain.getBlock(block_idx)
 
-        # Cell velocity
+        # Cell velocity: [E, C, *wall]
         u_cell: torch.Tensor = block.getVelocity(False)
-        u_cell = u_cell.squeeze()
         u_cell = u_cell[cell_slice]
 
-        # Boundary velocity
-        u_boundary: torch.Tensor = block.getBoundary(face).velocity
-        u_boundary = u_boundary.squeeze()
+        # Boundary velocity: static [N, C] or varying [N, C, *face], with N 1 (shared
+        # by all environments) or E; brought to the shape of the cell velocity
+        u_boundary: torch.Tensor = cast(
+            _C.FixedBoundary, block.getBoundary(face)
+        ).velocity
+        n_bound, channels = u_boundary.shape[:2]
+        if u_boundary.dim() == 2:
+            u_boundary = u_boundary.reshape(
+                n_bound, channels, *[1] * (u_cell.dim() - 2)
+            )
+        else:
+            # the face has one cell across it: [N, C, *face] -> [N, C, *wall]
+            u_boundary = u_boundary.reshape(n_bound, channels, *u_cell.shape[2:])
+        u_boundary = u_boundary.expand(n_envs, *u_cell.shape[1:])
 
-        # If the boundary velocity is not varying, it has shape [N_DIMS,],
-        # we need to expand it to match the cell velocity shape
-        if u_cell.ndim != u_boundary.ndim:
-            if domain.getSpatialDims() == 2:
-                u_boundary = u_boundary[:, None].repeat(1, u_cell.shape[1])
-            else:
-                u_boundary = u_boundary[:, None, None].repeat(
-                    1, u_cell.shape[1], u_cell.shape[2]
-                )
-
-        # Pressure
-        p_wall: torch.Tensor = block.pressure
-        p_wall = p_wall.squeeze()
+        # Pressure: [E, *wall]
+        p_wall: torch.Tensor = block.pressure[:, 0]
         p_wall = p_wall[cell_slice]
 
         if flip:
@@ -188,6 +187,36 @@ def collect_boundary_fields(
     all_p_cell = torch.cat(all_p_cell_list, dim=-1)
 
     return all_u_cell, all_u_boundary, all_p_cell
+
+
+def compute_env_forces(
+    forces_fn: Callable[..., torch.Tensor],
+    u_cell: torch.Tensor,
+    u_boundary: torch.Tensor,
+    p_cell: torch.Tensor,
+    **geometry: torch.Tensor,
+) -> torch.Tensor:
+    """Apply a single-environment force function to every environment.
+
+    Parameters
+    ----------
+    forces_fn: Callable[..., torch.Tensor]
+        :func:`compute_forces_2d` or :func:`compute_forces_3d`.
+
+    u_cell, u_boundary, p_cell: torch.Tensor
+        The wall fields of :func:`collect_boundary_fields`, with a leading env dim.
+
+    **geometry: torch.Tensor
+        The remaining (shared) arguments of ``forces_fn``.
+
+    Returns
+    -------
+    torch.Tensor
+        The forces of ``forces_fn`` per environment, with a leading env dim.
+    """
+    return torch.func.vmap(
+        lambda u, u_b, p: forces_fn(u_cell=u, u_boundary=u_b, p_cell=p, **geometry)
+    )(u_cell, u_boundary, p_cell)
 
 
 def compute_forces_2d(

@@ -1,16 +1,22 @@
 """3D Environment for flow around a cylinder with jet actuation."""
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import numpy as np
 import torch
 from gymnasium import spaces
+from phipict.core.piso_simulation import balance_boundary_fluxes
+from phipict.solvers.tolerance import SolverTolerance
 
 from fluidgym.envs.cylinder.cylinder_env_base import CylinderEnvBase
-from fluidgym.envs.util.obs_extraction import extract_global_3d_obs
+from fluidgym.envs.util.obs_extraction import (
+    extract_global_3d_obs,
+    transform_global_to_local_obs_3d,
+)
 from fluidgym.envs.util.profiles import get_jet_profile
+from fluidgym.envs.util.smoothing import smooth_segment_profile
 from fluidgym.envs.util.visualization import render_3d_iso
-from fluidgym.simulation.pict.PISOtorch_simulation import balance_boundary_fluxes
 
 VORTICITY_RENDER_LEVELS = {
     100: 1.5,
@@ -104,6 +110,38 @@ class CylinderJetEnv3D(CylinderEnvBase):
     differentiable: bool, optional
         Whether to enable differentiable simulation. Defaults to False.
 
+    advection_tol: float | SolverTolerance | Mapping | None, optional
+        Tolerance for the momentum and passive-scalar advection solves. None (the
+        default) keeps the tolerance this environment is tuned at.
+
+    pressure_tol: float | SolverTolerance | Mapping | None, optional
+        Tolerance for the pressure solve. None (the default) keeps the tolerance
+        this environment is tuned at.
+
+    pressure_tol_intermediate: float | SolverTolerance | Mapping | None, optional
+        Tolerance for the pressure solves before the final corrector. None (the
+        default) applies ``pressure_tol`` everywhere.
+
+    pressure_warm_start: bool, optional
+        Whether to seed each pressure solve with the previous sub-step's result.
+        Defaults to False.
+
+    linear_solve_max_iter: int | None, optional
+        Iteration limit for the advection and pressure solves. None (the default)
+        leaves the solver's own limit in place.
+
+    exclude_advection_solve_gradients: bool | None, optional
+        Drop the gradient of the advection solve. Diagnostic only; None (the
+        default) keeps it.
+
+    exclude_pressure_solve_gradients: bool | None, optional
+        Drop the gradient of the pressure solve. Diagnostic only; None (the
+        default) keeps it.
+
+    exclude_pressure_gradient_adjoint: bool | None, optional
+        Drop the pressure path of the PISO velocity-correction backward.
+        Diagnostic only; None (the default) keeps it.
+
     References
     ----------
     [1] P. Suárez et al., “Active Flow Control for Drag Reduction Through Multi-agent
@@ -116,10 +154,19 @@ class CylinderJetEnv3D(CylinderEnvBase):
     """
 
     _default_render_key: str = "3d_vorticity"
+    _render_resolution: int = 1
 
     _jet_angle: float = 10.0  # degrees
     _n_sensors_per_agent: int = 2
     _supports_marl: bool = True
+
+    # Fraction of the per-jet z-extent over which neighbouring jets are blended,
+    # the steps between jets are a source of numerical instability
+    _z_smoothing_alpha: float = 0.5
+
+    # A fifth of the 25 PISO steps of a registered env step: the 3D replay tape is
+    # what caps a differentiable rollout here (see ``FluidEnv.bptt_segment_size``)
+    _default_bptt_segment_size: int | None = 5
 
     def __init__(
         self,
@@ -142,6 +189,17 @@ class CylinderJetEnv3D(CylinderEnvBase):
         randomize_initial_state: bool = True,
         enable_actions: bool = True,
         differentiable: bool = False,
+        advection_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol_intermediate: (
+            float | SolverTolerance | Mapping[str, float] | None
+        ) = None,
+        pressure_warm_start: bool = False,
+        linear_solve_max_iter: int | None = None,
+        exclude_advection_solve_gradients: bool | None = None,
+        exclude_pressure_solve_gradients: bool | None = None,
+        exclude_pressure_gradient_adjoint: bool | None = None,
+        n_envs: int | None = None,
     ):
         if n_jets < 1 or resolution % n_jets != 0:
             raise ValueError(
@@ -183,6 +241,15 @@ class CylinderJetEnv3D(CylinderEnvBase):
             randomize_initial_state=randomize_initial_state,
             enable_actions=enable_actions,
             differentiable=differentiable,
+            advection_tol=advection_tol,
+            pressure_tol=pressure_tol,
+            pressure_tol_intermediate=pressure_tol_intermediate,
+            pressure_warm_start=pressure_warm_start,
+            linear_solve_max_iter=linear_solve_max_iter,
+            exclude_advection_solve_gradients=exclude_advection_solve_gradients,
+            exclude_pressure_solve_gradients=exclude_pressure_solve_gradients,
+            exclude_pressure_gradient_adjoint=exclude_pressure_gradient_adjoint,
+            n_envs=n_envs,
         )
 
     def _get_action_space(self) -> spaces.Box:
@@ -314,29 +381,14 @@ class CylinderJetEnv3D(CylinderEnvBase):
         )
 
     def _get_local_obs(self) -> dict[str, torch.Tensor]:
-        global_obs = self._get_global_obs()
-        offset = self._local_obs_window // 2
-
-        local_obs = {}
-        for k, v in global_obs.items():
-            # First, shift the global obs to start with the first agents sensor
-            # window at zero
-            shifted_obs = torch.roll(v, shifts=offset, dims=0)
-
-            local_obs_list = []
-            for _ in range(self._n_jets):
-                window = shifted_obs[: self._local_obs_window]
-
-                if self._local_2d_obs:
-                    window = window.squeeze()
-
-                local_obs_list += [window]
-
-                shifted_obs = torch.roll(shifted_obs, shifts=-1, dims=0)
-
-            local_obs[k] = torch.stack(local_obs_list, dim=0)
-
-        return local_obs
+        # [E, n_jets, local_obs_window, ...]
+        return transform_global_to_local_obs_3d(
+            global_obs=self._get_global_obs(),
+            local_obs_window=self._local_obs_window,
+            n_agents=self._n_jets,
+            local_2d_obs=self._local_2d_obs,
+            batch_dims=1,
+        )
 
     def __get_boundary_velocities(self) -> tuple[torch.Tensor, torch.Tensor, int]:
         def coords_to_velocities(
@@ -400,15 +452,20 @@ class CylinderJetEnv3D(CylinderEnvBase):
         action: torch.Tensor
             The actions to apply for each jet actuator.
         """
-        action = action.flatten()
+        # [E, n_jets] per environment
+        action = action.reshape(action.size(0), -1)
 
-        # We need to repeat the action in z-direction, having blocks of nz_per_agent
-        # values per agent
-        action = action.repeat_interleave(self._nz_per_agent, dim=0)
-        assert action.shape[0] == self._top_velocity.shape[2]
+        # We need to expand the action in z-direction, having blocks of nz_per_agent
+        # values per agent that are smoothly blended into each other
+        smooth_action = smooth_segment_profile(
+            action, self._nz_per_agent, self._z_smoothing_alpha
+        )
+
+        action = smooth_action
+        assert action.shape[1] == self._top_velocity.shape[2]
 
         # Then we expand dimensions to match the velocity shape
-        action = action[None, None, :, None, None]
+        action = action[:, None, :, None, None]
 
         self._top_boundary.setVelocity(self._top_velocity.clone() * action)
         self._bottom_boundary.setVelocity(self._bottom_velocity.clone() * action)
@@ -417,24 +474,26 @@ class CylinderJetEnv3D(CylinderEnvBase):
             self._domain.getBlock(self._bottom_block_idx).getBoundary("+y"),
             self._domain.getBlock(self._vortex_street_block_idx).getBoundary("+x"),
         ]
-        balance_boundary_fluxes(self._domain, out_bounds, tol=1e-7)
+        balance_boundary_fluxes(
+            self._domain, out_bounds, tol=1e-7, differentiable=self._differentiable
+        )
 
     @property
     def id(self) -> str:
         """Unique identifier for the environment."""
         return f"JetCylinder3D_Re{self._reynolds_number}"
 
-    def _step_impl(
-        self, action: torch.Tensor
+    def _finish_step(
+        self, metrics: dict[str, torch.Tensor]
     ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
-        obs, reward, term, info = super()._step_impl(action)
+        obs, reward, term, info = super()._finish_step(metrics)
 
         all_cds = info.pop("drag")
         all_cls = info.pop("lift")
 
-        # Sum over all cylinder cells to get total drag and lift
-        cd = torch.sum(all_cds) / self.D
-        cl = torch.sum(all_cls) / self.D
+        # Sum over all cylinder cells to get total drag and lift, per environment
+        cd = self._per_env_sum(all_cds) / self.D
+        cl = self._per_env_sum(all_cls) / self.D
 
         reward = self._cd_ref - cd - self._lift_penalty * torch.abs(cl)
 
@@ -448,22 +507,22 @@ class CylinderJetEnv3D(CylinderEnvBase):
 
         return obs, reward, term, info
 
-    def _step_marl_impl(
-        self, actions: torch.Tensor
+    def _finish_marl_step(
+        self, metrics: dict[str, torch.Tensor]
     ) -> tuple[dict[str, torch.Tensor], torch.Tensor, bool, dict[str, torch.Tensor]]:
         if self._local_reward_weight is None:
             raise ValueError("local_reward_weight must be set for multi-agent step.")
 
-        _, global_reward, terminated, info = self._step_impl(actions)
+        _, global_reward, terminated, info = self._finish_step(metrics)
 
         local_obs = self._get_local_obs()
 
         all_cds = info.pop("all_cds")
         lift = info.pop("all_cls")
 
-        # First mean over agents cylinder cells
-        local_cd = all_cds.view(self._n_jets, -1).sum(dim=1)
-        local_cl = lift.view(self._n_jets, -1).sum(dim=1)
+        # First mean over agents cylinder cells: [E, n_jets]
+        local_cd = all_cds.reshape(all_cds.size(0), self._n_jets, -1).sum(dim=-1)
+        local_cl = lift.reshape(lift.size(0), self._n_jets, -1).sum(dim=-1)
 
         local_cd = local_cd / (self.D / self._n_jets)
         local_cl = local_cl / (self.D / self._n_jets)
@@ -473,7 +532,7 @@ class CylinderJetEnv3D(CylinderEnvBase):
         )
         agent_rewards = (
             self._local_reward_weight * local_rewards
-            + (1 - self._local_reward_weight) * global_reward
+            + (1 - self._local_reward_weight) * global_reward[:, None]
         )
         info["global_reward"] = global_reward
 
@@ -488,8 +547,8 @@ class CylinderJetEnv3D(CylinderEnvBase):
             render_3d=render_3d, output_path=output_path
         )
 
-        curl = self.get_vorticity().squeeze(0)
-        u = self.get_velocity().squeeze(0)
+        curl = self._render_env_field(self._vorticity_fields())
+        u = self._render_env_field(self._velocity_fields())
 
         u_magn: torch.Tensor = torch.linalg.norm(u, dim=0)
         u_arr = u_magn.detach().cpu().numpy()
@@ -523,7 +582,7 @@ class CylinderJetEnv3D(CylinderEnvBase):
                 )
 
             render_data["3d_vorticity"] = render_3d_iso(
-                iso_field=curl_arr,
+                iso_field=np.abs(curl_arr),
                 iso=[iso_val],
                 output_path=output_path,
                 color_field=u_arr,

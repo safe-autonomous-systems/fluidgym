@@ -1,15 +1,9 @@
 """Grid and domain setup for turbulent channel flow simulations."""
 
-from typing import Any
-
 import numpy as np
 import torch
-
-import fluidgym.simulation.pict.data.shapes as shapes
-import fluidgym.simulation.pict.PISOtorch_simulation as PISOtorch_simulation
-from fluidgym.simulation.extensions import (
-    PISOtorch,  # type: ignore[import-untyped,import-not-found]
-)
+from phipict import _C, Hook, Hooks
+from phipict.grid import shapes
 
 
 def _make_y_weights(N: int = 1, ny_half: int = 48) -> list[float]:
@@ -99,8 +93,8 @@ def _make_reichardt_profile(domain, u_wall: float, cuda_device):
 
 
 def get_van_driest_sqr(
-    block: PISOtorch.Block,
-    domain: PISOtorch.Domain,
+    block: _C.Block,
+    domain: _C.Domain,
     u_wall: float,
     cuda_device: torch.device,
 ) -> torch.Tensor:
@@ -108,11 +102,11 @@ def get_van_driest_sqr(
 
     Parameters
     ----------
-    block: PISOtorch.Block
-        The PISOtorch block object.
+    block: _C.Block
+        The phipict block object.
 
-    domain: PISOtorch.Domain
-        The PISOtorch domain object.
+    domain: _C.Domain
+        The phipict domain object.
 
     u_wall: float
         The wall velocity tensor.
@@ -125,9 +119,7 @@ def get_van_driest_sqr(
     return van_driest_scale * van_driest_scale
 
 
-def set_dynamic_forcing(
-    ndims: int, domain: PISOtorch.Domain, prep_fn: dict[str, Any]
-) -> None:
+def set_dynamic_forcing(ndims: int, domain: _C.Domain, hooks: Hooks) -> None:
     """Set up dynamic forcing based on wall shear stress.
 
     Parameters
@@ -135,11 +127,11 @@ def set_dynamic_forcing(
     ndims: int
         Number of spatial dimensions (2 or 3).
 
-    domain: PISOtorch.Domain
-        The PISOtorch domain object.
+    domain: _C.Domain
+        The phipict domain object.
 
-    prep_fn: dict[str, Any]
-        The preparation function dictionary to which the forcing function will be added.
+    hooks: Hooks
+        The simulation hooks the forcing function is added to.
     """
     pos_y = torch.mean(domain.getBlock(0).getCellCoordinates()[0, 1], dim=(0, 2))
     d_y = (1 + pos_y[0].cpu().numpy(), 1 - pos_y[-1].cpu().numpy())
@@ -148,19 +140,22 @@ def set_dynamic_forcing(
         block = domain.getBlock(0)
         viscosity = domain.viscosity.to(domain.getDevice())
 
-        mean_vel_u = torch.mean(block.velocity[0, 0], dim=(0, 2))
-        tau_wall_n = viscosity * mean_vel_u[0] / d_y[0]
-        tau_wall_p = viscosity * mean_vel_u[-1] / d_y[-1]
+        # per environment: plane-averaged u_x at every y, [E, ny]
+        mean_vel_u = torch.mean(block.velocity[:, 0], dim=(1, 3))
+        tau_wall_n = viscosity * mean_vel_u[:, 0] / d_y[0]
+        tau_wall_p = viscosity * mean_vel_u[:, -1] / d_y[-1]
 
         forcing = (tau_wall_n + tau_wall_p) * 0.5
-        G = torch.tensor(
-            [[forcing] + [0] * (ndims - 1)],
+        # NC, one static velocity source per environment
+        G = torch.zeros(
+            (forcing.size(0), ndims),
             dtype=domain.getDtype(),
             device=domain.getDevice(),
-        )  # NC, static velocity source
+        )
+        G[:, 0] = forcing
         block.setVelocitySource(G)
 
-    PISOtorch_simulation.append_prep_fn(prep_fn, "PRE", pfn_set_forcing)
+    hooks.append(Hook.PRE, pfn_set_forcing)
 
 
 def make_channel_flow_domain(
@@ -227,7 +222,7 @@ def make_channel_flow_domain(
     vel_init = None
 
     # create domain
-    domain = PISOtorch.Domain(
+    domain = _C.Domain(
         n_dims,
         viscosity,
         passiveScalarChannels=0,
@@ -250,9 +245,7 @@ def make_channel_flow_domain(
     )
 
     if init_with_noise:
-        from fluidgym.simulation.extensions import (
-            SimplexNoiseVariations,  # type: ignore[import-untyped,import-not-found]
-        )
+        from phipict import _noise as SimplexNoiseVariations
 
         curl_noise = SimplexNoiseVariations.GenerateSimplexNoiseVariation(
             [x, y, z],
@@ -263,7 +256,10 @@ def make_channel_flow_domain(
         )
         curl_mag = torch.linalg.vector_norm(curl_noise, dim=1)
         curl_mag_max = torch.max(curl_mag)
-        curl_noise *= 0.5 * vel_init / curl_mag_max
+        # Scale every noise component with the streamwise profile, so the
+        # perturbation vanishes at the walls; scaling by vel_init itself would
+        # zero the wall-normal and spanwise noise, whose base flow is zero
+        curl_noise *= 0.5 * vel_init[:, :1] / curl_mag_max
         vel_init += curl_noise
 
     vel_init = vel_init.to(dtype).contiguous()

@@ -1,4 +1,4 @@
-"""StableBaselines3 VecEnv interface for MultiAgentFluidEnv environments."""
+"""StableBaselines3 VecEnv interface for vectorized and multi-agent fluid envs."""
 
 from pathlib import Path
 from typing import Any, cast
@@ -14,36 +14,88 @@ from fluidgym.types import FluidEnvLike
 
 
 class VecFluidEnv(SB3VecEnv):
-    """The stable-baselines3 VecEnv interface for MARL fluid environments."""
+    """The stable-baselines3 VecEnv interface for vectorized and MARL fluid envs.
+
+    Every agent of every environment is one SB3 environment: ``num_envs`` is
+    ``n_envs * n_agents``, ordered environment-major (all agents of environment 0
+    first). A vectorized single-agent environment has one SB3 environment per
+    environment, a single MARL environment one per agent (as before).
+
+    Parameters
+    ----------
+    env: FluidEnvLike
+        A vectorized (``n_envs`` given) or multi-agent environment.
+
+    auto_reset: bool
+        Whether to reset all environments when their shared episode ends.
+        Defaults to True.
+    """
 
     metadata = {"render_modes": ["rbg_array"]}
 
     def __init__(self, env: FluidEnvLike, auto_reset: bool = True):
         self.__env = env
-        self.__agents = list(range(env.n_agents))
         self.__auto_reset = auto_reset
 
-        if not env.use_marl or env.n_agents <= 1:
+        self.__vectorized = bool(getattr(env, "vectorized", False))
+        self.__n_envs = int(getattr(env, "n_envs", 1))
+        self.__n_agents = env.n_agents if env.use_marl else 1
+        # the layout the env acts in: [E?, A?, *action_shape]
+        self.__lead_shape = ((self.__n_envs,) if self.__vectorized else ()) + (
+            (self.__n_agents,) if env.use_marl else ()
+        )
+
+        if not self.__vectorized and (not env.use_marl or env.n_agents <= 1):
             raise ValueError(
-                "MultiAgentVecEnv can only be used with MARL fluid "
-                "environments with multiple agents."
+                "VecFluidEnv can only be used with vectorized fluid environments "
+                "(n_envs given) or MARL fluid environments with multiple agents. "
+                "Wrap a single environment with GymFluidEnv instead."
             )
 
         self.observations = None
         super().__init__(
-            num_envs=len(self.__agents),
+            num_envs=self.__n_envs * self.__n_agents,
             observation_space=env.observation_space,
             action_space=env.action_space,
         )
 
     def __to_np(self, data: torch.Tensor) -> np.ndarray:
-        return data.detach().cpu().numpy()
+        # [E?, A?, ...] -> [E * A, ...]
+        lead = len(self.__lead_shape)
+        return data.detach().reshape(-1, *data.shape[lead:]).cpu().numpy()
 
     def __to_np_dict(self, data: dict[str, torch.Tensor]) -> dict[str, np.ndarray]:
-        return {key: value.detach().cpu().numpy() for key, value in data.items()}
+        return {key: self.__to_np(value) for key, value in data.items()}
+
+    def __per_sb3_env(self, flags: Any) -> np.ndarray:
+        """Per-environment (or shared) flags, one per SB3 environment."""
+        flags_np = np.asarray(
+            flags.cpu().numpy() if torch.is_tensor(flags) else flags, dtype=bool
+        ).reshape(-1)
+        return np.broadcast_to(
+            flags_np.reshape(-1, 1), (self.__n_envs, self.__n_agents)
+        ).reshape(-1)
+
+    def __infos(self, info: dict[str, torch.Tensor]) -> list[dict[str, Any]]:
+        """The info of every SB3 environment: that of its environment."""
+        infos = []
+        for env_idx in range(self.__n_envs):
+            env_info = {
+                key: (value[env_idx] if self.__vectorized else value)
+                .detach()
+                .cpu()
+                .numpy()
+                for key, value in info.items()
+            }
+            # one dict per agent: auto-reset writes per-agent entries into it
+            infos += [dict(env_info) for _ in range(self.__n_agents)]
+        return infos
 
     def reset(
-        self, seed: int | None = None, randomize: bool | None = None
+        self,
+        seed: int | None = None,
+        randomize: bool | None = None,
+        domain_idx: int | list[int] | None = None,
     ) -> np.ndarray | dict[str, np.ndarray]:
         """Reset the environment and return initial observations for all agents.
 
@@ -56,12 +108,18 @@ class VecFluidEnv(SB3VecEnv):
             Whether to randomize the initial state. If None, the default behavior is
             used. Defaults to None.
 
+        domain_idx: int | list[int] | None
+            Index of the initial domain to load, one for all environments or one per
+            environment. If None, the default behavior is used. Defaults to None.
+
         Returns
         -------
         np.ndarray | dict[str, np.ndarray]:
-            The initial observations for all agents.
+            The initial observations for all agents, ``[num_envs, ...]``.
         """
-        local_obs, _ = self.__env.reset(seed=seed, randomize=randomize)
+        local_obs, _ = self.__env.reset(
+            seed=seed, randomize=randomize, domain_idx=domain_idx
+        )
         if isinstance(local_obs, dict):
             return self.__to_np_dict(local_obs)
         else:
@@ -75,7 +133,7 @@ class VecFluidEnv(SB3VecEnv):
         Parameters
         ----------
         actions: np.ndarray
-            The actions to take for all agents.
+            The actions to take for all agents, ``[num_envs, ...]``.
 
         Note
         ----
@@ -85,9 +143,7 @@ class VecFluidEnv(SB3VecEnv):
         self._actions = torch.as_tensor(
             actions,
             device=self.__env.cuda_device,
-        )
-        if self._actions.ndim > 2:
-            self._actions = self._actions.unsqueeze(-1)
+        ).reshape(*self.__lead_shape, *(self.action_space.shape or ()))
 
     def step_wait(
         self,
@@ -109,17 +165,14 @@ class VecFluidEnv(SB3VecEnv):
             local_obs_np = self.__to_np_dict(local_obs)
         else:
             local_obs_np = self.__to_np(local_obs)
-        rewards = self.__to_np(agent_rewards)
+        rewards = agent_rewards.detach().reshape(-1).cpu().numpy()
 
-        done = term or trunc
-        dones = np.full(len(self.__agents), done, dtype=bool)
+        dones = self.__per_sb3_env(term) | self.__per_sb3_env(trunc)
+        infos = self.__infos(info)
 
-        info_np: dict[str, Any] = self.__to_np_dict(info)
-        infos = [info_np for _ in self.__agents]
-
-        # Auto-reset
-        if done and self.__auto_reset:
-            for i in range(len(self.__agents)):
+        # Auto-reset: all environments share the episode, so they are done together
+        if bool(dones.all()) and self.__auto_reset:
+            for i in range(self.num_envs):
                 if isinstance(local_obs_np, dict):
                     infos[i]["terminated_observation"] = {
                         key: local_obs_np[key][i] for key in local_obs_np.keys()
@@ -146,7 +199,7 @@ class VecFluidEnv(SB3VecEnv):
         list[Any]
             A list of attribute values for each environment.
         """
-        return [getattr(self.__env, attr_name)] * len(self.__agents)
+        return [getattr(self.__env, attr_name)] * self.num_envs
 
     def set_attr(
         self, attr_name: str, value: Any, indices: VecEnvIndices = None
@@ -186,7 +239,7 @@ class VecFluidEnv(SB3VecEnv):
             A list of booleans indicating whether each environment is wrapped with the
             specified wrapper class. This always returns False.
         """
-        return [False] * len(self.__agents)
+        return [False] * self.num_envs
 
     def render(  # type: ignore[override]
         self,
@@ -195,6 +248,7 @@ class VecFluidEnv(SB3VecEnv):
         render_3d: bool = False,
         filename: str | None = None,
         output_path: Path | None = None,
+        env_ids: int | list[int] | None = None,
     ) -> np.ndarray:
         """Render the current state of the environment. For compatibility, this method
         returns the rendered frame as a numpy array in addition to the usual rendering
@@ -213,28 +267,35 @@ class VecFluidEnv(SB3VecEnv):
             Whether to enable 3d rendering. Defaults to False.
 
         filename: str | None
-            The filename to save the GIF file. If None, a default name is used.
+            The filename of the saved PNG files. If None, a default name is used.
             Defaults to None.
 
         output_path: Path | None
             The output path to save the rendered files. If None, saves to the current
             directory. Defaults to None.
 
+        env_ids: int | list[int] | None
+            The environments of a vectorized environment to render (all if None).
+            Defaults to None.
+
         Returns
         -------
         np.ndarray
-            The rendered frame as a numpy array.
+            The rendered frame ``[H, W, 3]``, or ``[N, H, W, 3]`` for several
+            environments of a vectorized environment.
         """
+        kwargs: dict[str, Any] = {} if env_ids is None else {"env_ids": env_ids}
         return self.__env.render(
             save=save,
             render_3d=render_3d,
             filename=filename,
             output_path=output_path,
+            **kwargs,
         )
 
     def close(self) -> None:
         """Close the environment."""
-        pass
+        self.__env.close()
 
     def env_method(
         self,
@@ -282,20 +343,6 @@ class VecFluidEnv(SB3VecEnv):
         """Set the environment to test mode."""
         self.__env.test()
 
-    def save_gif(self, filename: str, output_path: Path | None = None) -> None:
-        """Save the rendered frames as a GIF file.
-
-        Parameters
-        ----------
-        filename: str
-            The name of the file to save the GIF to.
-
-        output_path: Path | None
-            The output path to save the GIF file. If None, saves to the current
-            directory. Defaults to None.
-        """
-        self.__env.save_gif(filename=filename, output_path=output_path)
-
     def seed(self, seed: int) -> None:  # type: ignore[override]
         """Update the random seeds and seed the random number generators.
 
@@ -308,5 +355,5 @@ class VecFluidEnv(SB3VecEnv):
 
     @property
     def num_actions(self) -> int:
-        """Return the number of agents (actions) in the environment."""
+        """Return the number of agents (actions) of one environment."""
         return self.__env.n_agents

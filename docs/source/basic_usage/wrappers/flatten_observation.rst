@@ -14,7 +14,7 @@ match the old observation format.
 FluidGym wrappers can be used by importing them from the ``fluidgym.wrappers`` module
 and wrapping the environment instance.
 
-Here is a simple example from ``examples/wrappers/flatten_observation.py``:
+Here is a simple example from ``examples/basic_usage/wrappers/flatten_observation.py``:
 
 .. code-block:: python
 

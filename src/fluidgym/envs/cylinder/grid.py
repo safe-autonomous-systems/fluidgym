@@ -1,18 +1,17 @@
 """Grid generation for the cylinder vortex street environment."""
 
 import logging
+from typing import cast
 
 import numpy as np
 import torch
+from phipict import _C
+from phipict.grid import shapes
+from phipict.io.output import plot_grids
 
-import fluidgym.simulation.pict.data.shapes as shapes
 from fluidgym.envs.util.profiles import get_inflow_profile
-from fluidgym.simulation.extensions import (
-    PISOtorch,  # type: ignore[import-untyped,import-not-found]
-)
-from fluidgym.simulation.pict.util.output import plot_grids
 
-logger = logging.getLogger("env.cylinder.grid")
+logger = logging.getLogger("fluidgym.envs.cylinder.grid")
 
 
 def make_vortex_street_domain(
@@ -30,8 +29,8 @@ def make_vortex_street_domain(
     cuda_device: torch.device,
     dtype: torch.dtype = torch.float32,
     debug: bool = False,
-) -> PISOtorch.Domain:
-    """Create a PISOtorch Domain for the cylinder vortex street environment.
+) -> _C.Domain:
+    """Create a phipict Domain for the cylinder vortex street environment.
 
     Parameters
     ----------
@@ -79,8 +78,8 @@ def make_vortex_street_domain(
 
     Returns
     -------
-    PISOtorch.Domain
-        The created PISOtorch Domain for the simulation.
+    _C.Domain
+        The created phipict Domain for the simulation.
     """
     res_z = circle_resolution_angular
 
@@ -297,7 +296,7 @@ def make_vortex_street_domain(
             vortex_street_cords,
         ] = [shapes.extrude_grid_z(g, res_z=res_z, start_z=-2, end_z=2) for g in grids]
 
-    domain = PISOtorch.Domain(
+    domain = _C.Domain(
         ndims,
         viscosity,
         name="CylinderDomain",
@@ -320,7 +319,7 @@ def make_vortex_street_domain(
         name="BlockCylinderLeft",
     )
     cylinder_left_block.CloseBoundary("-x")  # Inflow
-    cylinder_left_block.getBoundary("-x").setVelocity(inflow)
+    cast(_C.FixedBoundary, cylinder_left_block.getBoundary("-x")).setVelocity(inflow)
     cylinder_left_block.CloseBoundary("+x")  # Cylinder
 
     cylinder_top_block = domain.CreateBlock(
@@ -351,8 +350,10 @@ def make_vortex_street_domain(
     vortex_street_block.CloseBoundary("-y")  # Wall
     vortex_street_block.CloseBoundary("+x")
 
-    vortex_street_block.getBoundary("+x").setVelocity(inflow)  # Outflow
-    vortex_street_block.getBoundary("+x").makeVelocityVarying()
+    cast(_C.FixedBoundary, vortex_street_block.getBoundary("+x")).setVelocity(
+        inflow
+    )  # Outflow
+    cast(_C.FixedBoundary, vortex_street_block.getBoundary("+x")).makeVelocityVarying()
 
     if ndims == 3:
         cylinder_left_block.MakePeriodic("z")
@@ -371,13 +372,13 @@ def make_vortex_street_domain(
     # same direction, 1 for inverted)
     #
     # Using block.ConnectBlock(faceIndex, otherBlock, otherFaceIndex, axis1Index,
-    # axis2Index), faceIndex of block is connected to otherFaceIndex of otherBlock.
+    # axis2Index), faceIndex of block is connected to otherFaceIndex of otherBlock
     # For 2D and 3D, the remaining axes are also mapped:
     #   faceIndex connects to otherFaceIndex
-    #   axis[(faceIndex / 2 + 1)%ndims] of block is aligned to axis1Index of otherBlock.
-    # The connection is inverted if axis1Index%2==1.
-    #   axis[(faceIndex / 2 + 2)%ndims] of block is aligned to axis2Index of otherBlock.
-    # The connection is inverted if axis2Index%2==1.
+    #   axis[(faceIndex / 2 + 1)%ndims] of block is aligned to axis1Index of otherBlock
+    # The connection is inverted if axis1Index%2==1
+    #   axis[(faceIndex / 2 + 2)%ndims] of block is aligned to axis2Index of otherBlock
+    # The connection is inverted if axis2Index%2==1
     # --------------------------------------------------------------------------------
     if ndims == 2:
         # The last argument (axis2Index) can be omitted for 2D

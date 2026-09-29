@@ -1,5 +1,6 @@
 """A base wrapper class for FluidEnv environments."""
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Generic, cast
 
@@ -25,7 +26,7 @@ class FluidWrapper(FluidEnvLike, Generic[EnvT]):  # type: ignore[misc]
         self._env = env
 
     def __getattr__(self, name: str) -> Any:
-        # Only called if normal attribute lookup fails on self.
+        # Only called if normal attribute lookup fails on self
         return getattr(self._env, name)
 
     @property
@@ -66,6 +67,21 @@ class FluidWrapper(FluidEnvLike, Generic[EnvT]):  # type: ignore[misc]
         """Whether the environment is differentiable."""
         return self._env.differentiable
 
+    @property
+    def n_envs(self) -> int:
+        """Number of environments simulated together (1 for a single one)."""
+        return getattr(self._env, "n_envs", 1)
+
+    @property
+    def num_envs(self) -> int:
+        """Alias of :attr:`n_envs`, the name vectorized-env libraries use."""
+        return self.n_envs
+
+    @property
+    def vectorized(self) -> bool:
+        """Whether the API carries a leading env dim."""
+        return getattr(self._env, "vectorized", False)
+
     def train(self) -> None:
         """Set the environment to training mode."""
         self._env.train()
@@ -91,7 +107,11 @@ class FluidWrapper(FluidEnvLike, Generic[EnvT]):  # type: ignore[misc]
     def step(
         self, action: torch.Tensor
     ) -> tuple[
-        dict[str, torch.Tensor], torch.Tensor, bool, bool, dict[str, torch.Tensor]
+        dict[str, torch.Tensor],
+        torch.Tensor,
+        bool | torch.Tensor,
+        bool | torch.Tensor,
+        dict[str, torch.Tensor],
     ]:
         """Run one timestep of the environment's dynamics using the agent actions.
 
@@ -127,6 +147,7 @@ class FluidWrapper(FluidEnvLike, Generic[EnvT]):  # type: ignore[misc]
         self,
         seed: int | None = None,
         randomize: bool | None = None,
+        domain_idx: int | Sequence[int] | None = None,
     ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         """Resets the environment to an initial internal state, returning an initial
         observation and info.
@@ -141,12 +162,17 @@ class FluidWrapper(FluidEnvLike, Generic[EnvT]):  # type: ignore[misc]
             Whether to randomize the initial state. If None, the default behavior is
             used.
 
+        domain_idx: int | Sequence[int] | None
+            Index of the initial domain to load, one for all environments or one per
+            environment of a vectorized environment. If None, the default behavior
+            is used. Defaults to None.
+
         Returns
         -------
         tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]
             A tuple containing the initial observation and an info dictionary.
         """
-        return self._env.reset(seed=seed, randomize=randomize)
+        return self._env.reset(seed=seed, randomize=randomize, domain_idx=domain_idx)
 
     def render(
         self,
@@ -154,6 +180,7 @@ class FluidWrapper(FluidEnvLike, Generic[EnvT]):  # type: ignore[misc]
         render_3d: bool = False,
         filename: str | None = None,
         output_path: Path | None = None,
+        env_ids: int | Sequence[int] | None = None,
     ) -> np.ndarray:
         """Render the current state of the environment.
 
@@ -166,38 +193,32 @@ class FluidWrapper(FluidEnvLike, Generic[EnvT]):  # type: ignore[misc]
             Whether to enable 3d rendering. Defaults to False.
 
         filename: str | None
-            The filename to save the GIF file. If None, a default name is used.
+            The filename of the saved PNG files. If None, a default name is used.
             Defaults to None.
 
         output_path: Path | None
             The output path to save the rendered files. If None, saves to the current
             directory. Defaults to None.
 
+        env_ids: int | Sequence[int] | None
+            The environments of a vectorized environment to render, see
+            :meth:`FluidEnv.render`. Defaults to None (all).
+
         Returns
         -------
         np.ndarray
-            The rendered frame as a numpy array.
+            The rendered frame ``[H, W, 3]``, or the frames ``[N, H, W, 3]`` of
+            several environments of a vectorized environment.
         """
+        # only forwarded when given, so wrapped envs without it keep working
+        kwargs: dict[str, Any] = {} if env_ids is None else {"env_ids": env_ids}
         return self._env.render(
             save=save,
             render_3d=render_3d,
             filename=filename,
             output_path=output_path,
+            **kwargs,
         )
-
-    def save_gif(self, filename: str, output_path: Path | None = None) -> None:
-        """Save the rendered frames as a GIF file.
-
-        Parameters
-        ----------
-        filename: str
-            The filename for the GIF file.
-
-        output_path: Path | None
-            The output path to save the GIF file. If None, saves to the current
-            directory. Defaults to None.
-        """
-        self._env.save_gif(filename=filename, output_path=output_path)
 
     def load_initial_domain(self, idx: int, mode: EnvMode | None = None) -> None:
         """Public method to load the initial domain from disk
@@ -214,7 +235,9 @@ class FluidWrapper(FluidEnvLike, Generic[EnvT]):  # type: ignore[misc]
         """
         self._env.load_initial_domain(idx=idx, mode=mode)
 
-    def get_uncontrolled_episode_metrics(self) -> pd.DataFrame | None:
+    def get_uncontrolled_episode_metrics(
+        self,
+    ) -> pd.DataFrame | list[pd.DataFrame | None] | None:
         """Get the uncontrolled episode metrics for the current domain.
 
         Note: This method returns the metrics for the currently loaded
@@ -231,6 +254,10 @@ class FluidWrapper(FluidEnvLike, Generic[EnvT]):  # type: ignore[misc]
     def detach(self) -> None:
         """Detach all tensors in the simulation from the computation graph."""
         self._env.detach()
+
+    def close(self) -> None:
+        """Release the resources held by the environment."""
+        self._env.close()
 
     @property
     def action_space(self) -> spaces.Box:

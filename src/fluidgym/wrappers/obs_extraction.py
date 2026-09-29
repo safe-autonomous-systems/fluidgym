@@ -1,5 +1,7 @@
 """A wrapper that extracts specific observations from the observation dictionary."""
 
+from collections.abc import Sequence
+
 import torch
 from gymnasium import spaces
 
@@ -54,6 +56,7 @@ class ObsExtraction(FluidWrapper):
         self,
         seed: int | None = None,
         randomize: bool | None = None,
+        domain_idx: int | Sequence[int] | None = None,
     ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         """Resets the environment to an initial internal state, returning an initial
         observation and info.
@@ -68,12 +71,19 @@ class ObsExtraction(FluidWrapper):
             Whether to randomize the initial state. If None, the default behavior is
             used.
 
+        domain_idx: int | Sequence[int] | None
+            Index of the initial domain to load, one for all environments or one per
+            environment of a vectorized environment. If None, the default behavior
+            is used. Defaults to None.
+
         Returns
         -------
         tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]
             A tuple containing the initial observation and an info dictionary.
         """
-        obs, info = self._env.reset(seed=seed, randomize=randomize)
+        obs, info = self._env.reset(
+            seed=seed, randomize=randomize, domain_idx=domain_idx
+        )
         obs = self.__filter_obs(obs)
 
         return obs, info
@@ -81,7 +91,11 @@ class ObsExtraction(FluidWrapper):
     def step(
         self, action: torch.Tensor
     ) -> tuple[
-        dict[str, torch.Tensor], torch.Tensor, bool, bool, dict[str, torch.Tensor]
+        dict[str, torch.Tensor],
+        torch.Tensor,
+        bool | torch.Tensor,
+        bool | torch.Tensor,
+        dict[str, torch.Tensor],
     ]:
         """Run one timestep of the environment's dynamics using the agent actions.
 

@@ -1,0 +1,101 @@
+name: Docs
+
+# Manual only (Actions -> Docs -> Run workflow). Builds the Sphinx docs of the
+# selected branch/tag; with `deploy`, publishes the site to the gh-pages branch
+# (GitHub Pages source: gh-pages / root): the landing page (docs/landing_page)
+# at the root and the docs under docs/.
+#
+# No GPU build is needed: conf.py mocks phipict for the import of fluidgym and
+# for autodoc.
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Publish to GitHub Pages (gh-pages branch)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # hatch-vcs derives the version from the tags
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          activate-environment: true
+      # CPU torch is enough to import the package for autodoc
+      - run: uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+      # Dependencies from pyproject.toml without phipict (mocked, see conf.py)
+      - name: Install dependencies
+        run: |
+          python - > docs-requirements.txt <<'EOF'
+          import tomllib
+          with open("pyproject.toml", "rb") as f:
+              project = tomllib.load(f)
+          reqs = project["project"]["dependencies"] + project["dependency-groups"]["docs"]
+          print("\n".join(r for r in reqs if not r.startswith("phipict")))
+          EOF
+          cat docs-requirements.txt
+          uv pip install -r docs-requirements.txt
+          uv pip install --no-deps -e .
+      - run: make -C docs html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs-html
+          path: docs/build/html
+          retention-days: 7
+
+  deploy:
+    if: inputs.deploy
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: gh-pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check out gh-pages
+        run: |
+          if git ls-remote --exit-code --heads origin gh-pages; then
+            git fetch origin gh-pages
+            git worktree add pages origin/gh-pages
+          else
+            git worktree add --orphan -b gh-pages pages
+          fi
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: docs-html
+          path: html
+
+      - name: Assemble the site
+        run: |
+          find pages -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -r docs/landing_page/. pages/
+          rm -f pages/README.md
+          cp -r html pages/docs
+          touch pages/.nojekyll
+
+      - name: Push
+        working-directory: pages
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Site unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update documentation (${GITHUB_REF_NAME}@${GITHUB_SHA::7})"
+          git push origin HEAD:gh-pages

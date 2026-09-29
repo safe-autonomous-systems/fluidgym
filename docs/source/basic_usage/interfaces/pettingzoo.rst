@@ -7,7 +7,7 @@ allowing seamless integration with various RL libraries that support Pettingzoo.
 To use a FluidGym environment with Pettingzoo, you can create an instance of the desired
 environment using the ``make`` function from FluidGym and the ``PettingZooFluidEnv`` wrapper.
 
-Here is a simple example from ``examples/interfaces/pettingzoo.py``:
+Here is a simple example from ``examples/basic_usage/interfaces/pettingzoo_env.py``:
 
 .. code-block:: python
     

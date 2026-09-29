@@ -5,6 +5,7 @@ Advanced Usage
    :maxdepth: 2
    
    parallelization
+   differentiable
    custom_environments
    configuration
 

@@ -1,8 +1,8 @@
 <p align="center">
-    <a href="./docs/images/logo_lm.png#gh-light-mode-only">
+    <a href="./docs/source/_static/img/logo_lm.png#gh-light-mode-only">
         <img src="./docs/source/_static/img/logo_lm.png#gh-light-mode-only" alt="FluidGym Logo" width="50%"/>
     </a>
-    <a href="./docs/images/logo_dm.png#gh-dark-mode-only">
+    <a href="./docs/source/_static/img/logo_dm.png#gh-dark-mode-only">
         <img src="./docs/source/_static/img/logo_dm.png#gh-dark-mode-only" alt="FluidGym Logo" width="50%"/>
     </a>
 </p>
@@ -28,7 +28,7 @@
 
 [![PyPI version](https://badge.fury.io/py/fluidgym.svg)](https://badge.fury.io/py/fluidgym)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/fluidgym)
-![PyTorch](https://img.shields.io/badge/PyTorch-2.9-EE4C2C?logo=pytorch&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.10-EE4C2C?logo=pytorch&logoColor=white)
 ![CUDA](https://img.shields.io/badge/CUDA-12.8-%2376B900)
 ![License](https://img.shields.io/badge/License-MIT-orange)
 [![Linters](https://github.com/safe-autonomous-systems/fluidgym/actions/workflows/linters.yml/badge.svg?branch=main)](https://github.com/safe-autonomous-systems/fluidgym/actions/workflows/linters.yml)
@@ -101,18 +101,21 @@ encounter any issues, please report these via an Issue on GitHub. Thank you!
 
 ## Installation
 
-### 📦 Installation from PyPi
+### 📦 Installation from PyPI
 
-1. Ensure the correct PyTorch version is installed (compatible with CUDA 12.8):
-```bash
-pip install torch --index-url https://download.pytorch.org/whl/cu128
-```
-
-2. Install 
+FluidGym needs Linux, an NVIDIA GPU with a driver for CUDA 12.8 (≥ 570) and
+Python 3.11–3.13.
 
 ```bash
 pip install fluidgym
 ```
+
+This also installs the solver [phiPICT](https://github.com/safe-autonomous-systems/phiPICT)
+together with the matching PyTorch (2.10, built with CUDA 12.8). There is no need
+to install PyTorch first: phiPICT's compiled extension only works with the PyTorch
+version it was built against, so pip replaces any other version. For other
+PyTorch/CUDA versions, install a matching phiPICT build first, see its
+[installation docs](https://safe-autonomous-systems.github.io/phiPICT/installation.html).
 
 ### 🐳 Using Docker
 
@@ -135,31 +138,21 @@ docker run -it --gpus all fluidgym-devel bash
 
 ### 🧱 Build from Source
 
+FluidGym itself is pure Python; the CUDA solver comes with phiPICT from PyPI.
+
 1. Create a new conda environment and activate it:
 ```bash
-conda create -n fluidgym python=3.10
+conda create -n fluidgym python=3.12
 conda activate fluidgym
 ```
 
-2. Install gcc:
+2. Clone the repository, enter the directory and install the package:
 ```bash
-conda install pip "gcc_linux-64>=6.0,<=11.5" "gxx_linux-64>=6.0,<=11.5"
+pip install .
 ```
 
-3. Install the latest PyTorch for CUDA 12.8 via pip:
-```bash
-pip install torch --index-url https://download.pytorch.org/whl/cu128
-```
-
-4. Install the matching CUDA toolkit via conda:
-```bash
-conda install cuda-toolkit=12.8 -c nvidia/label/cuda-12.8.1
-```
-
-5. Clone the repository and enter the directory, then compile the custom CUDA kernels and install the package (this might take several minutes):
-```bash
-make install
-```
+For development, use `make install-dev` instead, which installs the package in
+editable mode together with the development dependencies (needs pip ≥ 25.1).
 
 ## Getting Started
 

@@ -1,5 +1,4 @@
 SRC_DIR=src/fluidgym
-PICT_DIR=src/fluidgym/simulation/pict
 EXAMPLES_DIR=examples
 TEST_DIR=tests
 
@@ -10,26 +9,24 @@ MAKE ?= make
 RUFF ?= ruff
 MYPY ?= mypy
 PRECOMMIT ?= pre-commit
+UV ?= uv
 
 .PHONY: check-ruff
 check-ruff:
 	$(RUFF) check ${SRC_DIR} --fix || :
 	$(RUFF) check ${EXAMPLES_DIR} --fix || :
-	$(RUFF) check ${TESTS_DIR} --fix || :
+	$(RUFF) check ${TEST_DIR} --fix || :
 
 .PHONY: check-mypy
 check-mypy:
-	$(MYPY) ${SRC_DIR} --exclude "${PICT_DIR}/*" || :
+	$(MYPY) ${SRC_DIR} || :
 
-check: check-ruff check-mypy 
+check: check-ruff check-mypy
 
+# Deployed to GitHub Pages by the Docs workflow (Actions -> Docs)
 .PHONY: docs
 docs:
-	cd docs && $(MAKE) docs && cd ..
-
-.PHONY: upload-docs
-upload-docs: docs
-	ghp-import -n -p -f docs/build/html
+	cd docs && $(MAKE) html && cd ..
 
 .PHONY: pre-commit
 pre-commit:
@@ -44,34 +41,21 @@ test:
 	$(PYTEST) $(TEST_DIR)
 
 .PHONY: install
-install: clean build
-	$(PIP) install dist/fluidgym-*.whl
+install:
+	$(PIP) install .
 
 .PHONY: install-dev
+# phipict (the CUDA solver) must be installed first, see
+# https://github.com/safe-autonomous-systems/phiPICT
 install-dev:
-	FLUIDGYM_BUILD_NOISE_EXT=1 \
-	MAX_JOBS=1 \
-	TORCH_CUDA_ARCH_LIST="8.0;8.6;9.0+PTX" \
-	PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cu128 \
-	$(PIP) install -e ".[dev]"
+	$(PIP) install --group dev -e .
 
 .PHONY: clean
 clean:
-	rm -rf build dist __pycache__ src/*.egg-info
-	rm -rf $(SRC_DIR)/**/*.pyc $(SRC_DIR)/**/*.pyo
-	rm -rf $(TEST_DIR)/**/*.pyc $(TEST_DIR)/**/*.pyo
-	rm -rf docs/_build
-
+	rm -rf build dist .pytest_cache
+	find $(SRC_DIR) $(TEST_DIR) -name __pycache__ -prune -exec rm -rf {} +
+	rm -rf docs/build
 
 .PHONY: build
 build: clean
-	MAX_JOBS=1 \
-	TORCH_CUDA_ARCH_LIST="8.0;8.6;9.0+PTX" \
-	$(PYTHON) -m pip wheel . -w dist --no-build-isolation --no-deps
-
-.PHONY: build-manylinux
-build-manylinux: clean
-	@CIBW_MANYLINUX_X86_64=manylinux2014 \
-	CIBW_ENVIRONMENT='PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cu128 TORCH_CUDA_ARCH_LIST="8.0;8.6;9.0+PTX"' \
-	CIBW_REPAIR_WHEEL_COMMAND='auditwheel repair -w {dest_dir} {wheel} --exclude "libtorch*" --exclude "libc10*"' \
-	cibuildwheel --output-dir dist .
+	$(UV) build

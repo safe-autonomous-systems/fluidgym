@@ -14,18 +14,19 @@ action spaces for actuator control.
 .. code-block:: python
 
     import fluidgym
+    from fluidgym.wrappers import VideoRecorder
 
     env = fluidgym.make("CylinderJet2D-easy-v0")
+    env = VideoRecorder(env, filename="cylinder")
     obs, info = env.reset(seed=42)
 
     for _ in range(50):
         action = env.sample_action()
         obs, reward, terminated, truncated, info = env.step(action)
-        env.render()
         if terminated or truncated:
             break
 
-    env.save_gif("cylinder.gif")
+    env.close()  # saves cylinder_ep1.gif
 
 Browse the sections below to learn about the available environments, how to plug
 FluidGym into common RL frameworks, the observation wrappers, and rendering options.

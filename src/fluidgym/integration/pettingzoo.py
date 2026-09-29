@@ -37,6 +37,12 @@ class PettingZooFluidEnv(ParallelEnv):
                 "PettingZooFluidEnv requires a multi-agent FluidGym environment."
             )
 
+        if getattr(env, "vectorized", False):
+            raise ValueError(
+                "PettingZooFluidEnv requires a single (non-vectorized) environment; "
+                "use TorchRLFluidEnv or the SB3 VecFluidEnv for vectorized MARL."
+            )
+
         if not isinstance(env.observation_space, Box):
             raise ValueError("PettingZooFluidEnv only supports Box observation spaces.")
 
@@ -167,7 +173,7 @@ class PettingZooFluidEnv(ParallelEnv):
             Whether to enable 3d rendering. Defaults to False.
 
         filename: str | None
-            The filename to save the GIF file. If None, a default name is used.
+            The filename of the saved PNG files. If None, a default name is used.
             Defaults to None.
 
         output_path: Path | None
@@ -187,8 +193,8 @@ class PettingZooFluidEnv(ParallelEnv):
         )
 
     def close(self):
-        """Closes the rendering window."""
-        pass
+        """Close the environment."""
+        self.__env.close()
 
     @property
     def unwrapped(self) -> FluidEnvLike:

@@ -3,16 +3,20 @@ FluidGym
 
 FluidGym environments natively support SARL and MARL using the same interface.
 
-Here is a simple example for SARL from ``examples/interfaces/fluidgym.py``:
+Here is a simple example for SARL from ``examples/basic_usage/interfaces/fluidgym_env.py``:
 
 .. code-block:: python
-    
+
     import fluidgym
+    from fluidgym.wrappers import VideoRecorder
 
     # Create a FluidGym environment
     env = fluidgym.make(
-        "CylinderJet2D-easy-v0",
+        "RBC2D-easy-v0",
     )
+
+    # Record every episode as gif, this renders a frame after every step
+    env = VideoRecorder(env, filename="rbc")
 
     # We need to pass a reset seed to ensure reproducibility
     obs, info = env.reset(seed=42)
@@ -22,17 +26,14 @@ Here is a simple example for SARL from ``examples/interfaces/fluidgym.py``:
         action = env.sample_action()
         obs, reward, terminated, truncated, info = env.step(action)
 
-        # For the gif, we need to render at each step
-        env.render()
-
         # Important: All FluidGym environments only set the
         # truncation flag to True since they do not naturally
         # terminate
         if terminated or truncated:
             break
 
-    # This will save a gif of the rendered environment
-    env.save_gif("cylinder.gif")
+    # Closing the environment saves the gif, e.g. as rbc_ep1.gif
+    env.close()
 
 
 For MARL, you need to set the ``use_marl=True`` flag when creating the environment.
@@ -43,10 +44,11 @@ MARL activated. Here is an example for MARL:
 .. code-block:: python
 
     import fluidgym
-    from fluidgym.integration.gymnasium import GymFluidEnv
+    from fluidgym.wrappers import VideoRecorder
 
     # Create a FluidGym environment, now it is a multi-agent environment
     env = fluidgym.make("CylinderJet3D-easy-v0", use_marl=True)
+    env = VideoRecorder(env, filename="cylinder")
 
     # All FluidGym environments require seeding for reproducibility
     env.seed(42)
@@ -63,12 +65,10 @@ MARL activated. Here is an example for MARL:
         obs, reward, term, trunc, info = env.step(action)
         print(f"Step {i}: Reward = {reward.detach().cpu().numpy()}")
 
-        env.render()
-
         # Important: All FluidGym environments only set the
         # truncation flag to True since they do not naturally
         # terminate
         if term or trunc:
             break
 
-    env.save_gif("cylinder.gif")
+    env.close()

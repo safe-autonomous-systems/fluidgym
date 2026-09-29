@@ -1,6 +1,9 @@
 """Environment for flow around a cylinder with rotating cylinder actuation."""
 
+from collections.abc import Mapping
+
 import torch
+from phipict.solvers.tolerance import SolverTolerance
 
 from fluidgym.envs.cylinder.cylinder_env_base import CylinderEnvBase
 
@@ -75,12 +78,57 @@ class CylinderRotEnv2D(CylinderEnvBase):
     differentiable: bool
         Whether to enable differentiable simulation mode. Defaults to False.
 
+    advection_tol: float | SolverTolerance | Mapping | None
+        Tolerance for the momentum and passive-scalar advection solves. None (the
+        default) keeps the tolerance this environment is tuned at.
+
+    pressure_tol: float | SolverTolerance | Mapping | None
+        Tolerance for the pressure solve. None (the default) keeps the tolerance
+        this environment is tuned at.
+
+    pressure_tol_intermediate: float | SolverTolerance | Mapping | None
+        Tolerance for the pressure solves before the final corrector. None (the
+        default) applies ``pressure_tol`` everywhere.
+
+    pressure_warm_start: bool
+        Whether to seed each pressure solve with the previous sub-step's result.
+        Defaults to False.
+
+    linear_solve_max_iter: int | None
+        Iteration limit for the advection and pressure solves. None (the default)
+        leaves the solver's own limit in place.
+
+    exclude_advection_solve_gradients: bool | None
+        Drop the gradient of the advection solve. Diagnostic only; None (the
+        default) keeps it.
+
+    exclude_pressure_solve_gradients: bool | None
+        Drop the gradient of the pressure solve. Diagnostic only; None (the
+        default) keeps it.
+
+    exclude_pressure_gradient_adjoint: bool | None
+        Drop the pressure path of the PISO velocity-correction backward.
+        Diagnostic only; None (the default) keeps it.
+
+
+    n_envs: int | None
+
+        Number of environments simulated together, see
+
+        :class:`~fluidgym.envs.fluid_env.FluidEnv`. None (the default) is a single
+
+        environment.
+
     References
     ----------
     [1] M. Tokarev, E. Palkin, and R. Mullyadzhanov, “Deep Reinforcement Learning
     Control of Cylinder Flow Using Rotary Oscillations at Low Reynolds Number,”
     Energies, vol. 13, no. 22, Art. no. 22, Jan. 2020, doi: 10.3390/en13225920.
     """
+
+    # No sub-step checkpoint segments: the 2D replay tape fits whole, so cutting
+    # the step only adds carries and seams (see ``FluidEnv.bptt_segment_size``)
+    _default_bptt_segment_size: int | None = None
 
     def __init__(
         self,
@@ -99,6 +147,17 @@ class CylinderRotEnv2D(CylinderEnvBase):
         randomize_initial_state: bool = True,
         enable_actions: bool = True,
         differentiable: bool = False,
+        advection_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol: float | SolverTolerance | Mapping[str, float] | None = None,
+        pressure_tol_intermediate: (
+            float | SolverTolerance | Mapping[str, float] | None
+        ) = None,
+        pressure_warm_start: bool = False,
+        linear_solve_max_iter: int | None = None,
+        exclude_advection_solve_gradients: bool | None = None,
+        exclude_pressure_solve_gradients: bool | None = None,
+        exclude_pressure_gradient_adjoint: bool | None = None,
+        n_envs: int | None = None,
     ):
         super().__init__(
             ndims=2,
@@ -117,6 +176,15 @@ class CylinderRotEnv2D(CylinderEnvBase):
             randomize_initial_state=randomize_initial_state,
             enable_actions=enable_actions,
             differentiable=differentiable,
+            advection_tol=advection_tol,
+            pressure_tol=pressure_tol,
+            pressure_tol_intermediate=pressure_tol_intermediate,
+            pressure_warm_start=pressure_warm_start,
+            linear_solve_max_iter=linear_solve_max_iter,
+            exclude_advection_solve_gradients=exclude_advection_solve_gradients,
+            exclude_pressure_solve_gradients=exclude_pressure_solve_gradients,
+            exclude_pressure_gradient_adjoint=exclude_pressure_gradient_adjoint,
+            n_envs=n_envs,
         )
 
     def _additional_initialization(self) -> None:
@@ -171,10 +239,14 @@ class CylinderRotEnv2D(CylinderEnvBase):
         action: torch.Tensor
             The action to apply, representing the rotation speed of the cylinder wall.
         """
-        self._left_boundary.setVelocity(self._left_velocity * action)
-        self._top_boundary.setVelocity(self._top_velocity * action)
-        self._right_boundary.setVelocity(self._right_velocity * action)
-        self._bottom_boundary.setVelocity(self._bottom_velocity * action)
+        # one rotation speed per environment
+        for boundary, velocity in (
+            (self._left_boundary, self._left_velocity),
+            (self._top_boundary, self._top_velocity),
+            (self._right_boundary, self._right_velocity),
+            (self._bottom_boundary, self._bottom_velocity),
+        ):
+            boundary.setVelocity(velocity * self._env_broadcast(action, velocity))
 
     @property
     def id(self) -> str:

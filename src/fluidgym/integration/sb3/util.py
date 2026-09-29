@@ -1,6 +1,7 @@
 """Utility functions for StableBaselines3 integration."""
 
 import logging
+import pickle
 from collections import defaultdict
 from pathlib import Path
 
@@ -8,10 +9,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.base_class import BaseAlgorithm
 
 from fluidgym.integration.gymnasium import GymFluidEnv
 from fluidgym.integration.sb3.vec_env import VecFluidEnv
+from fluidgym.util.video import save_gif
 
 logger = logging.getLogger("fluidgym.integration.sb3")
 
@@ -220,6 +223,7 @@ def evaluate_model(
     render_3d: bool = False,
     deterministic: bool = True,
     output_path: Path | None = None,
+    domain_idx: int | None = None,
 ) -> tuple[pd.DataFrame, dict[str, float]]:
     """Evaluate a trained model in the environment and collect metrics.
 
@@ -251,6 +255,10 @@ def evaluate_model(
         The path to save the evaluation data. If None, saves to the current directory.
         Defaults to None.
 
+    domain_idx: int | None
+        Index of the initial domain to evaluate on. If None, the environment picks
+        the domain itself. Defaults to None.
+
     Returns
     -------
     tuple[pd.DataFrame, dict[str, float]]
@@ -260,25 +268,34 @@ def evaluate_model(
     if output_path is None:
         output_path = Path(".")
 
+    if getattr(env.unwrapped, "vectorized", False):
+        raise ValueError(
+            "evaluate_model runs a single episode of a single environment; evaluate "
+            "with a non-vectorized environment (n_envs=None)."
+        )
+
     is_marl = isinstance(env, VecFluidEnv)
     done = False
     episode_rewards: list[np.ndarray] = []
     episode_metrics: dict[str, float] = defaultdict(float)
     action_sequence: list[np.ndarray] = []
     metric_sequence: dict[str, list[np.ndarray]] = defaultdict(list)
+    frames: list[np.ndarray] = []
 
-    obs = env.reset(randomize=randomize)
+    obs = env.reset(randomize=randomize, domain_idx=domain_idx)
     if isinstance(obs, tuple):
         obs = obs[0]
     assert isinstance(obs, np.ndarray)
 
     # Render initial frame
     if save_name is not None:
-        env.unwrapped.render(
-            save=save_frames,
-            render_3d=render_3d,
-            output_path=output_path,
-            filename=save_name + "_initial",
+        frames.append(
+            env.unwrapped.render(
+                save=save_frames,
+                render_3d=render_3d,
+                output_path=output_path,
+                filename=save_name + "_initial",
+            )
         )
 
     step = 0
@@ -295,11 +312,13 @@ def evaluate_model(
         action_sequence += [action.flatten()]
 
         if save_name is not None:
-            env.unwrapped.render(
-                save=False,
-                render_3d=render_3d,
-                output_path=output_path,
-                filename=save_name + f"_step_{step:04d}",
+            frames.append(
+                env.unwrapped.render(
+                    save=False,
+                    render_3d=render_3d,
+                    output_path=output_path,
+                    filename=save_name + f"_step_{step:04d}",
+                )
             )
 
         episode_rewards += [reward]
@@ -315,11 +334,13 @@ def evaluate_model(
 
     # Render final frame
     if save_name is not None:
-        env.unwrapped.render(
-            save=save_frames,
-            render_3d=render_3d,
-            output_path=output_path,
-            filename=save_name + "_final",
+        frames.append(
+            env.unwrapped.render(
+                save=save_frames,
+                render_3d=render_3d,
+                output_path=output_path,
+                filename=save_name + "_final",
+            )
         )
 
     episode_rewards_arr = np.array(episode_rewards)  # (steps, n_envs,)
@@ -339,8 +360,7 @@ def evaluate_model(
     )
 
     if save_name is not None:
-        gif_name = save_name + ".gif"
-        env.save_gif(gif_name, output_path=output_path)
+        save_gif(frames, output_path / f"{save_name}.gif")
 
         csv_name = save_name + ".csv"
         sequence_df.to_csv(output_path / csv_name, index=False)
@@ -402,6 +422,8 @@ def test_model(
     test_sequence_dfs.append(sequence_df)
 
     uncontrolled_test_df = test_env.unwrapped.get_uncontrolled_episode_metrics()
+    if isinstance(uncontrolled_test_df, list):
+        uncontrolled_test_df = uncontrolled_test_df[0] if uncontrolled_test_df else None
     plot_eval_sequence(
         env=test_env,
         uncontrolled_sequence_df=uncontrolled_test_df,
@@ -425,3 +447,37 @@ def test_model(
 
     all_test_sequences_df = pd.concat(test_sequence_dfs, ignore_index=True)
     all_test_sequences_df.to_csv(output_path / "test_eval_sequences.csv", index=False)
+
+
+def load_buffer(model: PPO | SAC, path: str = "ckpt_latest") -> None:
+    """Load the replay buffer or rollout buffer from a checkpoint if it exists.
+
+    Parameters
+    ----------
+    model: PPO | SAC
+        The model to load the buffer into.
+
+    path: str
+        Path to the model checkpoint (without extension).
+    """
+    if isinstance(model, SAC):
+        replay_buffer_path = Path(path + "_replay_buffer.pkl")
+        if not replay_buffer_path.exists():
+            # Checkpoints written before the buffer was saved alongside the model
+            # only hold the policy; training then resumes with an empty buffer
+            logger.warning(
+                f"{replay_buffer_path} does not exist, resuming with an empty "
+                "replay buffer."
+            )
+            return
+        model.load_replay_buffer(replay_buffer_path)
+    elif isinstance(model, PPO):
+        rollout_buffer_path = Path(path + "_rollout_buffer.pkl")
+        if not rollout_buffer_path.exists():
+            logger.warning(
+                f"{rollout_buffer_path} does not exist, resuming with an empty "
+                "rollout buffer."
+            )
+            return
+        with open(rollout_buffer_path, "rb") as f:
+            model.rollout_buffer = pickle.load(f)
