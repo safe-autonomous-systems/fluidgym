@@ -1716,6 +1716,29 @@ class FluidEnv(ABC, FluidEnvLike):
         data = np.clip(data, 0.0, 1.0)
         return sns.color_palette(cmap, as_cmap=True)(data, bytes=True)[:, :, :3]
 
+    def _is_action_valid(self, action: torch.Tensor) -> bool:
+        """Check whether all elements of the action are within the action bounds.
+
+        The per-agent bounds are broadcast over leading env and agent dims.
+
+        Parameters
+        ----------
+        action: torch.Tensor
+            The action to check.
+
+        Returns
+        -------
+        bool
+            True if all action elements lie within [low, high], False otherwise.
+        """
+        low = torch.as_tensor(
+            self.action_space.low, device=action.device, dtype=action.dtype
+        )
+        high = torch.as_tensor(
+            self.action_space.high, device=action.device, dtype=action.dtype
+        )
+        return bool(torch.all((action >= low) & (action <= high)))
+
     def step(
         self, action: torch.Tensor
     ) -> tuple[
@@ -1754,6 +1777,12 @@ class FluidEnv(ABC, FluidEnvLike):
             raise ValueError(
                 f"Action shape {action.shape} does not match expected shape "
                 f"{self._zero_action.shape}."
+            )
+
+        if not self._is_action_valid(action):
+            raise ValueError(
+                f"Action {action} is outside of the action bounds "
+                f"[{self.action_space.low}, {self.action_space.high}]."
             )
 
         # Policies usually act in float32; the boundary setters require the
